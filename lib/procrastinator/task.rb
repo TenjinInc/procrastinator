@@ -5,5 +5,8 @@ module Procrastinator
       # TODO: should take blocks for #job, #fail, #success, #final_fail,
 
 
+      def initialize(run_at: )
+
+      end
    end
 end
