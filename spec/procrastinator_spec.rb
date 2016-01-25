@@ -7,6 +7,8 @@ describe Procrastinator do
 
    describe '#delay' do
       it 'should record a task'
+
+      it 'should complain when the given queue is not registered'
    end
 
    describe '#spawn_worker' do
