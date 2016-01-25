@@ -7,8 +7,6 @@ describe Procrastinator::Worker do
 
       it 'should only take jobs from the specific queue'
 
-      it 'should have a default max delay, sleep time, max attempts, max runtime' # TODO: this is actually a queue spec
-
       it 'should lock a job when it is working on it'
       it 'should unlock a job when it is not working on it'
 
@@ -19,6 +17,34 @@ describe Procrastinator::Worker do
          it 'should scan for new items in the queue from persistence'
          it 'should add any new additions to the queue after reloading'
          it 'should lose any removals from the queue after reloading'
+      end
+
+      context 'run_at passed' do
+         it 'should call Task#run' do
+
+            Procrastinator.define_queue(:email, max_fails: 3, timeout: 1000)
+
+            Procrastinator.delay(run_at: Time.now + 10, queue: :email) do |task|
+               task.job do
+
+               end
+
+               task.success do
+
+               end
+
+               task.fail do
+
+               end
+
+               task.final_fail do
+
+               end
+            end
+
+
+            expect(subject).to receive(:run)
+         end
       end
 
 
