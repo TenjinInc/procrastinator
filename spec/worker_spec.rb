@@ -16,7 +16,7 @@ describe Procrastinator::Worker do
          it 'should lose any removals from the queue after reloading'
       end
 
-      context 'run_at passed' do
+      context 'run_at time passed' do
          it 'should call Task#run' do
 
             expect(subject).to receive(:run)
@@ -26,7 +26,6 @@ describe Procrastinator::Worker do
       end
 
       context '#run succeeds' do
-         it 'should #success when #run completes without error'
          it 'should delete the task'
       end
 

@@ -1,8 +1,5 @@
 module Procrastinator
    class Task
-
-      # TODO: should handle #fail, #success, #final_fail
-
       attr_reader :run_at, :queue, :strategy, :attempts
 
       def initialize(run_at: Time.now, queue:, strategy:)
@@ -18,6 +15,7 @@ module Procrastinator
          begin
             @attempts += 1
             @strategy.run
+            @strategy.success
          rescue StandardError
             if max_attempts.nil? || @attempts <= max_attempts
                @strategy.fail

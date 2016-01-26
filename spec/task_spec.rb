@@ -45,24 +45,36 @@ describe Procrastinator::Task do
          expect(task.strategy).to eq strategy
       end
 
+      it 'should complain when no strategy is given' do
+         expect { Procrastinator::Task.new(queue: :some_queue) }.to raise_error(ArgumentError, 'missing keyword: strategy')
+      end
+
       it 'should complain if strategy does not support #run' do
          expect do
             Procrastinator::Task.new(strategy: double('BadStrat'), queue: :some_queue)
          end.to raise_error(Procrastinator::BadStrategyError, 'given strategy does not support #run method')
       end
 
-      it 'should complain when no strategy is given' do
-         expect { Procrastinator::Task.new(queue: :some_queue) }.to raise_error(ArgumentError, 'missing keyword: strategy')
-      end
+      it 'should call strategy #run when performing' do
+         strategy = double('Custom Strat')
 
-      it 'should call strategy run when performing' do
-         result = double('result')
-
-         strategy = double('Custom Strat', run: result)
+         expect(strategy).to receive(:run)
+         allow(strategy).to receive(:success)
 
          task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
 
-         expect(task.perform).to eq result
+         task.perform
+      end
+
+      it 'should call strategy #success when #run completes without error' do
+         result = double('result')
+
+         strategy = double('Custom Strat', run: result)
+         expect(strategy).to receive(:success)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         task.perform
       end
 
       it 'should call #fail when #run errors' do
@@ -81,6 +93,7 @@ describe Procrastinator::Task do
          strategy = double('Custom Strat')
 
          allow(strategy).to receive(:run)
+         allow(strategy).to receive(:success)
 
          task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
 
