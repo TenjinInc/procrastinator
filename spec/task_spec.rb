@@ -54,5 +54,112 @@ describe Procrastinator::Task do
       it 'should complain when no strategy is given' do
          expect { Procrastinator::Task.new(queue: :some_queue) }.to raise_error(ArgumentError, 'missing keyword: strategy')
       end
+
+      it 'should call strategy run when performing' do
+         result = double('result')
+
+         strategy = double('Custom Strat', run: result)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect(task.perform).to eq result
+      end
+
+      it 'should call #fail when #run errors' do
+         strategy = double('Custom Strat')
+
+         allow(strategy).to receive(:run).and_raise('fake error')
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect(strategy).to receive(:fail)
+
+         task.perform
+      end
+
+      it 'should increase number of attempts when #run is called' do
+         strategy = double('Custom Strat')
+
+         allow(strategy).to receive(:run)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         (1..3).each do |i|
+            task.perform
+            expect(task.attempts).to eq i
+         end
+      end
+
+      it 'should call #final_fail if #run errors more than given max_attempts' do
+         strategy     = double('Custom Strat')
+         max_attempts = 3
+
+         allow(strategy).to receive(:run).and_raise('fake error')
+         allow(strategy).to receive(:fail)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect(strategy).to receive(:final_fail)
+
+         begin
+            (max_attempts + 1).times do
+               task.perform(max_attempts: max_attempts)
+            end
+         rescue Procrastinator::FinalFailError
+            # it complains, but that's not this test
+         end
+      end
+
+      it 'should not call #fail if calling #final_fail' do
+         strategy = double('Custom Strat')
+
+         allow(strategy).to receive(:run).and_raise('fake error')
+         allow(strategy).to receive(:final_fail)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect(strategy).to_not receive(:fail) # this is the real expectation
+
+         begin
+            task.perform(max_attempts: 0)
+         rescue Procrastinator::FinalFailError
+            # it complains, but that's not this test
+         end
+      end
+
+      it 'should call #fail if nil max_attempts given and #run errors' do
+         strategy = double('Custom Strat')
+
+         allow(strategy).to receive(:run).and_raise('fake error')
+         expect(strategy).to receive(:fail)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         task.perform(max_attempts: nil)
+      end
+
+      it 'should not error or call #final_fail if nil max_attempts given' do
+         strategy = double('Custom Strat')
+
+         allow(strategy).to receive(:run).and_raise('fake error')
+         allow(strategy).to receive(:fail)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect(strategy).to_not receive(:final_fail)
+
+         task.perform(max_attempts: nil)
+      end
+
+      it 'should call #final_fail if #run errors more than given max_attempts' do
+         strategy = double('Custom Strat')
+
+         allow(strategy).to receive(:run).and_raise('fake error')
+         allow(strategy).to receive(:final_fail)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect { task.perform(max_attempts: 0) }.to raise_error(Procrastinator::FinalFailError)
+      end
    end
 end
