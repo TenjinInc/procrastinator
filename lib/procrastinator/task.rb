@@ -32,7 +32,7 @@ module Procrastinator
       private
       def try_hook(method)
          begin
-            @strategy.send(method)
+            @strategy.send(method) if @strategy.respond_to? method
          rescue StandardError => e
             $stderr.puts "#{method.to_s.capitalize} hook error: #{e.message}"
          end

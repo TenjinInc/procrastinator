@@ -223,7 +223,6 @@ describe Procrastinator::Task do
          expect { task.perform }.to output("Fail hook error: #{err}\n").to_stderr
       end
 
-
       it 'should handle errors from strategy #final_fail' do
          strategy = double('Strat')
          err      = 'final fail error'
@@ -240,6 +239,42 @@ describe Procrastinator::Task do
                # do nothing. this error is unimportant to the test
             end
          end.to output("Final_fail hook error: #{err}\n").to_stderr
+      end
+
+      it 'should do nothing if the strategy does not include #success' do
+         strategy = double('Strat')
+
+         allow(strategy).to receive(:run)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect { task.perform }.to_not output.to_stderr
+      end
+
+      it 'should do nothing if the strategy does not include #fail' do
+         strategy = double('Strat')
+
+         allow(strategy).to receive(:run).and_raise('fake error')
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect { task.perform }.to_not output.to_stderr
+      end
+
+      it 'should do nothing if the strategy does not include #final_fail' do
+         strategy = double('Strat')
+
+         allow(strategy).to receive(:run).and_raise('fake error')
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect do
+            begin
+               task.perform(max_attempts: 0)
+            rescue Procrastinator::FinalFailError
+               # do nothing. this error is unimportant to the test
+            end
+         end.to_not output.to_stderr
       end
    end
 end
