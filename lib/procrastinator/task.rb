@@ -12,16 +12,23 @@ module Procrastinator
       end
 
       def perform(max_attempts: nil)
+         @attempts += 1
+
          begin
-            @attempts += 1
             @strategy.run
-            @strategy.success
          rescue StandardError
             if max_attempts.nil? || @attempts <= max_attempts
                @strategy.fail
             else
                @strategy.final_fail
                raise FinalFailError.new('Task failed too many times.')
+            end
+         else
+            # the strategy #run completed happily
+            begin
+               @strategy.success
+            rescue StandardError => e
+               $stderr.puts "Success hook failed: #{e.message}"
             end
          end
       end

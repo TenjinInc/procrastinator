@@ -56,7 +56,7 @@ describe Procrastinator::Task do
       end
 
       it 'should call strategy #run when performing' do
-         strategy = double('Custom Strat')
+         strategy = double('Strat')
 
          expect(strategy).to receive(:run)
          allow(strategy).to receive(:success)
@@ -67,14 +67,50 @@ describe Procrastinator::Task do
       end
 
       it 'should call strategy #success when #run completes without error' do
-         result = double('result')
+         strategy = double('Strat')
 
-         strategy = double('Custom Strat', run: result)
+         allow(strategy).to receive(:run)
          expect(strategy).to receive(:success)
 
          task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
 
          task.perform
+      end
+
+      it 'should not call strategy #success when #run errors' do
+         strategy = double('Strat')
+
+         allow(strategy).to receive(:run).and_raise('fake error')
+         expect(strategy).to_not receive(:success)
+         allow(strategy).to receive(:fail)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         task.perform
+      end
+
+      it 'should not call strategy #fail when #success errors' do
+         strategy = double('Strat')
+
+         allow(strategy).to receive(:run)
+         allow(strategy).to receive(:success).and_raise('success block error')
+         expect(strategy).to_not receive(:fail)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         task.perform
+      end
+
+      it 'should complain to stderr when #success errors' do
+         strategy = double('Strat')
+         err      ='success block error'
+
+         allow(strategy).to receive(:run)
+         allow(strategy).to receive(:success).and_raise(err)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect { task.perform }.to output("Success hook failed: #{err}\n").to_stderr
       end
 
       it 'should call #fail when #run errors' do
