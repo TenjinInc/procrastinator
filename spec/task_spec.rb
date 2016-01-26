@@ -110,7 +110,7 @@ describe Procrastinator::Task do
 
          task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
 
-         expect { task.perform }.to output("Success hook failed: #{err}\n").to_stderr
+         expect { task.perform }.to output("Success hook error: #{err}\n").to_stderr
       end
 
       it 'should call #fail when #run errors' do
@@ -201,7 +201,7 @@ describe Procrastinator::Task do
       end
 
       it 'should call #final_fail if #run errors more than given max_attempts' do
-         strategy = double('Custom Strat')
+         strategy = double('Strat')
 
          allow(strategy).to receive(:run).and_raise('fake error')
          allow(strategy).to receive(:final_fail)
@@ -209,6 +209,37 @@ describe Procrastinator::Task do
          task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
 
          expect { task.perform(max_attempts: 0) }.to raise_error(Procrastinator::FinalFailError)
+      end
+
+      it 'should handle errors from strategy #fail' do
+         strategy = double('Strat')
+         err      = 'fail error'
+
+         allow(strategy).to receive(:run).and_raise('run error')
+         allow(strategy).to receive(:fail).and_raise(err)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect { task.perform }.to output("Fail hook error: #{err}\n").to_stderr
+      end
+
+
+      it 'should handle errors from strategy #final_fail' do
+         strategy = double('Strat')
+         err      = 'final fail error'
+
+         allow(strategy).to receive(:run).and_raise('run error')
+         allow(strategy).to receive(:final_fail).and_raise(err)
+
+         task = Procrastinator::Task.new(strategy: strategy, queue: :some_queue)
+
+         expect do
+            begin
+               task.perform(max_attempts: 0)
+            rescue Procrastinator::FinalFailError
+               # do nothing. this error is unimportant to the test
+            end
+         end.to output("Final_fail hook error: #{err}\n").to_stderr
       end
    end
 end
