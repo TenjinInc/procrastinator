@@ -7,7 +7,7 @@ describe Procrastinator::QueueWorker do
          it 'should require a queue to work on'
       end
 
-      what if a task has no queue?
+      # TODO: what if a task has no queue?
 
       context 'worker idle' do
          it 'should use a defined task reading frequency' # user defined

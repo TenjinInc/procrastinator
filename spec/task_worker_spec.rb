@@ -61,246 +61,243 @@ describe Procrastinator::TaskWorker do
    end
 
    describe '#work' do
-      it 'should call task #run' do
-         task = double('task')
 
-         expect(task).to receive(:run)
-         allow(task).to receive(:success)
+      context 'run hook' do
+         it 'should call task #run' do
+            task = double('task')
 
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+            expect(task).to receive(:run)
+            allow(task).to receive(:success)
 
-         worker.work
-      end
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-      it 'should call task #success when #run completes without error' do
-         task = double('task')
-
-         allow(task).to receive(:run)
-         expect(task).to receive(:success)
-
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
-
-         worker.work
-      end
-
-      it 'should not call task #success when #run errors' do
-         task = double('task')
-
-         allow(task).to receive(:run).and_raise('fake error')
-         expect(task).to_not receive(:success)
-         allow(task).to receive(:fail)
-
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
-
-         worker.work
-      end
-
-      it 'should not call task #fail when #success errors' do
-         task = double('task')
-
-         allow(task).to receive(:run)
-         allow(task).to receive(:success).and_raise('success block error')
-         expect(task).to_not receive(:fail)
-
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
-
-         worker.work
-      end
-
-      it 'should complain to stderr when #success errors' do
-         task = double('task')
-         err  ='success block error'
-
-         allow(task).to receive(:run)
-         allow(task).to receive(:success).and_raise(err)
-
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
-
-         expect { worker.work }.to output("Success hook error: #{err}\n").to_stderr
-      end
-
-      it 'should call #fail when #run errors' do
-         task = double('task')
-
-         allow(task).to receive(:run).and_raise('fake error')
-
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
-
-         expect(task).to receive(:fail)
-
-         worker.work
-      end
-
-      it 'should call #fail when #run duration exceeds timeout' do
-         task = double('task')
-
-         allow(task).to receive(:run) do
-            sleep(queue.timeout+0.1)
-         end
-         expect(task).to receive(:fail)
-
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
-
-         worker.work
-      end
-
-      it 'should increase number of attempts when #run is called' do
-         task = double('task')
-
-         allow(task).to receive(:run)
-         allow(task).to receive(:success)
-
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
-
-         (1..3).each do |i|
             worker.work
-            expect(worker.attempts).to eq i
          end
-      end
 
-      it 'should call #final_fail if #run errors more than given max_attempts' do
-         max_attempts = 3
-         task         = double('task')
-         queue        = double('queue', timeout: 0, max_attempts: max_attempts)
+         it 'should increase number of attempts when #run is called' do
+            task = double('task')
 
-         allow(task).to receive(:run).and_raise('fake error')
-         allow(task).to receive(:fail)
+            allow(task).to receive(:run)
+            allow(task).to receive(:success)
 
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         expect(task).to receive(:final_fail)
-
-         begin
-            (max_attempts + 1).times do
+            (1..3).each do |i|
                worker.work
+               expect(worker.attempts).to eq i
             end
-         rescue Procrastinator::FinalFailError
-            # it complains, but that's not this test
          end
       end
 
-      it 'should not call #fail if calling #final_fail' do
-         task  = double('task')
-         queue = double('queue', max_attempts: 0, timeout: 0)
+      context 'success hook' do
+         it 'should call task #success when #run completes without error' do
+            task = double('task')
 
-         allow(task).to receive(:run).and_raise('fake error')
-         allow(task).to receive(:final_fail)
+            allow(task).to receive(:run)
+            expect(task).to receive(:success)
 
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         expect(task).to_not receive(:fail) # this is the real expectation
-
-         begin
             worker.work
-         rescue Procrastinator::FinalFailError
-            # it complains, but that's not this test
+         end
+
+         it 'should not call task #success when #run errors' do
+            task = double('task')
+
+            allow(task).to receive(:run).and_raise('fake error')
+            expect(task).to_not receive(:success)
+            allow(task).to receive(:fail)
+
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+            worker.work
+         end
+
+         it 'should complain to stderr when #success errors' do
+            task = double('task')
+            err  ='success block error'
+
+            allow(task).to receive(:run)
+            allow(task).to receive(:success).and_raise(err)
+
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+            expect { worker.work }.to output("Success hook error: #{err}\n").to_stderr
+         end
+
+         it 'should do nothing if the task does not include #success' do
+            task = double('task')
+
+            allow(task).to receive(:run)
+
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+            expect { worker.work }.to_not output.to_stderr
          end
       end
 
-      it 'should call #fail if nil max_attempts given and #run errors' do
-         task  = double('task')
-         queue = double('queue', max_attempts: nil, timeout: 0)
+      context 'fail hook' do
+         it 'should #fail when #run errors' do
+            task = double('task')
 
-         allow(task).to receive(:run).and_raise('fake error')
-         expect(task).to receive(:fail)
+            allow(task).to receive(:run).and_raise('fake error')
 
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         worker.work
-      end
+            expect(task).to receive(:fail)
 
-      it 'should not error or call #final_fail if nil max_attempts given' do
-         task  = double('task')
-         queue = double('queue', max_attempts: nil, timeout: 0)
+            worker.work
+         end
 
-         allow(task).to receive(:run).and_raise('fake error')
-         allow(task).to receive(:fail)
+         it 'should #fail when #run duration exceeds timeout' do
+            task = double('task')
 
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+            allow(task).to receive(:run) do
+               sleep(queue.timeout+0.1)
+            end
+            expect(task).to receive(:fail)
 
-         expect(task).to_not receive(:final_fail)
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         worker.work
-      end
+            worker.work
+         end
 
-      it 'should call #final_fail if #run errors more than given max_attempts' do
-         task  = double('task')
-         queue = double('queue', max_attempts: 0, timeout: 0)
+         it 'should call #fail if nil max_attempts given and #run errors' do
+            task  = double('task')
+            queue = double('queue', max_attempts: nil, timeout: 0)
 
-         allow(task).to receive(:run).and_raise('fake error')
-         allow(task).to receive(:final_fail)
+            allow(task).to receive(:run).and_raise('fake error')
+            expect(task).to receive(:fail)
 
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         expect { worker.work }.to raise_error(Procrastinator::FinalFailError)
-      end
+            worker.work
+         end
 
-      it 'should handle errors from task #fail' do
-         task = double('task')
-         err  = 'fail error'
+         it 'should not #fail when #success errors' do
+            task = double('task')
 
-         allow(task).to receive(:run).and_raise('run error')
-         allow(task).to receive(:fail).and_raise(err)
+            allow(task).to receive(:run)
+            allow(task).to receive(:success).and_raise('success block error')
+            expect(task).to_not receive(:fail)
 
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         expect { worker.work }.to output("Fail hook error: #{err}\n").to_stderr
-      end
+            worker.work
+         end
 
-      it 'should handle errors from task #final_fail' do
-         task  = double('task')
-         queue = double('queue', max_attempts: 0, timeout: 0)
-         err   = 'final fail error'
+         it 'should not #fail if calling #final_fail' do
+            task  = double('task')
+            queue = double('queue', max_attempts: 0, timeout: 0)
 
-         allow(task).to receive(:run).and_raise('run error')
-         allow(task).to receive(:final_fail).and_raise(err)
+            allow(task).to receive(:run).and_raise('fake error')
+            allow(task).to receive(:final_fail)
 
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         expect do
+            expect(task).to_not receive(:fail) # this is the real expectation
+
             begin
                worker.work
             rescue Procrastinator::FinalFailError
-               # do nothing. this error is unimportant to the test
+               # it complains, but that's not this test
             end
-         end.to output("Final_fail hook error: #{err}\n").to_stderr
+         end
+
+         it 'should handle errors from task #fail' do
+            task = double('task')
+            err  = 'fail error'
+
+            allow(task).to receive(:run).and_raise('run error')
+            allow(task).to receive(:fail).and_raise(err)
+
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+            expect { worker.work }.to output("Fail hook error: #{err}\n").to_stderr
+         end
+
+         it 'should do nothing if the task does not include #fail' do
+            task = double('task')
+
+            allow(task).to receive(:run).and_raise('fake error')
+
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+            expect { worker.work }.to_not output.to_stderr
+         end
       end
 
-      it 'should do nothing if the task does not include #success' do
-         task = double('task')
+      context 'final_fail hook' do
+         it 'should call #final_fail if #run errors more than given max_attempts' do
+            max_attempts = 3
+            task         = double('task')
+            queue        = double('queue', timeout: 0, max_attempts: max_attempts)
 
-         allow(task).to receive(:run)
+            allow(task).to receive(:run).and_raise('fake error')
+            allow(task).to receive(:fail)
 
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         expect { worker.work }.to_not output.to_stderr
-      end
+            expect(task).to receive(:final_fail)
 
-      it 'should do nothing if the task does not include #fail' do
-         task = double('task')
-
-         allow(task).to receive(:run).and_raise('fake error')
-
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
-
-         expect { worker.work }.to_not output.to_stderr
-      end
-
-      it 'should do nothing if the task does not include #final_fail' do
-         task  = double('task')
-         queue = double('queue', max_attempts: 0, timeout: 0)
-
-         allow(task).to receive(:run).and_raise('fake error')
-
-         worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
-
-         expect do
             begin
-               worker.work
+               (max_attempts + 1).times do
+                  worker.work
+               end
             rescue Procrastinator::FinalFailError
-               # do nothing. this error is unimportant to the test
+               # it complains, but that's not this test
             end
-         end.to_not output.to_stderr
+         end
+
+         it 'should not error or call #final_fail if nil max_attempts given' do
+            task  = double('task')
+            queue = double('queue', max_attempts: nil, timeout: 0)
+
+            allow(task).to receive(:run).and_raise('fake error')
+            allow(task).to receive(:fail)
+
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+            expect(task).to_not receive(:final_fail)
+
+            worker.work
+         end
+
+         it 'should handle errors from #final_fail' do
+            task  = double('task')
+            queue = double('queue', max_attempts: 0, timeout: 0)
+            err   = 'final fail error'
+
+            allow(task).to receive(:run).and_raise('run error')
+            allow(task).to receive(:final_fail).and_raise(err)
+
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+            expect do
+               begin
+                  worker.work
+               rescue Procrastinator::FinalFailError
+                  # do nothing. this error is unimportant to the test
+               end
+            end.to output("Final_fail hook error: #{err}\n").to_stderr
+         end
+
+         it 'should do nothing if the task does not include #final_fail' do
+            task  = double('task')
+            queue = double('queue', max_attempts: 0, timeout: 0)
+
+            allow(task).to receive(:run).and_raise('fake error')
+
+            worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+            expect do
+               begin
+                  worker.work
+               rescue Procrastinator::FinalFailError
+                  # do nothing. this error is unimportant to the test
+               end
+            end.to_not output.to_stderr
+         end
       end
    end
 end
