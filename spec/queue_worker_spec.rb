@@ -47,29 +47,46 @@ describe Procrastinator::QueueWorker do
          expect(queue.max_attempts).to eq Procrastinator::QueueWorker::DEFAULT_MAX_ATTEMPTS
       end
 
-      it 'should accept a update_frequency' do
-         (1..3).each do |t|
-            queue = Procrastinator::QueueWorker.new(name: :queue, max_attempts: t)
+      it 'should accept a update_period' do
+         (1..3).each do |i|
+            queue = Procrastinator::QueueWorker.new(name: :queue, update_period: i)
 
-            expect(queue.max_attempts).to eq t
+            expect(queue.update_period).to eq i
          end
       end
 
-      it 'should provide a default checking freq'
+      it 'should provide a default update_period' do
+         queue = Procrastinator::QueueWorker.new(name: :queue)
+
+         expect(queue.update_period).to eq Procrastinator::QueueWorker::DEFAULT_UPDATE_PERIOD
+      end
+
+      it 'should accept a max_tasks' do
+         (1..3).each do |i|
+            queue = Procrastinator::QueueWorker.new(name: :queue, max_tasks: i)
+
+            expect(queue.max_tasks).to eq i
+         end
+      end
+
+      it 'should provide a default max_tasks' do
+         queue = Procrastinator::QueueWorker.new(name: :queue)
+
+         expect(queue.max_tasks).to eq Procrastinator::QueueWorker::DEFAULT_MAX_TASKS
+      end
    end
 
    describe '#work' do
-
-      # TODO: what if a task has no queue?
-
       context 'worker idle' do
-         it 'should use a defined task reading frequency' # user defined
-         it 'should have a default task reading frequency' #ie between reads
+         it 'should update every update_period' # user defined
 
          it 'should only take jobs from the given queue'
-         it 'should scan for new tasks that can be run immediately'
+         it 'should sort tasks by run_at' # make sure this is using a good algo for already sorted lists
          it 'should add any new additions to the queue after reloading'
          it 'should lose any removals from the queue after reloading'
+         it 'should start a TaskWorker for each ready task'
+         it 'should not start more TaskWorkers than max_tasks'
+         it 'should not start a TaskWorker any unready tasks'
       end
 
       context 'TaskWorker succeeds' do

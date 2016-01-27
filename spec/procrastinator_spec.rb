@@ -16,6 +16,8 @@ describe Procrastinator do
    #
    # Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
 
+   # TODO: what if a task has no queue? this is something the #go method will need to handle
+
 
    describe '.setup' do
       it 'should require a queue-reading block' # ie how to read the queue table
