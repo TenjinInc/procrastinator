@@ -1,7 +1,8 @@
 require 'spec_helper'
 
-describe Procrastinator::Worker do
+describe Procrastinator::QueueWorker do
    describe '#work' do
+
       describe '#initialize' do
          it 'should require a queue name to work on'
       end
@@ -21,8 +22,6 @@ describe Procrastinator::Worker do
 
             expect(subject).to receive(:run)
          end
-
-         it 'should lock the task before calling #run'
       end
 
       context '#run succeeds' do
@@ -43,12 +42,6 @@ describe Procrastinator::Worker do
 
             expect(t).to receive(:fail)
          end
-
-         it 'should #fail if #run duration exceeds timeout'
-
-         it 'should rescue when #fail errors' #TODO: and do what? puts to stderr maybe?
-
-         it 'should unlock the task'
       end
 
       context '#run failed too many times' do

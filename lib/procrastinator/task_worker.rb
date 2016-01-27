@@ -1,21 +1,23 @@
 module Procrastinator
-   class Task
-      attr_reader :run_at, :queue, :strategy, :attempts
+   class TaskWorker
+      attr_reader :run_at, :queue, :task, :attempts
 
-      def initialize(run_at: Time.now, queue:, strategy:)
+      def initialize(run_at: Time.now, queue:, task:)
          @run_at   = run_at
          @queue    = queue
-         @strategy = strategy
+         @task     = task
          @attempts = 0
 
-         raise(BadStrategyError.new('given strategy does not support #run method')) unless strategy.respond_to? :run
+         raise(MalformedTaskError.new('given task does not support #run method')) unless task.respond_to? :run
       end
 
-      def perform(max_attempts: nil)
+      def work(max_attempts: nil)
          @attempts += 1
 
          begin
-            @strategy.run
+            Timeout::timeout(@queue.timeout) do
+               @task.run
+            end
 
             try_hook(:success)
          rescue StandardError
@@ -32,14 +34,14 @@ module Procrastinator
       private
       def try_hook(method)
          begin
-            @strategy.send(method) if @strategy.respond_to? method
+            @task.send(method) if @task.respond_to? method
          rescue StandardError => e
             $stderr.puts "#{method.to_s.capitalize} hook error: #{e.message}"
          end
       end
    end
 
-   class BadStrategyError < StandardError
+   class MalformedTaskError < StandardError
    end
 
    class FinalFailError < StandardError

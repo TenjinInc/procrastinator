@@ -1,7 +1,7 @@
 require 'procrastinator/version'
-require 'procrastinator/worker'
-require 'procrastinator/task'
 require 'procrastinator/task_queue'
+require 'procrastinator/queue_worker'
+require 'procrastinator/task_worker'
 
 
 module Procrastinator

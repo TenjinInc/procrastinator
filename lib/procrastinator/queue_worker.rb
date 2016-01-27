@@ -1,5 +1,5 @@
 module Procrastinator
-   class Worker
+   class QueueWorker
 
    end
 end
