@@ -1,6 +1,6 @@
 module Procrastinator
    class TaskWorker
-      attr_reader :run_at, :queue, :task, :attempts
+      attr_reader :run_at, :queue, :task, :attempts, :last_fail_at
 
       def initialize(run_at: Time.now, queue:, task:)
          @run_at   = run_at
@@ -21,6 +21,8 @@ module Procrastinator
 
             try_hook(:success)
          rescue StandardError
+            @last_fail_at = Time.now.to_i
+
             if @queue.max_attempts.nil? || @attempts <= @queue.max_attempts
                try_hook(:fail)
             else

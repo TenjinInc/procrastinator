@@ -225,6 +225,25 @@ describe Procrastinator::TaskWorker do
 
             expect { worker.work }.to_not output.to_stderr
          end
+
+         it 'should record the most recent failure time' do
+            task       = double('task')
+            start_time = Time.now
+            delay      = 100
+
+            Timecop.freeze(start_time) do
+               allow(task).to receive(:run) do
+                  Timecop.travel(delay)
+                  raise 'fake error'
+               end
+
+               worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+               worker.work
+
+               expect(worker.last_fail_at).to eq start_time.to_i + delay
+            end
+         end
       end
 
       context 'final_fail hook' do
@@ -294,9 +313,33 @@ describe Procrastinator::TaskWorker do
                begin
                   worker.work
                rescue Procrastinator::FinalFailError
-                  # do nothing. this error is unimportant to the test
+                  # do nothing. this raise is intended and unimportant to the test
                end
             end.to_not output.to_stderr
+         end
+
+         it 'should record the most final failure time' do
+            task       = double('task')
+            queue      = double('queue', max_attempts: 0, timeout: 0)
+            start_time = Time.now
+            delay      = 100
+
+            Timecop.freeze(start_time) do
+               allow(task).to receive(:run) do
+                  Timecop.travel(delay)
+                  raise 'fake error'
+               end
+
+               worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
+
+               begin
+                  worker.work
+               rescue Procrastinator::FinalFailError
+                  # do nothing. this raise is intended and unimportant to the test
+               end
+
+               expect(worker.last_fail_at).to eq start_time.to_i + delay
+            end
          end
       end
    end
