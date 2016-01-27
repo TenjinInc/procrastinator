@@ -11,7 +11,7 @@ module Procrastinator
          raise(MalformedTaskError.new('given task does not support #run method')) unless task.respond_to? :run
       end
 
-      def work(max_attempts: nil)
+      def work
          @attempts += 1
 
          begin
@@ -21,7 +21,7 @@ module Procrastinator
 
             try_hook(:success)
          rescue StandardError
-            if max_attempts.nil? || @attempts <= max_attempts
+            if @queue.max_attempts.nil? || @attempts <= @queue.max_attempts
                try_hook(:fail)
             else
                try_hook(:final_fail)

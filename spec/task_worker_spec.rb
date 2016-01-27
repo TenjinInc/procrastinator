@@ -1,7 +1,7 @@
 require 'spec_helper'
 
 describe Procrastinator::TaskWorker do
-   let(:queue) { double('queue', timeout: 0.1) }
+   let(:queue) { double('queue', timeout: 0.1, max_attempts: nil) }
 
    describe '#inititalize' do
       let(:task) { double('Some task', run: 5) }
@@ -159,8 +159,9 @@ describe Procrastinator::TaskWorker do
       end
 
       it 'should call #final_fail if #run errors more than given max_attempts' do
-         task         = double('task')
          max_attempts = 3
+         task         = double('task')
+         queue        = double('queue', timeout: 0, max_attempts: max_attempts)
 
          allow(task).to receive(:run).and_raise('fake error')
          allow(task).to receive(:fail)
@@ -171,7 +172,7 @@ describe Procrastinator::TaskWorker do
 
          begin
             (max_attempts + 1).times do
-               worker.work(max_attempts: max_attempts)
+               worker.work
             end
          rescue Procrastinator::FinalFailError
             # it complains, but that's not this test
@@ -179,7 +180,8 @@ describe Procrastinator::TaskWorker do
       end
 
       it 'should not call #fail if calling #final_fail' do
-         task = double('task')
+         task  = double('task')
+         queue = double('queue', max_attempts: 0, timeout: 0)
 
          allow(task).to receive(:run).and_raise('fake error')
          allow(task).to receive(:final_fail)
@@ -189,25 +191,27 @@ describe Procrastinator::TaskWorker do
          expect(task).to_not receive(:fail) # this is the real expectation
 
          begin
-            worker.work(max_attempts: 0)
+            worker.work
          rescue Procrastinator::FinalFailError
             # it complains, but that's not this test
          end
       end
 
       it 'should call #fail if nil max_attempts given and #run errors' do
-         task = double('task')
+         task  = double('task')
+         queue = double('queue', max_attempts: nil, timeout: 0)
 
          allow(task).to receive(:run).and_raise('fake error')
          expect(task).to receive(:fail)
 
          worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         worker.work(max_attempts: nil)
+         worker.work
       end
 
       it 'should not error or call #final_fail if nil max_attempts given' do
-         task = double('task')
+         task  = double('task')
+         queue = double('queue', max_attempts: nil, timeout: 0)
 
          allow(task).to receive(:run).and_raise('fake error')
          allow(task).to receive(:fail)
@@ -216,18 +220,19 @@ describe Procrastinator::TaskWorker do
 
          expect(task).to_not receive(:final_fail)
 
-         worker.work(max_attempts: nil)
+         worker.work
       end
 
       it 'should call #final_fail if #run errors more than given max_attempts' do
-         task = double('task')
+         task  = double('task')
+         queue = double('queue', max_attempts: 0, timeout: 0)
 
          allow(task).to receive(:run).and_raise('fake error')
          allow(task).to receive(:final_fail)
 
          worker = Procrastinator::TaskWorker.new(task: task, queue: queue)
 
-         expect { worker.work(max_attempts: 0) }.to raise_error(Procrastinator::FinalFailError)
+         expect { worker.work }.to raise_error(Procrastinator::FinalFailError)
       end
 
       it 'should handle errors from task #fail' do
@@ -243,8 +248,9 @@ describe Procrastinator::TaskWorker do
       end
 
       it 'should handle errors from task #final_fail' do
-         task = double('task')
-         err  = 'final fail error'
+         task  = double('task')
+         queue = double('queue', max_attempts: 0, timeout: 0)
+         err   = 'final fail error'
 
          allow(task).to receive(:run).and_raise('run error')
          allow(task).to receive(:final_fail).and_raise(err)
@@ -253,7 +259,7 @@ describe Procrastinator::TaskWorker do
 
          expect do
             begin
-               worker.work(max_attempts: 0)
+               worker.work
             rescue Procrastinator::FinalFailError
                # do nothing. this error is unimportant to the test
             end
@@ -281,7 +287,8 @@ describe Procrastinator::TaskWorker do
       end
 
       it 'should do nothing if the task does not include #final_fail' do
-         task = double('task')
+         task  = double('task')
+         queue = double('queue', max_attempts: 0, timeout: 0)
 
          allow(task).to receive(:run).and_raise('fake error')
 
@@ -289,7 +296,7 @@ describe Procrastinator::TaskWorker do
 
          expect do
             begin
-               worker.work(max_attempts: 0)
+               worker.work
             rescue Procrastinator::FinalFailError
                # do nothing. this error is unimportant to the test
             end
