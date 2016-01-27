@@ -1,5 +1,4 @@
 require 'procrastinator/version'
-require 'procrastinator/task_queue'
 require 'procrastinator/queue_worker'
 require 'procrastinator/task_worker'
 
