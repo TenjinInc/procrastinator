@@ -9,18 +9,46 @@ module Procrastinator
 
       # Timeout is in seconds
       def initialize(name:,
+                     persister:,
                      max_attempts: DEFAULT_MAX_ATTEMPTS,
                      timeout: DEFAULT_TIMEOUT,
                      update_period: DEFAULT_UPDATE_PERIOD,
                      max_tasks: DEFAULT_MAX_TASKS)
          raise ArgumentError.new('Queue name may not be nil') unless name
-         raise ArgumentError.new('Queue name must be a symbol') unless name
+         raise ArgumentError.new('Persister may not be nil') unless persister
+
+         raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #read_tasks')) unless persister.respond_to? :read_tasks
+         raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #update_task')) unless persister.respond_to? :update_task
+         raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #delete_task')) unless persister.respond_to? :delete_task
+
 
          @name          = name.to_s.gsub(/\s/, '_').to_sym
          @timeout       = timeout
          @max_attempts  = max_attempts
          @update_period = update_period
          @max_tasks     = max_tasks
+         @persister     = persister
       end
+
+      def work
+         loop do
+            sleep(@update_period)
+
+            # shuffling and re-sorting to avoid worst case O(n^2) on quicksort
+            # when receiving already sorted data. Ideally, we'd use a better algo, but this will do for now
+            tasks = @persister.read_tasks(@name).shuffle.sort_by { |t| t.run_at }
+
+            tasks.each do |task|
+               task.run
+            end
+         end
+      end
+
+      def stop
+
+      end
+   end
+
+   class MalformedTaskPersisterError < StandardError
    end
 end
