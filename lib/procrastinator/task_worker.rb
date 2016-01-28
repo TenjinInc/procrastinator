@@ -1,6 +1,6 @@
 module Procrastinator
    class TaskWorker
-      attr_reader :run_at, :task, :attempts, :last_fail_at
+      attr_reader :run_at, :task, :attempts, :last_fail_at, :status
 
       def initialize(run_at: Time.now, attempts: 0, timeout: nil, max_attempts: nil, task:)
          raise(MalformedTaskError.new('given task does not support #run method')) unless task.respond_to? :run
@@ -22,6 +22,7 @@ module Procrastinator
             end
 
             try_hook(:success)
+            @status = :success
          rescue StandardError => e
             @last_fail_at = Time.now.to_i
 
@@ -29,8 +30,10 @@ module Procrastinator
                try_hook(:final_fail, e)
 
                #TODO: @last_error_reason = 'Task failed too many times.')
+               @status = :final_fail
             else
                try_hook(:fail, e)
+               @status = :fail
             end
          end
       end

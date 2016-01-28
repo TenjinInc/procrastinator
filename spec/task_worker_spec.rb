@@ -383,5 +383,48 @@ module Procrastinator
             expect(worker.final_fail?).to be false
          end
       end
+
+      describe '#status' do
+         it 'should return :success when #run completes without error' do
+            task = double('task')
+
+            allow(task).to receive(:run)
+            allow(task).to receive(:success)
+
+            worker = TaskWorker.new(task: task)
+
+            worker.work
+
+            expect(worker.status).to eq :success
+         end
+
+         it 'should return :fail if #run failed' do
+            task = double('task')
+
+            allow(task).to receive(:run).and_raise('fake error')
+            allow(task).to receive(:fail)
+
+            worker = TaskWorker.new(task: task)
+
+            worker.work
+
+            expect(worker.status).to eq :fail
+         end
+
+         it 'should return :final_fail if #run final_failed' do
+            max_attempts = 3
+            task         = double('task')
+
+            allow(task).to receive(:run).and_raise('fake error')
+            allow(task).to receive(:final_fail)
+
+            worker = TaskWorker.new(task: task, attempts: max_attempts-1, max_attempts: max_attempts)
+
+            worker.work
+
+            expect(worker.status).to eq :final_fail
+         end
+      end
+
    end
 end
