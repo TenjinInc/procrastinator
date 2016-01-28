@@ -36,16 +36,14 @@ module Procrastinator
 
             # shuffling and re-sorting to avoid worst case O(n^2) on quicksort
             # when receiving already sorted data. Ideally, we'd use a better algo, but this will do for now
-            tasks = @persister.read_tasks(@name).shuffle.sort_by { |t| t.run_at }
+            tasks = @persister.read_tasks(@name).shuffle.sort_by { |t| t[:run_at] }
 
-            tasks.each do |task|
-               task.run
+            tasks.each do |task_data|
+               tw = TaskWorker.new(task_data) # TODO: load :task from yaml
+
+               tw.work
             end
          end
-      end
-
-      def stop
-
       end
    end
 

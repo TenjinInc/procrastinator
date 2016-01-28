@@ -142,29 +142,29 @@ module Procrastinator
             end
 
             it 'should sort tasks by run_at' do
-               job1 = double('job1', run_at: 1)
-               job2 = double('job2', run_at: 2)
-               job3 = double('job3', run_at: 3)
+               job1 = {run_at: 1, task: double('task1', run: nil)}
+               job2 = {run_at: 2, task: double('task2', run: nil)}
+               job3 = {run_at: 3, task: double('task3', run: nil)}
 
                persister = double('disorganized persister', read_tasks: [job2, job3, job1], update_task: nil, delete_task: nil)
                worker    = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
                stub_loop(worker)
 
-               expect(job1).to receive(:run).ordered
-               expect(job2).to receive(:run).ordered
-               expect(job3).to receive(:run).ordered
+               expect(job1[:task]).to receive(:run).ordered
+               expect(job2[:task]).to receive(:run).ordered
+               expect(job3[:task]).to receive(:run).ordered
 
                worker.work
             end
 
             it 'should reload tasks every cycle' do
-               job1 = double('job1', run_at: 1)
-               job2 = double('job2', run_at: 1)
+               job1 = {run_at: 1, task: double('job1')}
+               job2 = {run_at: 1, task: double('job2')}
 
-               allow(job1).to receive(:run) do
+               allow(job1[:task]).to receive(:run) do
                   Timecop.travel(4)
                end
-               allow(job2).to receive(:run) do
+               allow(job2[:task]).to receive(:run) do
                   Timecop.travel(6)
                end
 
@@ -182,23 +182,29 @@ module Procrastinator
                end
             end
 
-            it 'should #work a TaskWorker for each ready task'# do
-               # job1 = double('job1', run_at: 1, run: nil)
-               # job2 = double('job2', run_at: 1, run: nil)
-               #
-               # persister = double('disorganized persister', update_task: nil, delete_task: nil)
-               # allow(persister).to receive(:read_tasks).and_return([job1, job2])
-               #
-               # worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
-               # stub_loop(worker)
-               #
-               # worker.work
-            #end
+            it 'should run a TaskWorker for each ready task' do
+               task_data1 = {run_at: 1, task: double('task1', run: nil)}
+               task_data2 = {run_at: 1, task: double('task2', run: nil)}
+               task_data3 = {run_at: 1, task: double('task3', run: nil)}
+
+               [task_data1, task_data2, task_data3].each do |data|
+                  expect(TaskWorker).to receive(:new).with(run_at: data[:run_at],
+                                                           task:   data[:task]).and_call_original
+               end
+
+               persister = double('persister', update_task: nil, delete_task: nil)
+               allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2, task_data3])
+
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
+
+               stub_loop worker
+               worker.work
+            end
 
             it 'should not start more TaskWorkers than max_tasks'
             #set max_tasks to 1, give 2 ready jobs.
 
-            it 'should not start a TaskWorker any unready tasks'
+            it 'should not start any TaskWorkers for unready tasks'
          end
 
          context 'TaskWorker succeeds' do
@@ -216,27 +222,6 @@ module Procrastinator
 
             it 'should mark the task as permanently failed' # maybe by blanking run_at?
          end
-      end
-
-      describe '#stop' do
-         it 'should stop looping' # do
-         #    worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.00)
-         #
-         #    thread = Thread.new do
-         #       worker.work # this infiniloops until told to stop
-         #       Thread.exit
-         #    end
-         #
-         #    sleep(0.5)
-         #
-         #    worker.stop
-         #
-         #    expect(thread.status).to be false
-         #
-         #    if thread.status != false
-         #       thread.exit
-         #    end
-         # end
       end
    end
 end
