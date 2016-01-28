@@ -45,6 +45,15 @@ module Procrastinator
             expect { TaskWorker.new(task: task, timeout: -1) }.to raise_error(ArgumentError, 'Timeout cannot be negative')
          end
 
+         it 'should accept attempts' do
+            (1..3).each do |attempts|
+
+               worker = TaskWorker.new(attempts: attempts, task: task)
+
+               expect(worker.attempts).to eq attempts
+            end
+         end
+
          it 'should accept task parameter' do
             worker = TaskWorker.new(task: task)
 
@@ -199,11 +208,7 @@ module Procrastinator
 
                expect(task).to_not receive(:fail) # this is the real expectation
 
-               begin
-                  worker.work
-               rescue FinalFailError
-                  # it complains, but that's not this test
-               end
+               worker.work
             end
 
             it 'should handle errors from task #fail' do
@@ -261,12 +266,8 @@ module Procrastinator
 
                expect(task).to receive(:final_fail).with(err)
 
-               begin
-                  (max_attempts + 1).times do
-                     worker.work
-                  end
-               rescue FinalFailError
-                  # it complains, but that's not this test
+               max_attempts.times do
+                  worker.work
                end
             end
 
@@ -339,6 +340,47 @@ module Procrastinator
                   expect(worker.last_fail_at).to eq start_time.to_i + delay
                end
             end
+         end
+      end
+
+      describe '#final_fail?' do
+         it 'should be true if no attempts remain' do
+            task = double('task')
+
+            allow(task).to receive(:run).and_raise('fake error')
+            allow(task).to receive(:fail)
+
+            worker = TaskWorker.new(task: task, attempts: 2, max_attempts: 3)
+
+            worker.work # attempts should now go up to 3
+
+            expect(worker.final_fail?).to be true
+         end
+
+         it 'should be false if attempts remain' do
+            task = double('task')
+
+            allow(task).to receive(:run).and_raise('fake error')
+            allow(task).to receive(:fail)
+
+            worker = TaskWorker.new(task: task, attempts: 1, max_attempts: 3)
+
+            worker.work
+
+            expect(worker.final_fail?).to be false
+         end
+
+         it 'should be false if nil max_attempts is given' do
+            task = double('task')
+
+            allow(task).to receive(:run).and_raise('fake error')
+            allow(task).to receive(:fail)
+
+            worker = TaskWorker.new(task: task, max_attempts: nil)
+
+            worker.work
+
+            expect(worker.final_fail?).to be false
          end
       end
    end
