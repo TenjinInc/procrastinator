@@ -1,3 +1,5 @@
+require 'yaml'
+
 module Procrastinator
    class QueueWorker
       DEFAULT_TIMEOUT       = 3600 # seconds = one hour
@@ -38,10 +40,14 @@ module Procrastinator
             # when receiving already sorted data. Ideally, we'd use a better algo, but this will do for now
             tasks = @persister.read_tasks(@name).shuffle.sort_by { |t| t[:run_at] }
 
-            tasks.each do |task_data|
-               tw = TaskWorker.new(task_data) # TODO: load :task from yaml
+            tasks.first(@max_tasks).each do |task_data|
+               if Time.now.to_i >= task_data[:run_at].to_i
+                  parsed_data = task_data.merge(task: YAML.load(task_data[:task]))
 
-               tw.work
+                  tw = TaskWorker.new(parsed_data)
+
+                  tw.work
+               end
             end
          end
       end

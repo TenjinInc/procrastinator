@@ -118,6 +118,12 @@ module Procrastinator
                end
             end
 
+            def stub_yaml
+               allow(YAML).to receive(:load) do |arg|
+                  arg
+               end
+            end
+
             it 'should wait for update_period' do
                [0.01, 0.02].each do |period|
                   worker = QueueWorker.new(name: :queue, persister: persister, update_period: period)
@@ -149,6 +155,7 @@ module Procrastinator
                persister = double('disorganized persister', read_tasks: [job2, job3, job1], update_task: nil, delete_task: nil)
                worker    = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
                stub_loop(worker)
+               stub_yaml
 
                expect(job1[:task]).to receive(:run).ordered
                expect(job2[:task]).to receive(:run).ordered
@@ -158,15 +165,18 @@ module Procrastinator
             end
 
             it 'should reload tasks every cycle' do
-               job1 = {run_at: 1, task: double('job1')}
-               job2 = {run_at: 1, task: double('job2')}
+               task1 = double('task1')
+               task2 = double('task2')
 
-               allow(job1[:task]).to receive(:run) do
+               allow(task1).to receive(:run) do
                   Timecop.travel(4)
                end
-               allow(job2[:task]).to receive(:run) do
+               allow(task2).to receive(:run) do
                   Timecop.travel(6)
                end
+
+               job1 = {run_at: 1, task: task1}
+               job2 = {run_at: 1, task: task2}
 
                allow(persister).to receive(:read_tasks).and_return([job1], [job2])
 
@@ -175,6 +185,7 @@ module Procrastinator
                Timecop.freeze(start_time) do
                   worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.00)
                   stub_loop(worker, 2)
+                  stub_yaml
 
                   worker.work
 
@@ -182,18 +193,18 @@ module Procrastinator
                end
             end
 
-            it 'should run a TaskWorker for each ready task' do
-               task_data1 = {run_at: 1, task: double('task1', run: nil)}
-               task_data2 = {run_at: 1, task: double('task2', run: nil)}
-               task_data3 = {run_at: 1, task: double('task3', run: nil)}
+            it 'should run a TaskWorker with all the data' do
+               task_double = double('task', run: nil)
+               task_data   = {run_at: 1, task: YAML.dump(task_double)}
 
-               [task_data1, task_data2, task_data3].each do |data|
-                  expect(TaskWorker).to receive(:new).with(run_at: data[:run_at],
-                                                           task:   data[:task]).and_call_original
-               end
+               allow(YAML).to receive(:load).and_return(task_double)
+
+               expect(TaskWorker).to receive(:new)
+                                           .with(task_data.merge(task: YAML.load(task_data[:task])))
+                                           .and_call_original
 
                persister = double('persister', update_task: nil, delete_task: nil)
-               allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2, task_data3])
+               allow(persister).to receive(:read_tasks).and_return([task_data])
 
                worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
 
@@ -201,10 +212,64 @@ module Procrastinator
                worker.work
             end
 
-            it 'should not start more TaskWorkers than max_tasks'
-            #set max_tasks to 1, give 2 ready jobs.
+            it 'should run a TaskWorker for each ready task' do
+               task_data1 = {run_at: 1, task: double('task1', run: nil)}
+               task_data2 = {run_at: 1, task: double('task2', run: nil)}
+               task_data3 = {run_at: 1, task: double('task3', run: nil)}
 
-            it 'should not start any TaskWorkers for unready tasks'
+               expect(TaskWorker).to receive(:new).exactly(3).times.and_call_original
+
+               persister = double('persister', update_task: nil, delete_task: nil)
+               allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2, task_data3])
+
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
+
+               stub_loop worker
+               stub_yaml
+
+               worker.work
+            end
+
+            it 'should not start any TaskWorkers for unready tasks' do
+               now = Time.now
+
+               task_data1 = {run_at: now, task: double('task1', run: nil)}
+               task_data2 = {run_at: now + 1, task: double('task2', run: nil)}
+
+               expect(TaskWorker).to receive(:new).and_call_original
+               expect(TaskWorker).to_not receive(:new).and_call_original
+
+               persister = double('persister', update_task: nil, delete_task: nil)
+               allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
+
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
+
+               Timecop.freeze(now) do
+                  stub_loop worker
+                  stub_yaml
+
+                  worker.work
+               end
+            end
+
+            it 'should not start more TaskWorkers than max_tasks' do
+               task_data1 = {run_at: 1, task: double('task1', run: nil)}
+               task_data2 = {run_at: 2, task: double('task2', run: nil)}
+
+               expect(TaskWorker).to receive(:new).with(task_data1).and_call_original
+               expect(TaskWorker).to_not receive(:new).with(task_data2).and_call_original
+
+               persister = double('persister', update_task: nil, delete_task: nil)
+               allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
+
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
+
+               stub_loop worker
+               stub_yaml
+
+               worker.work
+            end
+
          end
 
          context 'TaskWorker succeeds' do
