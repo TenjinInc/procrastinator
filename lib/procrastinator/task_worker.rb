@@ -25,14 +25,18 @@ module Procrastinator
          rescue StandardError => e
             @last_fail_at = Time.now.to_i
 
-            if @max_attempts.nil? || @attempts <= @max_attempts # TODO: refactor this out to #over_limit?
-               try_hook(:fail, e)
-            else
+            if final_fail? # TODO: refactor this out to #over_limit?
                try_hook(:final_fail, e)
 
                raise FinalFailError.new('Task failed too many times.') #TODO: remove this, just record error reason instead
+            else
+               try_hook(:fail, e)
             end
          end
+      end
+
+      def final_fail?
+         !@max_attempts.nil? && @attempts > @max_attempts
       end
 
       private
