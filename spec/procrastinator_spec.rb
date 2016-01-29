@@ -5,6 +5,18 @@ describe Procrastinator do
       expect(Procrastinator::VERSION).not_to be nil
    end
 
+
+   it 'should default run_at to now' #do # TODO: move this to procrastinator #delay
+   #    now = Time.now
+   #    stub_yaml(task)
+   #
+   #    Timecop.freeze(now) do
+   #       worker = TaskWorker.new(task: nil)
+   #
+   #       expect(worker.run_at).to eq now
+   #    end
+   # end
+
    # Procrastinator.setup do
    #    define_queue(:invite_email, max_fails: 6, timeout: 1500)
    #    define_queue(:reminder_email, max_fails: 3, timeout: 1000)
@@ -16,7 +28,7 @@ describe Procrastinator do
    #
    # Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
 
-   # TODO: what if a task has no queue? this is something the #go method will need to handle
+   # TODO: what if a task is found that doesn't match a defined queue? this is something the #go method will need to handle
 
 
    describe '.setup' do
@@ -31,6 +43,8 @@ describe Procrastinator do
       it 'should record a task'
 
       it 'should complain when the given queue is not registered'
+
+      it 'should record initial_run_at and run_at to be the same'
    end
 
    describe '.spawn_worker' do

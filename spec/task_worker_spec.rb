@@ -1,15 +1,36 @@
 require 'spec_helper'
 
 module Procrastinator
+   class SuccessTask
+      def run
+
+      end
+   end
+
+   class FailTask
+      def run
+         raise('derp')
+      end
+   end
+
    describe TaskWorker do
+      let(:default_args) do
+         {id:             0,
+          run_at:         0,
+          initial_run_at: 0,
+          attempts:       0,
+          timeout:        0,
+          max_attempts:   2,
+          last_fail_at:   0,
+          task:           YAML.dump(SuccessTask.new)}
+      end
+
       describe '#inititalize' do
          let(:task) { double('task', run: nil) }
 
          it 'should accept id parameter' do
             [double('id1'), double('id2')].each do |id|
-               stub_yaml(task)
-
-               worker = TaskWorker.new(id: id, task: nil)
+               worker = TaskWorker.new(default_args.merge(id: id))
 
                expect(worker.id).to eq id
             end
@@ -17,36 +38,51 @@ module Procrastinator
 
          it 'should accept run_at parameter' do
             [double('time1'), double('time2')].each do |time|
-               stub_yaml(task)
-
-               worker = TaskWorker.new(run_at: time, task: nil)
+               worker = TaskWorker.new(default_args.merge(run_at: time))
 
                expect(worker.run_at).to eq time
             end
          end
 
-         it 'should default run_at to now' do # TODO: move this to procrastinator #delay
-            now = Time.now
-            stub_yaml(task)
+         it 'should accept initial_run_at parameter' do
+            [double('time1'), double('time2')].each do |time|
+               worker = TaskWorker.new(default_args.merge(initial_run_at: time))
 
-            Timecop.freeze(now) do
-               worker = TaskWorker.new(task: nil)
-
-               expect(worker.run_at).to eq now
+               expect(worker.initial_run_at).to eq time
             end
+         end
+
+         it 'should complain when run_at is missing' do
+            args = default_args.dup
+            args.delete(:run_at)
+
+            expect { TaskWorker.new(args) }.to raise_error(ArgumentError, 'missing keyword: run_at')
+         end
+
+         it 'should complain when initial_run_at is missing' do
+            args = default_args.dup
+            args.delete(:initial_run_at)
+
+            expect { TaskWorker.new(args) }.to raise_error(ArgumentError, 'missing keyword: initial_run_at')
+         end
+
+         it 'should complain when initial_run_at is nil' do
+            expect do
+               TaskWorker.new(default_args.merge(initial_run_at: nil))
+            end.to raise_error(ArgumentError, 'initial_run_at cannot be nil')
          end
 
          it 'should complain when timeout is negative' do
             stub_yaml(task)
 
-            expect { TaskWorker.new(task: nil, timeout: -1) }.to raise_error(ArgumentError, 'Timeout cannot be negative')
+            expect do
+               TaskWorker.new(default_args.merge(timeout: -1))
+            end.to raise_error(ArgumentError, 'timeout cannot be negative')
          end
 
          it 'should accept attempts' do
-            stub_yaml(task)
-
             (1..3).each do |attempts|
-               worker = TaskWorker.new(attempts: attempts, task: nil)
+               worker = TaskWorker.new(default_args.merge(attempts: attempts))
 
                expect(worker.attempts).to eq attempts
             end
@@ -58,18 +94,25 @@ module Procrastinator
 
             allow(YAML).to receive(:load).with(task_yml).and_return(task)
 
-            worker = TaskWorker.new(task: task_yml)
+            worker = TaskWorker.new(default_args.merge(task: task_yml))
 
             expect(worker.task).to eq task
          end
 
          it 'should complain when no handler is given' do
-            expect { TaskWorker.new }.to raise_error(ArgumentError, 'missing keyword: task')
+            args = default_args.dup
+            args.delete(:task)
+
+            expect do
+               TaskWorker.new(args)
+            end.to raise_error(ArgumentError, 'missing keyword: task')
          end
 
          it 'should complain if task does not support #run' do
+            task_str = YAML.dump(double('Badtask'))
+
             expect do
-               TaskWorker.new(task: YAML.dump(double('Badtask')))
+               TaskWorker.new(default_args.merge(task: task_str))
             end.to raise_error(MalformedTaskError, 'given task does not support #run method')
          end
       end
@@ -85,7 +128,7 @@ module Procrastinator
                expect(task).to receive(:run)
                allow(task).to receive(:success)
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                worker.work
             end
@@ -98,7 +141,7 @@ module Procrastinator
                allow(task).to receive(:run)
                allow(task).to receive(:success)
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                (1..3).each do |i|
                   worker.work
@@ -116,7 +159,7 @@ module Procrastinator
                allow(task).to receive(:run)
                expect(task).to receive(:success)
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                worker.work
             end
@@ -130,7 +173,7 @@ module Procrastinator
                expect(task).to_not receive(:success)
                allow(task).to receive(:fail)
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                worker.work
             end
@@ -144,7 +187,7 @@ module Procrastinator
                allow(task).to receive(:run)
                allow(task).to receive(:success).and_raise(err)
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                expect { worker.work }.to output("Success hook error: #{err}\n").to_stderr
             end
@@ -156,7 +199,7 @@ module Procrastinator
 
                allow(task).to receive(:run)
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                expect { worker.work }.to_not output.to_stderr
             end
@@ -173,7 +216,7 @@ module Procrastinator
 
                allow(task).to receive(:run).and_raise(err)
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                expect(task).to receive(:fail).with(err)
 
@@ -191,7 +234,7 @@ module Procrastinator
                end
                expect(task).to receive(:fail).with(Timeout::Error)
 
-               worker = TaskWorker.new(task: task, timeout: timeout)
+               worker = TaskWorker.new(default_args.merge(task: task, timeout: timeout))
 
                worker.work
             end
@@ -204,7 +247,7 @@ module Procrastinator
                allow(task).to receive(:run).and_raise('fake error')
                expect(task).to receive(:fail)
 
-               worker = TaskWorker.new(task: task, max_attempts: nil)
+               worker = TaskWorker.new(default_args.merge(task: task, max_attempts: nil))
 
                worker.work
             end
@@ -218,7 +261,7 @@ module Procrastinator
                allow(task).to receive(:success).and_raise('success block error')
                expect(task).to_not receive(:fail)
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                worker.work
             end
@@ -231,7 +274,7 @@ module Procrastinator
                allow(task).to receive(:run).and_raise('fake error')
                allow(task).to receive(:final_fail)
 
-               worker = TaskWorker.new(task: task, max_attempts: 0)
+               worker = TaskWorker.new(default_args.merge(task: task, max_attempts: 0))
 
                expect(task).to_not receive(:fail) # this is the real expectation
 
@@ -247,7 +290,7 @@ module Procrastinator
                allow(task).to receive(:run).and_raise('run error')
                allow(task).to receive(:fail).and_raise(err)
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                expect { worker.work }.to output("Fail hook error: #{err}\n").to_stderr
             end
@@ -259,7 +302,7 @@ module Procrastinator
 
                allow(task).to receive(:run).and_raise('fake error')
 
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(default_args.merge(task: task))
 
                expect { worker.work }.to_not output.to_stderr
             end
@@ -277,7 +320,7 @@ module Procrastinator
                      raise 'fake error'
                   end
 
-                  worker = TaskWorker.new(task: task)
+                  worker = TaskWorker.new(default_args.merge(task: task))
 
                   worker.work
 
@@ -301,7 +344,7 @@ module Procrastinator
 
                stub_yaml(task)
 
-               worker = TaskWorker.new(task: task, max_attempts: max_attempts)
+               worker = TaskWorker.new(default_args.merge(task: task, max_attempts: max_attempts))
 
                expect(task).to receive(:final_fail).with(err)
 
@@ -318,7 +361,7 @@ module Procrastinator
 
                stub_yaml(task)
 
-               worker = TaskWorker.new(task: task, max_attempts: nil)
+               worker = TaskWorker.new(default_args.merge(task: task, max_attempts: nil))
 
                expect(task).to_not receive(:final_fail)
 
@@ -334,7 +377,7 @@ module Procrastinator
 
                stub_yaml(task)
 
-               worker = TaskWorker.new(task: task, max_attempts: 0)
+               worker = TaskWorker.new(default_args.merge(task: task, max_attempts: 0))
 
                expect do
                   begin
@@ -352,7 +395,7 @@ module Procrastinator
 
                stub_yaml(task)
 
-               worker = TaskWorker.new(task: task, max_attempts: 0)
+               worker = TaskWorker.new(default_args.merge(task: task, max_attempts: 0))
 
                expect do
                   begin
@@ -376,7 +419,7 @@ module Procrastinator
 
                   stub_yaml(task)
 
-                  worker = TaskWorker.new(task: task, max_attempts: 0)
+                  worker = TaskWorker.new(default_args.merge(task: task, max_attempts: 0))
 
                   begin
                      worker.work
@@ -402,7 +445,7 @@ module Procrastinator
 
             stub_yaml(task)
 
-            worker = TaskWorker.new(task: task, attempts: 2, max_attempts: 3)
+            worker = TaskWorker.new(default_args.merge(task: task, attempts: 2, max_attempts: 3))
 
             worker.work # attempts should now go up to 3
 
@@ -417,7 +460,7 @@ module Procrastinator
 
             stub_yaml(task)
 
-            worker = TaskWorker.new(task: task, attempts: 1, max_attempts: 3)
+            worker = TaskWorker.new(default_args.merge(task: task, attempts: 1, max_attempts: 3))
 
             worker.work
 
@@ -432,7 +475,7 @@ module Procrastinator
 
             stub_yaml(task)
 
-            worker = TaskWorker.new(task: task, max_attempts: nil)
+            worker = TaskWorker.new(default_args.merge(task: task, max_attempts: nil))
 
             worker.work
 
@@ -449,7 +492,7 @@ module Procrastinator
 
             stub_yaml(task)
 
-            worker = TaskWorker.new(task: task)
+            worker = TaskWorker.new(default_args.merge(task: task))
 
             worker.work
 
@@ -464,7 +507,7 @@ module Procrastinator
 
             stub_yaml(task)
 
-            worker = TaskWorker.new(task: task)
+            worker = TaskWorker.new(default_args.merge(task: task))
 
             worker.work
 
@@ -480,7 +523,7 @@ module Procrastinator
 
             stub_yaml(task)
 
-            worker = TaskWorker.new(task: task, attempts: max_attempts-1, max_attempts: max_attempts)
+            worker = TaskWorker.new(default_args.merge(task: task, attempts: max_attempts-1, max_attempts: max_attempts))
 
             worker.work
 
@@ -495,26 +538,28 @@ module Procrastinator
             end
          end
 
-         it 'should return the data as a hash' do
-            id           = double('id')
-            run_at       = double('run_at')
-            task         = DummyTask.new
-            attempts     = double('attempts')
-            last_fail_at = double('last_fail_at')
+         it 'should return the properties as a hash' do
+            id             = double('id')
+            run_at         = double('run_at')
+            initial_run_at = double('initial_run_at')
+            task           = DummyTask.new
+            attempts       = double('attempts')
+            last_fail_at   = double('last_fail_at')
 
-            worker = TaskWorker.new(id: id, run_at: run_at, task: YAML.dump(task), attempts: attempts, last_fail_at: last_fail_at)
+            properties = {id:             id,
+                          initial_run_at: initial_run_at,
+                          run_at:         run_at,
+                          attempts:       attempts,
+                          last_fail_at:   last_fail_at,
+                          task:           YAML.dump(task)}
 
-            expected_hash = {id:           id,
-                             run_at:       run_at,
-                             attempts:     attempts,
-                             last_fail_at: last_fail_at,
-                             task:         YAML.dump(task)}
+            worker = TaskWorker.new(properties)
+
             #TODO: add:
-            # initial_run_at: ,
             # expire_at: ,
             # last_error: ,
 
-            expect(worker.to_hash).to eq expected_hash
+            expect(worker.to_hash).to eq properties
          end
       end
    end
