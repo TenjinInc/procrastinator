@@ -28,38 +28,6 @@ module Procrastinator
       describe '#inititalize' do
          let(:task) { double('task', run: nil) }
 
-         it 'should accept id parameter' do
-            [double('id1'), double('id2')].each do |id|
-               worker = TaskWorker.new(default_args.merge(id: id))
-
-               expect(worker.id).to eq id
-            end
-         end
-
-         it 'should accept run_at parameter' do
-            [double('time1'), double('time2')].each do |time|
-               worker = TaskWorker.new(default_args.merge(run_at: time))
-
-               expect(worker.run_at).to eq time
-            end
-         end
-
-         it 'should accept initial_run_at parameter' do
-            [double('time1'), double('time2')].each do |time|
-               worker = TaskWorker.new(default_args.merge(initial_run_at: time))
-
-               expect(worker.initial_run_at).to eq time
-            end
-         end
-
-         it 'should accept expire_at parameter' #do
-         # [double('time1'), double('time2')].each do |time|
-         #    worker = TaskWorker.new(default_args.merge(expire_at: time))
-         #
-         #    expect(worker.expire_at).to eq time
-         # end
-         #end
-
          it 'should complain when timeout is negative' do
             stub_yaml(task)
 
@@ -68,15 +36,7 @@ module Procrastinator
             end.to raise_error(ArgumentError, 'timeout cannot be negative')
          end
 
-         it 'should accept attempts' do
-            (1..3).each do |attempts|
-               worker = TaskWorker.new(default_args.merge(attempts: attempts))
-
-               expect(worker.attempts).to eq attempts
-            end
-         end
-
-         it 'should accept handler parameter' do
+         it 'should unpack handler parameter' do
             task     = double('task', run: nil)
             task_yml = YAML.dump(task)
 
@@ -153,13 +113,12 @@ module Procrastinator
             end
 
             it 'should not call task #success when #run errors' do
-               task = double('task')
+               task = FailTask.new
 
-               stub_yaml(task)
-
-               allow(task).to receive(:run).and_raise('fake error')
                expect(task).to_not receive(:success)
                allow(task).to receive(:fail)
+
+               stub_yaml(task)
 
                worker = TaskWorker.new(default_args.merge(task: task))
 
@@ -167,12 +126,11 @@ module Procrastinator
             end
 
             it 'should complain to stderr when #success errors' do
-               task = double('task')
+               task = SuccessTask.new
                err  ='success block error'
 
                stub_yaml(task)
 
-               allow(task).to receive(:run)
                allow(task).to receive(:success).and_raise(err)
 
                worker = TaskWorker.new(default_args.merge(task: task))
@@ -181,18 +139,18 @@ module Procrastinator
             end
 
             it 'should do nothing if the task does not include #success' do
-               task = double('task')
-
-               stub_yaml(task)
-
-               allow(task).to receive(:run)
-
-               worker = TaskWorker.new(default_args.merge(task: task))
+               worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new)))
 
                expect { worker.work }.to_not output.to_stderr
             end
 
-            it 'should blank the error message'
+            it 'should blank the error message' do
+               worker = TaskWorker.new(default_args.merge(last_error: 'derp', task: YAML.dump(SuccessTask.new)))
+
+               worker.work
+
+               expect(worker.last_error).to be nil
+            end
          end
 
          context 'fail hook' do
@@ -318,7 +276,14 @@ module Procrastinator
 
             it 'should reschedule for the future'
             it 'should reschedule on an increasing basis' #TODO: (30 + n_attempts^4) seconds
-            it 'should record the error'
+
+            it 'should record the error and trace in last_error' do
+               worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new)))
+               worker.work
+
+               expect(worker.last_error).to start_with 'Task failed: '
+               expect(worker.last_error).to match /(.*\n)+/ # poor version of checking for backtrace, but it works for now
+            end
          end
 
          context 'final_fail hook' do
@@ -340,6 +305,8 @@ module Procrastinator
                   worker.work
                end
             end
+
+            it 'should call #final_fail when the expiry time has passed' # TODO: and record different message
 
             it 'should not error or call #final_fail if nil max_attempts given' do
                task = double('task')
@@ -377,24 +344,14 @@ module Procrastinator
             end
 
             it 'should do nothing if the task does not include #final_fail' do
-               task = double('task')
-
-               allow(task).to receive(:run).and_raise('fake error')
-
-               stub_yaml(task)
-
-               worker = TaskWorker.new(default_args.merge(task: task, max_attempts: 0))
+               worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new), max_attempts: 0))
 
                expect do
-                  begin
-                     worker.work
-                  rescue FinalFailError
-                     # do nothing. this raise is intended and unimportant to the test
-                  end
+                  worker.work
                end.to_not output.to_stderr
             end
 
-            it 'should record the most final failure time' do
+            it 'should record the final failure time' do
                task       = double('task')
                start_time = Time.now
                delay      = 100
@@ -409,20 +366,21 @@ module Procrastinator
 
                   worker = TaskWorker.new(default_args.merge(task: task, max_attempts: 0))
 
-                  begin
-                     worker.work
-                  rescue FinalFailError
-                     # do nothing. this raise is intended and unimportant to the test
-                  end
+                  worker.work
 
                   expect(worker.last_fail_at).to eq start_time.to_i + delay
                end
             end
 
             it 'should mark the task as permanently failed' # TODO: by nilling run_at
-            it 'should record the error'
 
-            it 'should call #final_fail when the expiry time has passed' # TODO: and record different message
+            it 'should record the error and trace in last_error' do
+               worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new), max_attempts: 0))
+               worker.work
+
+               expect(worker.last_error).to start_with 'Task failed too many times: '
+               expect(worker.last_error).to match /(.*\n)+/ # poor version of checking for backtrace, but it works for now
+            end
          end
       end
 
@@ -535,12 +493,15 @@ module Procrastinator
             task           = DummyTask.new
             attempts       = double('attempts')
             last_fail_at   = double('last_fail_at')
+            last_error     = double('last_error')
+
 
             properties = {id:             id,
                           initial_run_at: initial_run_at,
                           run_at:         run_at,
                           attempts:       attempts,
                           last_fail_at:   last_fail_at,
+                          last_error:     last_error,
                           task:           YAML.dump(task)}
 
             worker = TaskWorker.new(properties)

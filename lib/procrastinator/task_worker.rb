@@ -2,7 +2,7 @@ require 'yaml'
 
 module Procrastinator
    class TaskWorker
-      attr_reader :id, :run_at, :initial_run_at, :task, :attempts, :last_fail_at
+      attr_reader :id, :run_at, :initial_run_at, :task, :attempts, :last_fail_at, :last_error
 
       def initialize(id: nil,
                      run_at: nil,
@@ -11,6 +11,7 @@ module Procrastinator
                      timeout: nil,
                      max_attempts: nil,
                      last_fail_at: nil,
+                     last_error: nil,
                      task:)
          @id             = id
          @run_at         = run_at
@@ -20,6 +21,7 @@ module Procrastinator
          @max_attempts   = max_attempts
          @timeout        = timeout
          @last_fail_at   = last_fail_at
+         @last_error     = last_error
 
          raise(MalformedTaskError.new('given task does not support #run method')) unless @task.respond_to? :run
          raise(ArgumentError.new('timeout cannot be negative')) if timeout && timeout < 0
@@ -34,21 +36,21 @@ module Procrastinator
             end
 
             try_hook(:success)
-            @status = :success
-               #TODO: @last_error = nil
+            @status     = :success
+            @last_error = nil
          rescue StandardError => e
             @last_fail_at = Time.now.to_i
 
             if final_fail?
                try_hook(:final_fail, e)
 
-               #TODO: @last_error = 'Task failed too many times: ' + e.backtrace
-               @status = :final_fail
+               @last_error = 'Task failed too many times: ' + e.backtrace.join("\n")
+               @status     = :final_fail
             else
                try_hook(:fail, e)
                @status = :fail
 
-               #TODO: @last_error = 'Task failed: ' + e.backtrace
+               @last_error = 'Task failed: ' + e.backtrace.join("\n")
             end
          end
       end
@@ -67,6 +69,7 @@ module Procrastinator
           initial_run_at: @initial_run_at,
           attempts:       @attempts,
           last_fail_at:   @last_fail_at,
+          last_error:     @last_error,
           task:           YAML.dump(@task)}
       end
 
