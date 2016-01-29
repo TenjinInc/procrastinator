@@ -484,5 +484,32 @@ module Procrastinator
          end
       end
 
+      describe '#to_hash' do
+         class DummyTask
+            def run
+
+            end
+         end
+
+         it 'should return the data as a hash' do
+            id           = double('id')
+            task         = DummyTask.new
+            attempts     = double('attempts')
+            last_fail_at = double('last_fail_at')
+
+            worker = TaskWorker.new(id: id, task: YAML.dump(task), attempts: attempts, last_fail_at: last_fail_at)
+
+            expected_hash = {id:           id,
+                             attempts:     attempts,
+                             last_fail_at: last_fail_at,
+                             task:         YAML.dump(task)}
+            #TODO: add:
+            # initial_run_at: ,
+            # expire_at: ,
+            # last_error: ,
+
+            expect(worker.to_hash).to eq expected_hash
+         end
+      end
    end
 end
