@@ -151,6 +151,14 @@ module Procrastinator
 
                expect(worker.last_error).to be nil
             end
+
+            it 'should blank the error time' do
+               worker = TaskWorker.new(default_args.merge(last_fail_at: double('failtime'), task: YAML.dump(SuccessTask.new)))
+
+               worker.work
+
+               expect(worker.last_fail_at).to be nil
+            end
          end
 
          context 'fail hook' do
@@ -385,63 +393,35 @@ module Procrastinator
          end
       end
 
-      describe '#final_fail?' do
+      describe '#too_many_fails?' do
          it 'should be true if no attempts remain' do
-            task = double('task')
-
-            allow(task).to receive(:run).and_raise('fake error')
-            allow(task).to receive(:fail)
-
-            stub_yaml(task)
-
-            worker = TaskWorker.new(default_args.merge(task: task, attempts: 2, max_attempts: 3))
+            worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new), attempts: 2, max_attempts: 3))
 
             worker.work # attempts should now go up to 3
 
-            expect(worker.final_fail?).to be true
+            expect(worker.too_many_fails?).to be true
          end
 
          it 'should be false if attempts remain' do
-            task = double('task')
-
-            allow(task).to receive(:run).and_raise('fake error')
-            allow(task).to receive(:fail)
-
-            stub_yaml(task)
-
-            worker = TaskWorker.new(default_args.merge(task: task, attempts: 1, max_attempts: 3))
+            worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new), attempts: 1, max_attempts: 3))
 
             worker.work
 
-            expect(worker.final_fail?).to be false
+            expect(worker.too_many_fails?).to be false
          end
 
          it 'should be false if nil max_attempts is given' do
-            task = double('task')
-
-            allow(task).to receive(:run).and_raise('fake error')
-            allow(task).to receive(:fail)
-
-            stub_yaml(task)
-
-            worker = TaskWorker.new(default_args.merge(task: task, max_attempts: nil))
+            worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new), max_attempts: nil))
 
             worker.work
 
-            expect(worker.final_fail?).to be false
+            expect(worker.too_many_fails?).to be false
          end
       end
 
       describe '#successful?' do
          it 'should return true when #run completes without error' do
-            task = double('task')
-
-            allow(task).to receive(:run)
-            allow(task).to receive(:success)
-
-            stub_yaml(task)
-
-            worker = TaskWorker.new(default_args.merge(task: task))
+            worker = TaskWorker.new(default_args.merge(task: YAML.dump(SuccessTask.new)))
 
             worker.work
 
@@ -449,30 +429,15 @@ module Procrastinator
          end
 
          it 'should return false if #run failed' do
-            task = double('task')
-
-            allow(task).to receive(:run).and_raise('fake error')
-            allow(task).to receive(:fail)
-
-            stub_yaml(task)
-
-            worker = TaskWorker.new(default_args.merge(task: task))
+            worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new)))
 
             worker.work
 
             expect(worker.successful?).to be false
          end
 
-         it 'should return false if #run final_failed' do
-            max_attempts = 3
-            task         = double('task')
-
-            allow(task).to receive(:run).and_raise('fake error')
-            allow(task).to receive(:final_fail)
-
-            stub_yaml(task)
-
-            worker = TaskWorker.new(default_args.merge(task: task, attempts: max_attempts-1, max_attempts: max_attempts))
+         it 'should return false if final failure' do
+            worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new), max_attempts: 1))
 
             worker.work
 
@@ -481,17 +446,11 @@ module Procrastinator
       end
 
       describe '#to_hash' do
-         class DummyTask
-            def run
-
-            end
-         end
-
          it 'should return the properties as a hash' do
             id             = double('id')
             run_at         = double('run_at')
             initial_run_at = double('initial_run_at')
-            task           = DummyTask.new
+            task           = SuccessTask.new
             attempts       = double('attempts')
             last_fail_at   = double('last_fail_at')
             last_error     = double('last_error')
@@ -507,9 +466,7 @@ module Procrastinator
 
             worker = TaskWorker.new(properties)
 
-            #TODO: add:
-            # expire_at: ,
-            # last_error: ,
+            #TODO: add: expire_at:
 
             expect(worker.to_hash).to eq properties
          end

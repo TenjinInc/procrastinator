@@ -36,12 +36,13 @@ module Procrastinator
             end
 
             try_hook(:success)
-            @status     = :success
-            @last_error = nil
+            @status       = :success
+            @last_error   = nil
+            @last_fail_at = nil
          rescue StandardError => e
             @last_fail_at = Time.now.to_i
 
-            if final_fail?
+            if too_many_fails?
                try_hook(:final_fail, e)
 
                @run_at     = nil
@@ -60,7 +61,7 @@ module Procrastinator
          @status == :success
       end
 
-      def final_fail?
+      def too_many_fails?
          !@max_attempts.nil? && @attempts >= @max_attempts
       end
 
