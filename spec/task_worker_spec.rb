@@ -52,6 +52,14 @@ module Procrastinator
             end
          end
 
+         it 'should accept expire_at parameter' #do
+           # [double('time1'), double('time2')].each do |time|
+           #    worker = TaskWorker.new(default_args.merge(expire_at: time))
+#
+           #    expect(worker.expire_at).to eq time
+           # end
+         #end
+
          it 'should complain when timeout is negative' do
             stub_yaml(task)
 
@@ -413,6 +421,8 @@ module Procrastinator
 
             it 'should mark the task as permanently failed' # TODO: by nilling run_at
             it 'should record the error'
+
+            it 'should call #final_fail when the expiry time has passed' # TODO: and record different message
          end
       end
 
