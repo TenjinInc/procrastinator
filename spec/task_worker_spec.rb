@@ -36,14 +36,6 @@ module Procrastinator
             end
          end
 
-          it 'should complain when id is missing' do
-            args = default_args.dup
-            args.delete(:id)
-
-            expect { TaskWorker.new(args) }.to raise_error(ArgumentError, 'missing keyword: id')
-         end
-
-
          it 'should accept run_at parameter' do
             [double('time1'), double('time2')].each do |time|
                worker = TaskWorker.new(default_args.merge(run_at: time))
@@ -58,26 +50,6 @@ module Procrastinator
 
                expect(worker.initial_run_at).to eq time
             end
-         end
-
-         it 'should complain when run_at is missing' do
-            args = default_args.dup
-            args.delete(:run_at)
-
-            expect { TaskWorker.new(args) }.to raise_error(ArgumentError, 'missing keyword: run_at')
-         end
-
-         it 'should complain when initial_run_at is missing' do
-            args = default_args.dup
-            args.delete(:initial_run_at)
-
-            expect { TaskWorker.new(args) }.to raise_error(ArgumentError, 'missing keyword: initial_run_at')
-         end
-
-         it 'should complain when initial_run_at is nil' do
-            expect do
-               TaskWorker.new(default_args.merge(initial_run_at: nil))
-            end.to raise_error(ArgumentError, 'initial_run_at cannot be nil')
          end
 
          it 'should complain when timeout is negative' do

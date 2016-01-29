@@ -158,9 +158,9 @@ module Procrastinator
                task2 = SuccessTask.new
                task3 = SuccessTask.new
 
-               job1 = {run_at: 1, task: YAML.dump(task1)}
-               job2 = {run_at: 2, task: YAML.dump(task2)}
-               job3 = {run_at: 3, task: YAML.dump(task3)}
+               job1 = {id: 4, run_at: 1, initial_run_at: 0, task: YAML.dump(task1)}
+               job2 = {id: 5, run_at: 2, initial_run_at: 0, task: YAML.dump(task2)}
+               job3 = {id: 6, run_at: 3, initial_run_at: 0, task: YAML.dump(task3)}
 
                allow(YAML).to receive(:load).and_return(task1, task2, task3)
 

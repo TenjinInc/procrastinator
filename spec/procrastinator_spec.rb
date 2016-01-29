@@ -45,6 +45,8 @@ describe Procrastinator do
       it 'should complain when the given queue is not registered'
 
       it 'should record initial_run_at and run_at to be the same'
+
+      it 'should require id, run_at, task'
    end
 
    describe '.spawn_worker' do

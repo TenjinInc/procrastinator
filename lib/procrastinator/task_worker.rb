@@ -4,9 +4,9 @@ module Procrastinator
    class TaskWorker
       attr_reader :id, :run_at, :initial_run_at, :task, :attempts, :last_fail_at, :status
 
-      def initialize(id:,
-                     run_at:,
-                     initial_run_at:,
+      def initialize(id: nil,
+                     run_at: nil,
+                     initial_run_at: nil,
                      attempts: 0,
                      timeout: nil,
                      max_attempts: nil,
@@ -23,7 +23,6 @@ module Procrastinator
 
          raise(MalformedTaskError.new('given task does not support #run method')) unless @task.respond_to? :run
          raise(ArgumentError.new('timeout cannot be negative')) if timeout && timeout < 0
-         raise(ArgumentError.new('initial_run_at cannot be nil')) if @initial_run_at.nil?
       end
 
       def work
