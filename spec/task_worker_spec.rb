@@ -36,6 +36,14 @@ module Procrastinator
             end
          end
 
+          it 'should complain when id is missing' do
+            args = default_args.dup
+            args.delete(:id)
+
+            expect { TaskWorker.new(args) }.to raise_error(ArgumentError, 'missing keyword: id')
+         end
+
+
          it 'should accept run_at parameter' do
             [double('time1'), double('time2')].each do |time|
                worker = TaskWorker.new(default_args.merge(run_at: time))

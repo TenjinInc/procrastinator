@@ -4,7 +4,7 @@ module Procrastinator
    class TaskWorker
       attr_reader :id, :run_at, :initial_run_at, :task, :attempts, :last_fail_at, :status
 
-      def initialize(id: nil,
+      def initialize(id:,
                      run_at:,
                      initial_run_at:,
                      attempts: 0,
