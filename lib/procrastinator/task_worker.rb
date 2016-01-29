@@ -2,11 +2,12 @@ require 'yaml'
 
 module Procrastinator
    class TaskWorker
-      attr_reader :id, :run_at, :initial_run_at, :task, :attempts, :last_fail_at, :last_error
+      attr_reader :id, :run_at, :initial_run_at, :expire_at, :task, :attempts, :last_fail_at, :last_error
 
       def initialize(id: nil,
                      run_at: nil,
                      initial_run_at: nil,
+                     expire_at: nil,
                      attempts: 0,
                      timeout: nil,
                      max_attempts: nil,
@@ -14,8 +15,9 @@ module Procrastinator
                      last_error: nil,
                      task:)
          @id             = id
-         @run_at         = run_at
-         @initial_run_at = initial_run_at
+         @run_at         = run_at.to_i
+         @initial_run_at = initial_run_at.to_i
+         @expire_at      = expire_at.to_i
          @task           = YAML.load(task)
          @attempts       = attempts
          @max_attempts   = max_attempts
@@ -64,10 +66,15 @@ module Procrastinator
          !@max_attempts.nil? && @attempts >= @max_attempts
       end
 
+      def expired?
+         Time.now.to_i < @expire_at
+      end
+
       def to_hash
          {id:             @id,
           run_at:         @run_at,
           initial_run_at: @initial_run_at,
+          expire_at:      @expire_at,
           attempts:       @attempts,
           last_fail_at:   @last_fail_at,
           last_error:     @last_error,

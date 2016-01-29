@@ -47,6 +47,16 @@ module Procrastinator
             expect(worker.task).to eq task
          end
 
+         it 'should convert run_at, initial_run at, and expire_at ints' do
+            now = Time.now
+
+            worker = TaskWorker.new(default_args.merge(run_at: now, initial_run_at: now, expire_at: now))
+
+            expect(worker.run_at).to eq now.to_i
+            expect(worker.initial_run_at).to eq now.to_i
+            expect(worker.expire_at).to eq now.to_i
+         end
+
          it 'should complain when no handler is given' do
             args = default_args.dup
             args.delete(:task)
@@ -445,36 +455,63 @@ module Procrastinator
          end
 
          it 'should complain if it has not been run yet' do
-            worker = TaskWorker.new(default_args.merge(task: YAML.dump(SuccessTask.new)))
+            worker = TaskWorker.new(default_args)
 
             expect { worker.successful? }.to raise_error(RuntimeError, 'you cannot check for success before running #work')
+         end
+      end
+
+      describe '#expired?' do
+         let(:now) { now = Time.now }
+
+         it 'should return true when the expiry date has passed' do
+            worker = TaskWorker.new(default_args.merge(expire_at: Time.now+1))
+
+            Timecop.freeze(now) do
+               expect(worker.expired?).to be true
+            end
+         end
+
+         it 'should return false when the expiry date has not passed' do
+            worker = TaskWorker.new(default_args.merge(expire_at: Time.now))
+
+            Timecop.freeze(now) do
+               expect(worker.expired?).to be false
+            end
          end
       end
 
       describe '#to_hash' do
          it 'should return the properties as a hash' do
             id             = double('id')
-            run_at         = double('run_at')
-            initial_run_at = double('initial_run_at')
+            run_at         = double('run_at', to_i: double('run_at_i'))
+            initial_run_at = double('initial_run_at', to_i: double('initial_run_at_i'))
+            expire_at      = double('expire_at', to_i: double('expire_at_i'))
             task           = SuccessTask.new
             attempts       = double('attempts')
             last_fail_at   = double('last_fail_at')
             last_error     = double('last_error')
 
 
-            properties = {id:             id,
-                          initial_run_at: initial_run_at,
-                          run_at:         run_at,
-                          attempts:       attempts,
-                          last_fail_at:   last_fail_at,
-                          last_error:     last_error,
-                          task:           YAML.dump(task)}
+            worker = TaskWorker.new(id:             id,
+                                    initial_run_at: initial_run_at,
+                                    run_at:         run_at,
+                                    expire_at:      expire_at,
+                                    attempts:       attempts,
+                                    last_fail_at:   last_fail_at,
+                                    last_error:     last_error,
+                                    task:           YAML.dump(task))
 
-            worker = TaskWorker.new(properties)
+            hash = {id:             id,
+                    initial_run_at: initial_run_at.to_i,
+                    run_at:         run_at.to_i,
+                    expire_at:      expire_at.to_i,
+                    attempts:       attempts,
+                    last_fail_at:   last_fail_at,
+                    last_error:     last_error,
+                    task:           YAML.dump(task)}
 
-            #TODO: add: expire_at:
-
-            expect(worker.to_hash).to eq properties
+            expect(worker.to_hash).to eq hash
          end
       end
    end
