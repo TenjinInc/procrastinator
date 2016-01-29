@@ -36,7 +36,6 @@ module Procrastinator
             end
 
             try_hook(:success)
-            @status       = :success
             @last_error   = nil
             @last_fail_at = nil
          rescue StandardError => e
@@ -47,10 +46,8 @@ module Procrastinator
 
                @run_at     = nil
                @last_error = 'Task failed too many times: ' + e.backtrace.join("\n")
-               @status     = :final_fail
             else
                try_hook(:fail, e)
-               @status = :fail
 
                @last_error = 'Task failed: ' + e.backtrace.join("\n")
             end
@@ -58,7 +55,9 @@ module Procrastinator
       end
 
       def successful?
-         @status == :success
+         raise(RuntimeError, 'you cannot check for success before running #work') unless @attempts > 0
+
+         @last_error.nil? && @last_fail_at.nil?
       end
 
       def too_many_fails?

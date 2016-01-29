@@ -443,6 +443,12 @@ module Procrastinator
 
             expect(worker.successful?).to be false
          end
+
+         it 'should complain if it has not been run yet' do
+            worker = TaskWorker.new(default_args.merge(task: YAML.dump(SuccessTask.new)))
+
+            expect { worker.successful? }.to raise_error(RuntimeError, 'you cannot check for success before running #work')
+         end
       end
 
       describe '#to_hash' do
