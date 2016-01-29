@@ -53,11 +53,11 @@ module Procrastinator
          end
 
          it 'should accept expire_at parameter' #do
-           # [double('time1'), double('time2')].each do |time|
-           #    worker = TaskWorker.new(default_args.merge(expire_at: time))
-#
-           #    expect(worker.expire_at).to eq time
-           # end
+         # [double('time1'), double('time2')].each do |time|
+         #    worker = TaskWorker.new(default_args.merge(expire_at: time))
+         #
+         #    expect(worker.expire_at).to eq time
+         # end
          #end
 
          it 'should complain when timeout is negative' do
@@ -473,8 +473,8 @@ module Procrastinator
          end
       end
 
-      describe '#status' do
-         it 'should return :success when #run completes without error' do
+      describe '#successful?' do
+         it 'should return true when #run completes without error' do
             task = double('task')
 
             allow(task).to receive(:run)
@@ -486,10 +486,10 @@ module Procrastinator
 
             worker.work
 
-            expect(worker.status).to eq :success
+            expect(worker.successful?).to be true
          end
 
-         it 'should return :fail if #run failed' do
+         it 'should return false if #run failed' do
             task = double('task')
 
             allow(task).to receive(:run).and_raise('fake error')
@@ -501,10 +501,10 @@ module Procrastinator
 
             worker.work
 
-            expect(worker.status).to eq :fail
+            expect(worker.successful?).to be false
          end
 
-         it 'should return :final_fail if #run final_failed' do
+         it 'should return false if #run final_failed' do
             max_attempts = 3
             task         = double('task')
 
@@ -517,7 +517,7 @@ module Procrastinator
 
             worker.work
 
-            expect(worker.status).to eq :final_fail
+            expect(worker.successful?).to be false
          end
       end
 

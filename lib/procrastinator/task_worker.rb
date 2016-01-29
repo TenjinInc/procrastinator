@@ -2,7 +2,7 @@ require 'yaml'
 
 module Procrastinator
    class TaskWorker
-      attr_reader :id, :run_at, :initial_run_at, :task, :attempts, :last_fail_at, :status
+      attr_reader :id, :run_at, :initial_run_at, :task, :attempts, :last_fail_at
 
       def initialize(id: nil,
                      run_at: nil,
@@ -51,6 +51,10 @@ module Procrastinator
                #TODO: @last_error = 'Task failed: ' + e.backtrace
             end
          end
+      end
+
+      def successful?
+         @status == :success
       end
 
       def final_fail?
