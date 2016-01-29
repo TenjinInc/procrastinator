@@ -1,6 +1,12 @@
 require 'spec_helper'
 
 module Procrastinator
+   def stub_loop(object, count = 1)
+      allow(object).to receive(:loop) do |&block|
+         count.times { block.call }
+      end
+   end
+
    describe QueueWorker do
       let(:persister) { loader = double('loader', read_tasks: [], update_task: nil, delete_task: nil) }
 
@@ -112,18 +118,6 @@ module Procrastinator
 
       describe '#work' do
          context 'loading tasks' do
-            def stub_loop(object, count = 1)
-               allow(object).to receive(:loop) do |&block|
-                  count.times { block.call }
-               end
-            end
-
-            def stub_yaml
-               allow(YAML).to receive(:load) do |arg|
-                  arg
-               end
-            end
-
             it 'should wait for update_period' do
                [0.01, 0.02].each do |period|
                   worker = QueueWorker.new(name: :queue, persister: persister, update_period: period)
@@ -148,18 +142,18 @@ module Procrastinator
             end
 
             it 'should sort tasks by run_at' do
-               job1 = {run_at: 1, task: double('task1', run: nil)}
-               job2 = {run_at: 2, task: double('task2', run: nil)}
-               job3 = {run_at: 3, task: double('task3', run: nil)}
+               job1 = {run_at: 1, handler: double('task1', run: nil)}
+               job2 = {run_at: 2, handler: double('task2', run: nil)}
+               job3 = {run_at: 3, handler: double('task3', run: nil)}
 
                persister = double('disorganized persister', read_tasks: [job2, job3, job1], update_task: nil, delete_task: nil)
                worker    = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
                stub_loop(worker)
                stub_yaml
 
-               expect(job1[:task]).to receive(:run).ordered
-               expect(job2[:task]).to receive(:run).ordered
-               expect(job3[:task]).to receive(:run).ordered
+               expect(job1[:handler]).to receive(:run).ordered
+               expect(job2[:handler]).to receive(:run).ordered
+               expect(job3[:handler]).to receive(:run).ordered
 
                worker.work
             end
@@ -175,8 +169,8 @@ module Procrastinator
                   Timecop.travel(6)
                end
 
-               job1 = {run_at: 1, task: task1}
-               job2 = {run_at: 1, task: task2}
+               job1 = {run_at: 1, handler: task1}
+               job2 = {run_at: 1, handler: task2}
 
                allow(persister).to receive(:read_tasks).and_return([job1], [job2])
 
@@ -195,13 +189,11 @@ module Procrastinator
 
             it 'should run a TaskWorker with all the data' do
                task_double = double('task', run: nil)
-               task_data   = {run_at: 1, task: YAML.dump(task_double)}
+               task_data   = {run_at: 1, handler: YAML.dump(task_double)}
 
                allow(YAML).to receive(:load).and_return(task_double)
 
-               expect(TaskWorker).to receive(:new)
-                                           .with(task_data.merge(task: YAML.load(task_data[:task])))
-                                           .and_call_original
+               expect(TaskWorker).to receive(:new).with(task_data).and_call_original
 
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data])
@@ -213,9 +205,9 @@ module Procrastinator
             end
 
             it 'should run a TaskWorker for each ready task' do
-               task_data1 = {run_at: 1, task: double('task1', run: nil)}
-               task_data2 = {run_at: 1, task: double('task2', run: nil)}
-               task_data3 = {run_at: 1, task: double('task3', run: nil)}
+               task_data1 = {run_at: 1, handler: double('task1', run: nil)}
+               task_data2 = {run_at: 1, handler: double('task2', run: nil)}
+               task_data3 = {run_at: 1, handler: double('task3', run: nil)}
 
                expect(TaskWorker).to receive(:new).exactly(3).times.and_call_original
 
@@ -233,8 +225,8 @@ module Procrastinator
             it 'should not start any TaskWorkers for unready tasks' do
                now = Time.now
 
-               task_data1 = {run_at: now, task: double('task1', run: nil)}
-               task_data2 = {run_at: now + 1, task: double('task2', run: nil)}
+               task_data1 = {run_at: now, handler: double('task1', run: nil)}
+               task_data2 = {run_at: now + 1, handler: double('task2', run: nil)}
 
                expect(TaskWorker).to receive(:new).and_call_original
                expect(TaskWorker).to_not receive(:new).and_call_original
@@ -253,8 +245,8 @@ module Procrastinator
             end
 
             it 'should not start more TaskWorkers than max_tasks' do
-               task_data1 = {run_at: 1, task: double('task1', run: nil)}
-               task_data2 = {run_at: 2, task: double('task2', run: nil)}
+               task_data1 = {run_at: 1, handler: double('task1', run: nil)}
+               task_data2 = {run_at: 2, handler: double('task2', run: nil)}
 
                expect(TaskWorker).to receive(:new).with(task_data1).and_call_original
                expect(TaskWorker).to_not receive(:new).with(task_data2).and_call_original
@@ -273,19 +265,68 @@ module Procrastinator
          end
 
          context 'TaskWorker succeeds' do
-            it 'should delete the task'
+            it 'should delete the task' do
+               task_data = {id: double('id'), handler: double('task1', run: nil)}
+
+               allow(persister).to receive(:read_tasks).and_return([task_data])
+
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
+
+               expect(persister).to receive(:delete_task).with(task_data[:id])
+
+               stub_loop(worker)
+               stub_yaml
+
+               worker.work
+            end
          end
 
          context 'TaskWorker failed' do
-            it 'should reschedule for the future'
-            it 'should reschedule on an increasing basis'
+            it 'should update the task' do
+               task_data = {id: double('id'), handler: double('task1')}
+
+               allow(persister).to receive(:read_tasks).and_return([task_data])
+               allow(task_data[:task]).to receive(:run).and_raise('derp')
+
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
+
+               expect(persister).to receive(:update_task).with(task_data)
+
+               stub_loop(worker)
+               stub_yaml
+
+               worker.work
+
+               fail pending 'need to fix yaml first'
+            end
          end
 
          context 'TaskWorker failed for the last time' do
             # to do: promote captain Piett to admiral
+            it 'should update the task' do
+               task_data = {id: double('id'), handler: double('task1', run: nil)}
 
+               allow(persister).to receive(:read_tasks).and_return([task_data])
+               allow(task_data[:task]).to receive(:run).and_raise('derp')
 
-            it 'should mark the task as permanently failed' # maybe by blanking run_at?
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
+
+               expect(persister).to receive(:update_task).with(:id,
+                                                               :queue,
+                                                               :run_at,
+                                                               :initial_run_at,
+                                                               :expire_at,
+                                                               :attempts,
+                                                               :last_error,
+                                                               :handler)
+
+               stub_loop(worker)
+               stub_yaml
+
+               worker.work
+
+               fail pending 'need to fix yaml first'
+            end
          end
       end
    end

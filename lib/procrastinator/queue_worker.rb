@@ -1,5 +1,3 @@
-require 'yaml'
-
 module Procrastinator
    class QueueWorker
       DEFAULT_TIMEOUT       = 3600 # seconds = one hour
@@ -42,11 +40,18 @@ module Procrastinator
 
             tasks.first(@max_tasks).each do |task_data|
                if Time.now.to_i >= task_data[:run_at].to_i
-                  parsed_data = task_data.merge(task: YAML.load(task_data[:task]))
+                  parsed_data = task_data
+                  id          = parsed_data.delete(:id)
 
                   tw = TaskWorker.new(parsed_data)
 
                   tw.work
+
+                  if tw.status == :success
+                     @persister.delete_task(id)
+                  else
+                     @persister.update_task(tw.to_hash)
+                  end
                end
             end
          end

@@ -2,71 +2,70 @@ require 'spec_helper'
 
 module Procrastinator
    describe TaskWorker do
+      def stub_yaml(payload)
+         allow(YAML).to receive(:load) do |arg|
+            payload
+         end
+      end
+
       describe '#inititalize' do
-         let(:task) { double('Some task', run: 5) }
+         let(:task) { double('task', run: nil) }
 
          it 'should accept run_at parameter' do
             [double('time1'), double('time2')].each do |time|
-               worker = TaskWorker.new(run_at: time, task: task)
+               stub_yaml(task)
+
+               worker = TaskWorker.new(run_at: time, task: nil)
 
                expect(worker.run_at).to eq time
             end
          end
 
-         it 'should default run_at to now' do
+         it 'should default run_at to now' do # TODO: move this to procrastinator #delay
             now = Time.now
+            stub_yaml(task)
 
             Timecop.freeze(now) do
-               worker = TaskWorker.new(task: task)
+               worker = TaskWorker.new(task: nil)
 
                expect(worker.run_at).to eq now
             end
          end
 
-         # context('queue') do
-         # it 'should accept timeout parameter' do
-         #    (1..3).each do |t|
-         #       worker = TaskWorker.new(timeout: t, task: task)
-         #
-         #       expect(worker.timeout).to eq t
-         #    end
-         # end
-         #
-         # it 'should accept max_attempts parameter' do
-         #    (1..3).each do |i|
-         #       worker = TaskWorker.new(max_attempts: i, task: task)
-         #
-         #       expect(worker.max_attempts).to eq i
-         #    end
-         # end
-         # end
-
          it 'should complain when timeout is negative' do
-            expect { TaskWorker.new(task: task, timeout: -1) }.to raise_error(ArgumentError, 'Timeout cannot be negative')
+            stub_yaml(task)
+
+            expect { TaskWorker.new(task: nil, timeout: -1) }.to raise_error(ArgumentError, 'Timeout cannot be negative')
          end
 
          it 'should accept attempts' do
-            (1..3).each do |attempts|
+            stub_yaml(task)
 
-               worker = TaskWorker.new(attempts: attempts, task: task)
+            (1..3).each do |attempts|
+               worker = TaskWorker.new(attempts: attempts, task: nil)
 
                expect(worker.attempts).to eq attempts
             end
          end
 
-         it 'should accept task parameter' do
-            worker = TaskWorker.new(task: task)
+         it 'should accept handler parameter' do
+            task     = double('task', run: nil)
+            task_yml = YAML.dump(task)
+
+            allow(YAML).to receive(:load).with(task_yml).and_return(task)
+
+            worker = TaskWorker.new(task: task_yml)
 
             expect(worker.task).to eq task
          end
 
-         it 'should complain when no task is given' do
+         it 'should complain when no handler is given' do
             expect { TaskWorker.new }.to raise_error(ArgumentError, 'missing keyword: task')
          end
 
          it 'should complain if task does not support #run' do
             expect do
-               TaskWorker.new(task: double('Badtask'))
+               TaskWorker.new(task: YAML.dump(double('Badtask')))
             end.to raise_error(MalformedTaskError, 'given task does not support #run method')
          end
       end
@@ -76,6 +75,8 @@ module Procrastinator
          context 'run hook' do
             it 'should call task #run' do
                task = double('task')
+
+               stub_yaml(task)
 
                expect(task).to receive(:run)
                allow(task).to receive(:success)
@@ -87,6 +88,8 @@ module Procrastinator
 
             it 'should increase number of attempts when #run is called' do
                task = double('task')
+
+               stub_yaml(task)
 
                allow(task).to receive(:run)
                allow(task).to receive(:success)
@@ -104,6 +107,8 @@ module Procrastinator
             it 'should call task #success when #run completes without error' do
                task = double('task')
 
+               stub_yaml(task)
+
                allow(task).to receive(:run)
                expect(task).to receive(:success)
 
@@ -114,6 +119,8 @@ module Procrastinator
 
             it 'should not call task #success when #run errors' do
                task = double('task')
+
+               stub_yaml(task)
 
                allow(task).to receive(:run).and_raise('fake error')
                expect(task).to_not receive(:success)
@@ -128,6 +135,8 @@ module Procrastinator
                task = double('task')
                err  ='success block error'
 
+               stub_yaml(task)
+
                allow(task).to receive(:run)
                allow(task).to receive(:success).and_raise(err)
 
@@ -139,18 +148,24 @@ module Procrastinator
             it 'should do nothing if the task does not include #success' do
                task = double('task')
 
+               stub_yaml(task)
+
                allow(task).to receive(:run)
 
                worker = TaskWorker.new(task: task)
 
                expect { worker.work }.to_not output.to_stderr
             end
+
+            it 'should blank the error message'
          end
 
          context 'fail hook' do
             it 'should #fail when #run errors' do
                task = double('task')
                err  = StandardError.new('fake error')
+
+               stub_yaml(task)
 
                allow(task).to receive(:run).and_raise(err)
 
@@ -165,6 +180,8 @@ module Procrastinator
                task    = double('task')
                timeout = 0.1 # can't be 0. timeout doesn't actually do timeout stuff if given 0
 
+               stub_yaml(task)
+
                allow(task).to receive(:run) do
                   sleep(timeout + 0.1)
                end
@@ -178,6 +195,8 @@ module Procrastinator
             it 'should call #fail if nil max_attempts given and #run errors' do
                task = double('task')
 
+               stub_yaml(task)
+
                allow(task).to receive(:run).and_raise('fake error')
                expect(task).to receive(:fail)
 
@@ -188,6 +207,8 @@ module Procrastinator
 
             it 'should not #fail when #success errors' do
                task = double('task')
+
+               stub_yaml(task)
 
                allow(task).to receive(:run)
                allow(task).to receive(:success).and_raise('success block error')
@@ -200,6 +221,8 @@ module Procrastinator
 
             it 'should not #fail if calling #final_fail' do
                task = double('task')
+
+               stub_yaml(task)
 
                allow(task).to receive(:run).and_raise('fake error')
                allow(task).to receive(:final_fail)
@@ -215,6 +238,8 @@ module Procrastinator
                task = double('task')
                err  = 'fail error'
 
+               stub_yaml(task)
+
                allow(task).to receive(:run).and_raise('run error')
                allow(task).to receive(:fail).and_raise(err)
 
@@ -225,6 +250,8 @@ module Procrastinator
 
             it 'should do nothing if the task does not include #fail' do
                task = double('task')
+
+               stub_yaml(task)
 
                allow(task).to receive(:run).and_raise('fake error')
 
@@ -237,6 +264,8 @@ module Procrastinator
                task       = double('task')
                start_time = Time.now
                delay      = 100
+
+               stub_yaml(task)
 
                Timecop.freeze(start_time) do
                   allow(task).to receive(:run) do
@@ -251,6 +280,10 @@ module Procrastinator
                   expect(worker.last_fail_at).to eq start_time.to_i + delay
                end
             end
+
+            it 'should reschedule for the future'
+            it 'should reschedule on an increasing basis'
+            it 'should record the error'
          end
 
          context 'final_fail hook' do
@@ -261,6 +294,8 @@ module Procrastinator
 
                allow(task).to receive(:run).and_raise(err)
                allow(task).to receive(:fail)
+
+               stub_yaml(task)
 
                worker = TaskWorker.new(task: task, max_attempts: max_attempts)
 
@@ -277,6 +312,8 @@ module Procrastinator
                allow(task).to receive(:run).and_raise('fake error')
                allow(task).to receive(:fail)
 
+               stub_yaml(task)
+
                worker = TaskWorker.new(task: task, max_attempts: nil)
 
                expect(task).to_not receive(:final_fail)
@@ -290,6 +327,8 @@ module Procrastinator
 
                allow(task).to receive(:run).and_raise('run error')
                allow(task).to receive(:final_fail).and_raise(err)
+
+               stub_yaml(task)
 
                worker = TaskWorker.new(task: task, max_attempts: 0)
 
@@ -306,6 +345,8 @@ module Procrastinator
                task = double('task')
 
                allow(task).to receive(:run).and_raise('fake error')
+
+               stub_yaml(task)
 
                worker = TaskWorker.new(task: task, max_attempts: 0)
 
@@ -329,6 +370,8 @@ module Procrastinator
                      raise 'fake error'
                   end
 
+                  stub_yaml(task)
+
                   worker = TaskWorker.new(task: task, max_attempts: 0)
 
                   begin
@@ -340,6 +383,9 @@ module Procrastinator
                   expect(worker.last_fail_at).to eq start_time.to_i + delay
                end
             end
+
+            it 'should mark the task as permanently failed' # TODO: by nilling run_at
+            it 'should record the error'
          end
       end
 
@@ -349,6 +395,8 @@ module Procrastinator
 
             allow(task).to receive(:run).and_raise('fake error')
             allow(task).to receive(:fail)
+
+            stub_yaml(task)
 
             worker = TaskWorker.new(task: task, attempts: 2, max_attempts: 3)
 
@@ -363,6 +411,8 @@ module Procrastinator
             allow(task).to receive(:run).and_raise('fake error')
             allow(task).to receive(:fail)
 
+            stub_yaml(task)
+
             worker = TaskWorker.new(task: task, attempts: 1, max_attempts: 3)
 
             worker.work
@@ -375,6 +425,8 @@ module Procrastinator
 
             allow(task).to receive(:run).and_raise('fake error')
             allow(task).to receive(:fail)
+
+            stub_yaml(task)
 
             worker = TaskWorker.new(task: task, max_attempts: nil)
 
@@ -391,6 +443,8 @@ module Procrastinator
             allow(task).to receive(:run)
             allow(task).to receive(:success)
 
+            stub_yaml(task)
+
             worker = TaskWorker.new(task: task)
 
             worker.work
@@ -403,6 +457,8 @@ module Procrastinator
 
             allow(task).to receive(:run).and_raise('fake error')
             allow(task).to receive(:fail)
+
+            stub_yaml(task)
 
             worker = TaskWorker.new(task: task)
 
@@ -417,6 +473,8 @@ module Procrastinator
 
             allow(task).to receive(:run).and_raise('fake error')
             allow(task).to receive(:final_fail)
+
+            stub_yaml(task)
 
             worker = TaskWorker.new(task: task, attempts: max_attempts-1, max_attempts: max_attempts)
 
