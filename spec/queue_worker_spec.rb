@@ -1,14 +1,26 @@
 require 'spec_helper'
 
 module Procrastinator
-   def stub_loop(object, count = 1)
-      allow(object).to receive(:loop) do |&block|
-         count.times { block.call }
+   class SuccessTask
+      def run
+
+      end
+   end
+
+   class FailTask
+      def run
+         raise 'derp'
       end
    end
 
    describe QueueWorker do
       let(:persister) { loader = double('loader', read_tasks: [], update_task: nil, delete_task: nil) }
+
+      def stub_loop(object, count = 1)
+         allow(object).to receive(:loop) do |&block|
+            count.times { block.call }
+         end
+      end
 
       describe '#initialize' do
          it 'should require a name' do
@@ -142,18 +154,23 @@ module Procrastinator
             end
 
             it 'should sort tasks by run_at' do
-               job1 = {run_at: 1, handler: double('task1', run: nil)}
-               job2 = {run_at: 2, handler: double('task2', run: nil)}
-               job3 = {run_at: 3, handler: double('task3', run: nil)}
+               task1 = SuccessTask.new
+               task2 = SuccessTask.new
+               task3 = SuccessTask.new
+
+               job1 = {run_at: 1, task: YAML.dump(task1)}
+               job2 = {run_at: 2, task: YAML.dump(task2)}
+               job3 = {run_at: 3, task: YAML.dump(task3)}
+
+               allow(YAML).to receive(:load).and_return(task1, task2, task3)
 
                persister = double('disorganized persister', read_tasks: [job2, job3, job1], update_task: nil, delete_task: nil)
                worker    = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
                stub_loop(worker)
-               stub_yaml
 
-               expect(job1[:handler]).to receive(:run).ordered
-               expect(job2[:handler]).to receive(:run).ordered
-               expect(job3[:handler]).to receive(:run).ordered
+               expect(task1).to receive(:run).ordered
+               expect(task2).to receive(:run).ordered
+               expect(task3).to receive(:run).ordered
 
                worker.work
             end
@@ -169,17 +186,18 @@ module Procrastinator
                   Timecop.travel(6)
                end
 
-               job1 = {run_at: 1, handler: task1}
-               job2 = {run_at: 1, handler: task2}
+               job1 = {run_at: 1, task: task1}
+               job2 = {run_at: 1, task: task2}
 
                allow(persister).to receive(:read_tasks).and_return([job1], [job2])
+
+               allow(YAML).to receive(:load).and_return(task1, task2)
 
                start_time = Time.now
 
                Timecop.freeze(start_time) do
                   worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.00)
                   stub_loop(worker, 2)
-                  stub_yaml
 
                   worker.work
 
@@ -189,7 +207,7 @@ module Procrastinator
 
             it 'should run a TaskWorker with all the data' do
                task_double = double('task', run: nil)
-               task_data   = {run_at: 1, handler: YAML.dump(task_double)}
+               task_data   = {run_at: 1, task: YAML.dump(task_double)}
 
                allow(YAML).to receive(:load).and_return(task_double)
 
@@ -205,9 +223,9 @@ module Procrastinator
             end
 
             it 'should run a TaskWorker for each ready task' do
-               task_data1 = {run_at: 1, handler: double('task1', run: nil)}
-               task_data2 = {run_at: 1, handler: double('task2', run: nil)}
-               task_data3 = {run_at: 1, handler: double('task3', run: nil)}
+               task_data1 = {run_at: 1, task: YAML.dump(SuccessTask.new)}
+               task_data2 = {run_at: 1, task: YAML.dump(SuccessTask.new)}
+               task_data3 = {run_at: 1, task: YAML.dump(SuccessTask.new)}
 
                expect(TaskWorker).to receive(:new).exactly(3).times.and_call_original
 
@@ -217,7 +235,6 @@ module Procrastinator
                worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
 
                stub_loop worker
-               stub_yaml
 
                worker.work
             end
@@ -225,11 +242,11 @@ module Procrastinator
             it 'should not start any TaskWorkers for unready tasks' do
                now = Time.now
 
-               task_data1 = {run_at: now, handler: double('task1', run: nil)}
-               task_data2 = {run_at: now + 1, handler: double('task2', run: nil)}
+               task_data1 = {run_at: now, task: YAML.dump(SuccessTask.new)}
+               task_data2 = {run_at: now + 1, task: YAML.dump(SuccessTask.new)}
 
-               expect(TaskWorker).to receive(:new).and_call_original
-               expect(TaskWorker).to_not receive(:new).and_call_original
+               expect(TaskWorker).to receive(:new).ordered.and_call_original
+               expect(TaskWorker).to_not receive(:new).ordered.and_call_original
 
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
@@ -238,15 +255,14 @@ module Procrastinator
 
                Timecop.freeze(now) do
                   stub_loop worker
-                  stub_yaml
 
                   worker.work
                end
             end
 
             it 'should not start more TaskWorkers than max_tasks' do
-               task_data1 = {run_at: 1, handler: double('task1', run: nil)}
-               task_data2 = {run_at: 2, handler: double('task2', run: nil)}
+               task_data1 = {run_at: 1, task: YAML.dump(SuccessTask.new)}
+               task_data2 = {run_at: 2, task: YAML.dump(SuccessTask.new)}
 
                expect(TaskWorker).to receive(:new).with(task_data1).and_call_original
                expect(TaskWorker).to_not receive(:new).with(task_data2).and_call_original
@@ -257,7 +273,6 @@ module Procrastinator
                worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
 
                stub_loop worker
-               stub_yaml
 
                worker.work
             end
@@ -266,7 +281,7 @@ module Procrastinator
 
          context 'TaskWorker succeeds' do
             it 'should delete the task' do
-               task_data = {id: double('id'), handler: double('task1', run: nil)}
+               task_data = {id: double('id'), task: YAML.dump(SuccessTask.new)}
 
                allow(persister).to receive(:read_tasks).and_return([task_data])
 
@@ -275,7 +290,6 @@ module Procrastinator
                expect(persister).to receive(:delete_task).with(task_data[:id])
 
                stub_loop(worker)
-               stub_yaml
 
                worker.work
             end
@@ -283,49 +297,42 @@ module Procrastinator
 
          context 'TaskWorker failed' do
             it 'should update the task' do
-               task_data = {id: double('id'), handler: double('task1')}
+               run_at    = double('run_at', to_i: 0)
+               task_data = {run_at: run_at, task: YAML.dump(FailTask.new)}
+               task_hash = {stub: :hash}
 
                allow(persister).to receive(:read_tasks).and_return([task_data])
-               allow(task_data[:task]).to receive(:run).and_raise('derp')
+
+               allow_any_instance_of(TaskWorker).to receive(:to_hash).and_return(task_hash)
 
                worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
 
-               expect(persister).to receive(:update_task).with(task_data)
+               expect(persister).to receive(:update_task).with(task_hash.merge(run_at: run_at, queue: worker.name))
 
                stub_loop(worker)
-               stub_yaml
 
                worker.work
-
-               fail pending 'need to fix yaml first'
             end
          end
 
          context 'TaskWorker failed for the last time' do
             # to do: promote captain Piett to admiral
             it 'should update the task' do
-               task_data = {id: double('id'), handler: double('task1', run: nil)}
+               run_at    = double('run_at', to_i: 0)
+               task_data = {run_at: run_at, task: YAML.dump(FailTask.new)}
+               task_hash = {stub: :hash}
 
                allow(persister).to receive(:read_tasks).and_return([task_data])
-               allow(task_data[:task]).to receive(:run).and_raise('derp')
 
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
+               allow_any_instance_of(TaskWorker).to receive(:to_hash).and_return(task_hash)
 
-               expect(persister).to receive(:update_task).with(:id,
-                                                               :queue,
-                                                               :run_at,
-                                                               :initial_run_at,
-                                                               :expire_at,
-                                                               :attempts,
-                                                               :last_error,
-                                                               :handler)
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1, max_attempts: 0)
+
+               expect(persister).to receive(:update_task).with(task_hash.merge(run_at: run_at, queue: worker.name))
 
                stub_loop(worker)
-               stub_yaml
 
                worker.work
-
-               fail pending 'need to fix yaml first'
             end
          end
       end

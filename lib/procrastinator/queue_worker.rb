@@ -50,7 +50,7 @@ module Procrastinator
                   if tw.status == :success
                      @persister.delete_task(id)
                   else
-                     @persister.update_task(tw.to_hash)
+                     @persister.update_task(tw.to_hash.merge(run_at: task_data[:run_at], queue: @name))
                   end
                end
             end

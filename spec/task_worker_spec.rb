@@ -2,12 +2,6 @@ require 'spec_helper'
 
 module Procrastinator
    describe TaskWorker do
-      def stub_yaml(payload)
-         allow(YAML).to receive(:load) do |arg|
-            payload
-         end
-      end
-
       describe '#inititalize' do
          let(:task) { double('task', run: nil) }
 
@@ -282,7 +276,7 @@ module Procrastinator
             end
 
             it 'should reschedule for the future'
-            it 'should reschedule on an increasing basis'
+            it 'should reschedule on an increasing basis'  #TODO: (30 + n_attempts^4) seconds
             it 'should record the error'
          end
 
