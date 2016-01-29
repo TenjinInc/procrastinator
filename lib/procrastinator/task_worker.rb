@@ -44,6 +44,7 @@ module Procrastinator
             if final_fail?
                try_hook(:final_fail, e)
 
+               @run_at     = nil
                @last_error = 'Task failed too many times: ' + e.backtrace.join("\n")
                @status     = :final_fail
             else

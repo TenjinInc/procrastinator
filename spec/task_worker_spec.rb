@@ -335,11 +335,7 @@ module Procrastinator
                worker = TaskWorker.new(default_args.merge(task: task, max_attempts: 0))
 
                expect do
-                  begin
-                     worker.work
-                  rescue FinalFailError
-                     # do nothing. this error is unimportant to the test
-                  end
+                  worker.work
                end.to output("Final_fail hook error: #{err}\n").to_stderr
             end
 
@@ -372,7 +368,12 @@ module Procrastinator
                end
             end
 
-            it 'should mark the task as permanently failed' # TODO: by nilling run_at
+            it 'should mark the task as permanently failed' do
+               worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new), max_attempts: 0))
+               worker.work
+
+               expect(worker.run_at).to be nil
+            end
 
             it 'should record the error and trace in last_error' do
                worker = TaskWorker.new(default_args.merge(task: YAML.dump(FailTask.new), max_attempts: 0))
