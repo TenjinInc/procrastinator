@@ -40,17 +40,14 @@ module Procrastinator
 
             tasks.first(@max_tasks).each do |task_data|
                if Time.now.to_i >= task_data[:run_at].to_i
-                  parsed_data = task_data
-                  id          = parsed_data.delete(:id)
-
-                  tw = TaskWorker.new(parsed_data)
+                  tw = TaskWorker.new(task_data)
 
                   tw.work
 
                   if tw.status == :success
-                     @persister.delete_task(id)
+                     @persister.delete_task(task_data[:id])
                   else
-                     @persister.update_task(tw.to_hash.merge(run_at: task_data[:run_at], queue: @name))
+                     @persister.update_task(tw.to_hash.merge(queue: @name))
                   end
                end
             end

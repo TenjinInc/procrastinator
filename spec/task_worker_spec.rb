@@ -5,6 +5,16 @@ module Procrastinator
       describe '#inititalize' do
          let(:task) { double('task', run: nil) }
 
+         it 'should accept id parameter' do
+            [double('id1'), double('id2')].each do |id|
+               stub_yaml(task)
+
+               worker = TaskWorker.new(id: id, task: nil)
+
+               expect(worker.id).to eq id
+            end
+         end
+
          it 'should accept run_at parameter' do
             [double('time1'), double('time2')].each do |time|
                stub_yaml(task)
@@ -276,7 +286,7 @@ module Procrastinator
             end
 
             it 'should reschedule for the future'
-            it 'should reschedule on an increasing basis'  #TODO: (30 + n_attempts^4) seconds
+            it 'should reschedule on an increasing basis' #TODO: (30 + n_attempts^4) seconds
             it 'should record the error'
          end
 
@@ -487,13 +497,15 @@ module Procrastinator
 
          it 'should return the data as a hash' do
             id           = double('id')
+            run_at       = double('run_at')
             task         = DummyTask.new
             attempts     = double('attempts')
             last_fail_at = double('last_fail_at')
 
-            worker = TaskWorker.new(id: id, task: YAML.dump(task), attempts: attempts, last_fail_at: last_fail_at)
+            worker = TaskWorker.new(id: id, run_at: run_at, task: YAML.dump(task), attempts: attempts, last_fail_at: last_fail_at)
 
             expected_hash = {id:           id,
+                             run_at:       run_at,
                              attempts:     attempts,
                              last_fail_at: last_fail_at,
                              task:         YAML.dump(task)}

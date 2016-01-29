@@ -2,7 +2,7 @@ require 'yaml'
 
 module Procrastinator
    class TaskWorker
-      attr_reader :run_at, :task, :attempts, :last_fail_at, :status
+      attr_reader :id, :run_at, :task, :attempts, :last_fail_at, :status
 
       def initialize(id: nil, run_at: Time.now, attempts: 0, timeout: nil, max_attempts: nil, last_fail_at: nil, task:)
          @id           = id
@@ -51,7 +51,11 @@ module Procrastinator
       end
 
       def to_hash
-         {id: @id, attempts: @attempts, last_fail_at: @last_fail_at, task: YAML.dump(@task)}
+         {id:           @id,
+          run_at:       @run_at,
+          attempts:     @attempts,
+          last_fail_at: @last_fail_at,
+          task:         YAML.dump(@task)}
       end
 
       private

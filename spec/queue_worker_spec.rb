@@ -295,44 +295,27 @@ module Procrastinator
             end
          end
 
-         context 'TaskWorker failed' do
+         context 'TaskWorker fails or fails For The Last Time' do
+            # to do: it should promote captain Piett to admiral
+
             it 'should update the task' do
-               run_at    = double('run_at', to_i: 0)
-               task_data = {run_at: run_at, task: YAML.dump(FailTask.new)}
-               task_hash = {stub: :hash}
+               [0, 1].each do |max_attempts|
+                  run_at    = double('run_at', to_i: 0)
+                  task_data = {run_at: run_at, task: YAML.dump(FailTask.new)}
+                  task_hash = {stub: :hash}
 
-               allow(persister).to receive(:read_tasks).and_return([task_data])
+                  allow(persister).to receive(:read_tasks).and_return([task_data])
 
-               allow_any_instance_of(TaskWorker).to receive(:to_hash).and_return(task_hash)
+                  allow_any_instance_of(TaskWorker).to receive(:to_hash).and_return(task_hash)
 
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
+                  worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_attempts: max_attempts)
 
-               expect(persister).to receive(:update_task).with(task_hash.merge(run_at: run_at, queue: worker.name))
+                  expect(persister).to receive(:update_task).with(task_hash.merge(queue: worker.name))
 
-               stub_loop(worker)
+                  stub_loop(worker)
 
-               worker.work
-            end
-         end
-
-         context 'TaskWorker failed for the last time' do
-            # to do: promote captain Piett to admiral
-            it 'should update the task' do
-               run_at    = double('run_at', to_i: 0)
-               task_data = {run_at: run_at, task: YAML.dump(FailTask.new)}
-               task_hash = {stub: :hash}
-
-               allow(persister).to receive(:read_tasks).and_return([task_data])
-
-               allow_any_instance_of(TaskWorker).to receive(:to_hash).and_return(task_hash)
-
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1, max_attempts: 0)
-
-               expect(persister).to receive(:update_task).with(task_hash.merge(run_at: run_at, queue: worker.name))
-
-               stub_loop(worker)
-
-               worker.work
+                  worker.work
+               end
             end
          end
       end
