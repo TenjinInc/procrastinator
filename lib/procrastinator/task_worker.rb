@@ -54,6 +54,8 @@ module Procrastinator
                try_hook(:fail, e)
 
                @last_error = 'Task failed: ' + e.backtrace.join("\n")
+
+               reschedule
             end
          end
       end
@@ -92,6 +94,13 @@ module Procrastinator
          rescue StandardError => e
             $stderr.puts "#{method.to_s.capitalize} hook error: #{e.message}"
          end
+      end
+
+      def reschedule
+         # (30 + n_attempts^4) seconds is chosen to rapidly expand
+         # but with the baseline of 30s to avoid hitting the disc too frequently.
+
+         @run_at += 30 + (@attempts**4)
       end
    end
 

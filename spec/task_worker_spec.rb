@@ -272,13 +272,7 @@ module Procrastinator
             end
 
             it 'should do nothing if the task does not include #fail' do
-               task = double('task')
-
-               stub_yaml(task)
-
-               allow(task).to receive(:run).and_raise('fake error')
-
-               worker = TaskWorker.new(required_args.merge(task: task))
+               worker = TaskWorker.new(required_args.merge(task: YAML.dump(FailTask.new)))
 
                expect { worker.work }.to_not output.to_stderr
             end
@@ -304,8 +298,29 @@ module Procrastinator
                end
             end
 
-            it 'should reschedule for the future'
-            it 'should reschedule on an increasing basis' #TODO: (30 + n_attempts^4) seconds
+            it 'should reschedule for the future' do
+               worker = TaskWorker.new(required_args.merge(task: YAML.dump(FailTask.new)))
+
+               worker.work
+
+               expect(worker.run_at).to be > worker.initial_run_at
+            end
+
+            it 'should reschedule on an increasing basis' do
+               worker = TaskWorker.new(required_args.merge(run_at: 0, max_attempts: 4, task: YAML.dump(FailTask.new)))
+
+               (1..3).each do |i|
+                  previous_time = worker.run_at
+
+                  worker.work
+
+                  expected_time = previous_time + (30 + (i**4))
+
+                  actual_time = worker.run_at
+
+                  expect(actual_time).to eq expected_time
+               end
+            end
 
             it 'should record the error and trace in last_error' do
                worker = TaskWorker.new(required_args.merge(task: YAML.dump(FailTask.new)))
