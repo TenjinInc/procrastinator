@@ -15,4 +15,8 @@ module Procrastinator
    #
    #    Process.detach(pid)
    # end
+
+   class Environment
+
+   end
 end
