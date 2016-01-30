@@ -17,7 +17,7 @@ module Procrastinator
          @id             = id
          @run_at         = run_at.to_i
          @initial_run_at = initial_run_at.to_i
-         @expire_at      = expire_at.to_i
+         @expire_at      = expire_at.nil? ? nil : expire_at.to_i
          @task           = YAML.load(task)
          @attempts       = attempts
          @max_attempts   = max_attempts
@@ -33,6 +33,8 @@ module Procrastinator
          @attempts += 1
 
          begin
+            raise(TaskExpiredError.new("task is over its expiry time of #{@expire_at}")) if expired?
+
             Timeout::timeout(@timeout) do
                @task.run
             end
@@ -43,11 +45,11 @@ module Procrastinator
          rescue StandardError => e
             @last_fail_at = Time.now.to_i
 
-            if too_many_fails?
+            if too_many_fails? || expired?
                try_hook(:final_fail, e)
 
                @run_at     = nil
-               @last_error = 'Task failed too many times: ' + e.backtrace.join("\n")
+               @last_error = "#{expired? ? 'Task expired' : 'Task failed too many times'}: #{e.backtrace.join("\n")}"
             else
                try_hook(:fail, e)
 
@@ -57,7 +59,9 @@ module Procrastinator
       end
 
       def successful?
-         raise(RuntimeError, 'you cannot check for success before running #work') unless @attempts > 0
+         if !expired? && @attempts <= 0
+            raise(RuntimeError, 'you cannot check for success before running #work')
+         end
 
          @last_error.nil? && @last_fail_at.nil?
       end
@@ -67,7 +71,7 @@ module Procrastinator
       end
 
       def expired?
-         Time.now.to_i < @expire_at
+         !@expire_at.nil? && Time.now.to_i > @expire_at
       end
 
       def to_hash
@@ -89,6 +93,9 @@ module Procrastinator
             $stderr.puts "#{method.to_s.capitalize} hook error: #{e.message}"
          end
       end
+   end
+
+   class TaskExpiredError < StandardError
    end
 
    class MalformedTaskError < StandardError
