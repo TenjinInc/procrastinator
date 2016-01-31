@@ -6,33 +6,60 @@ module Procrastinator
          expect(Procrastinator::VERSION).not_to be nil
       end
 
-      # TODO: Procrastinator.new(queues: hash_of_queue_defs, persister: persister)
-      # Procrastinator.setup do
-      #    define_queue(:invite_email, max_fails: 6, timeout: 1500)
-      #    define_queue(:reminder_email, max_fails: 3, timeout: 1000)
-      #    define_queue(:cleanup, max_fails: 2, timeout: 500)
-      #
-      #    # calls CRUD methods in expected interface on the given persister
-      #    task_io(@persister)
-      # end
-      #
-      # Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
-
-      # TODO: what if a task is found that doesn't match a defined queue? this is something the #go method will need to handle
+      # TODO: what if a task is found that doesn't match a defined queue? Do we handle this? Maybe document as their responibility?
 
       describe '.setup' do
-         it 'should require a persistence strategy be given'
-         it 'should require queue definitions be given'
+         # let(:persister) { double('persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil) }
 
-         # TODO: test for pasisng in queue name, update period, max_attempts, timeout to queueworker?
+         it 'should require that the persister not be nil' do
+            expect { Procrastinator.setup(nil, email: {}) }.to raise_error(ArgumentError, 'persister cannot be nil')
+         end
 
-         it 'should require the persister respond to #read_tasks' # TODO: MalformedPersisterError
-         it 'should require the persister respond to #create_task' # TODO: MalformedPersisterError
-         it 'should require the persister respond to #update_task' # TODO: MalformedPersisterError
-         it 'should require the persister respond to #delete_task' # TODO: MalformedPersisterError
+         it 'should require that the queue definitions not be nil' do
+            expect { Procrastinator.setup(double('persister'), nil) }.to raise_error(ArgumentError, 'queue definitions cannot be nil')
+         end
 
-         it 'should return the configured procrastinator'
+         it 'should require that the queue definitions have at least one element' do
+            expect { Procrastinator.setup(double('persister'), {}) }.to raise_error(ArgumentError, 'queue definition hash is empty')
+         end
 
+
+         # TODO: Procrastinator.setup(task_repo, email:   {timeout: 1.hour, max_attempts: 15, max_tasks: 5},
+         # TODO:                                 cleanup: {timeout: 1.minute, max_attempts: 3, max_tasks: 2} )
+
+         it 'should require the persister respond to #read_tasks' do
+            expect do
+               Procrastinator.setup(double('persister', create_task: nil, update_task: nil, delete_task: nil), email: {})
+            end.to raise_error(MalformedPersisterError, 'persister must repond to #read_tasks')
+         end
+
+         it 'should require the persister respond to #create_task' do
+            expect do
+               Procrastinator.setup(double('persister', read_tasks: nil, update_task: nil, delete_task: nil), email: {})
+            end.to raise_error(MalformedPersisterError, 'persister must repond to #create_task')
+         end
+
+         it 'should require the persister respond to #update_task' do
+            expect do
+               Procrastinator.setup(double('persister', read_tasks: nil, create_task: nil, delete_task: nil), email: {})
+            end.to raise_error(MalformedPersisterError, 'persister must repond to #update_task')
+         end
+
+         it 'should require the persister respond to #delete_task' do
+            expect do
+               Procrastinator.setup(double('persister', read_tasks: nil, create_task: nil, update_task: nil), email: {})
+            end.to raise_error(MalformedPersisterError, 'persister must repond to #delete_task')
+         end
+
+         it 'should return the configured procrastinator environment' do
+            env = Procrastinator.setup
+
+            expect(env).to be_a Environment
+
+            expect(env).to have_attributes(attr: val)
+         end
+
+         # TODO: test for passing in queue name, update period, max_attempts, timeout to queueworker?
          it 'should fork a worker process for each queue' # tODO: test that it forks a process, and names it
          it 'should tell the worker process to work' # TODO and that the subprocess creates a worker and #works
          it 'should kill children on natural exit'
@@ -49,6 +76,8 @@ module Procrastinator
       describe Environment do
          describe '#delay' do
             let(:procrastinator) { instance_double(Environment) }
+
+            # TODO: api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
 
             it 'should record a task'
 
@@ -76,6 +105,7 @@ module Procrastinator
             #       expect(worker.run_at).to eq now
             #    end
             # end
+
          end
       end
    end

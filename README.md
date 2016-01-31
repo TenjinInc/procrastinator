@@ -51,7 +51,10 @@ Read on for more details on each step.
 <!--TODO: describe timeout  -->
 <!--TODO: describe update_period  -->
 <!--TODO: describe max_attempts  --> 
-<!--TODO: describe max_tasks  --> 
+<!--TODO: describe max_tasks  -->
+ 
+ <!--TODO: explain that neither persister nor queue hash may be nil, and queue hash must have contents  --> 
+
 
 
 #### Persister Strategy
