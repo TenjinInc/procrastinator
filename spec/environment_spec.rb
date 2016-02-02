@@ -45,37 +45,105 @@ module Procrastinator
          # TODO:                                 cleanup: {timeout: 1.minute, max_attempts: 3, max_tasks: 2} )
          let(:procrastinator) { instance_double(Environment) }
 
+         let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
+         let(:env) { Environment.new(persister, queue1: {}) }
+         let(:task) { double('task', run: nil) }
+
          # TODO: api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
 
-         it 'should record a task'
+         it 'should record a task on the given queue' do
+            # these are, at the moment, all of the arguments the dev can pass in
+            expect(persister).to receive(:create_task).with(include(queue: :queue1))
 
-         it 'should complain when the given queue is not registered'
+            env.delay(queue: :queue1, task: task)
+         end
 
-         it 'should record initial_run_at and run_at to be the same'
+         it 'should record a task with given run_at and expire_at' do
+            run_stamp    = double('runstamp')
+            expire_stamp = double('expirestamp')
 
-         it 'should require queue be provided if there is more than one queue defined'
+            # these are, at the moment, all of the arguments the dev can pass in
+            args         = {run_at: double('run', to_i: run_stamp), expire_at: double('expire', to_i: expire_stamp)}
 
-         it 'should not require queue be provided if there only one queue defined'
+            expect(persister).to receive(:create_task).with(include(run_at: run_stamp, expire_at: expire_stamp))
 
-         it 'should require id, task be provided'
+            env.delay(args.merge(task: task))
+         end
 
-         it 'should require id, task not be nil'
+         it 'should record a task with serialized task strategy' do
+            # these are, at the moment, all of the arguments the dev can pass in
+            expect(persister).to receive(:create_task).with(include(task: YAML.dump(task)))
 
-         it 'should default expire_at, timeout, max_attempts to nil'
+            env.delay(task: task)
+         end
 
-         it 'should default run_at to now' #do
-         #    now = Time.now
-         #    stub_yaml(task)
-         #
-         #    Timecop.freeze(now) do
-         #       worker = TaskWorker.new(task: nil)
-         #
-         #       expect(worker.run_at).to eq now
-         #    end
-         # end
+         it 'should default run_at to now' do
+            now = Time.now
 
+            Timecop.freeze(now) do
+               expect(persister).to receive(:create_task).with(include(run_at: now.to_i))
+
+               env.delay(task: task)
+            end
+         end
+
+         it 'should record initial_run_at and run_at to be the same' do
+            time = Time.now
+
+            expect(persister).to receive(:create_task).with(include(run_at: time.to_i, initial_run_at: time.to_i))
+
+            env.delay(run_at: time, task: task)
+         end
+
+         it 'should record convert run_at, initial_run_at, expire_at to ints' do
+            expect(persister).to receive(:create_task).with(include(run_at: 0, initial_run_at: 0, expire_at: 1))
+
+            env.delay(run_at:    double('time', to_i: 0),
+                      expire_at: double('time', to_i: 1),
+                      task:      task)
+         end
+
+         it 'should default expire_at to nil' do
+            expect(persister).to receive(:create_task).with(include(expire_at: nil))
+
+            env.delay(task: task)
+         end
+
+         it 'should require a task be given' do
+            expect { env.delay }.to raise_error(ArgumentError, 'missing keyword: task')
+         end
+
+         it 'should require task not be nil' do
+            expect { env.delay(task: nil) }.to raise_error(ArgumentError, 'task may not be nil')
+         end
+
+         it 'should complain if task does not support #run' do
+            expect do
+               env.delay(task: double('bad_task'))
+            end.to raise_error(MalformedTaskError, 'given task does not support #run method')
+         end
+
+         it 'should require queue be provided if there is more than one queue defined' do
+            env = Environment.new(persister, queue1: {}, queue2: {})
+
+            expect { env.delay(run_at: 0, task: task) }.to raise_error(ArgumentError, 'queue must be specified when more than one is registered')
+
+            # also test the negative
+            expect { env.delay(queue: :queue1, run_at: 0, task: task) }.to_not raise_error
+         end
+
+         it 'should not require queue be provided if there only one queue defined' do
+            env = Environment.new(persister, queue1: {})
+
+            expect { env.delay(run_at: 0, task: task) }.to_not raise_error
+         end
+
+         it 'should complain when the given queue is not registered' do
+            [:bogus, :other_bogus].each do |name|
+               expect { env.delay(queue: name, run_at: 0, task: task) }.to raise_error(ArgumentError, %Q{there is no "#{name}" queue registered in this environment})
+            end
+         end
       end
-
       describe 'spawn_workers' do
          let(:persister) { double('persister', read_tasks: [], create_task: [], update_task: [], delete_task: []) }
          let(:queues) { {testa: {}, testb: {}, testc: {}} }
@@ -163,6 +231,8 @@ module Procrastinator
          end
 
          context 'subprocess' do
+            before(:each) { allow(Process).to receive(:setproctitle) }
+
             def stub_fork(receiver)
                allow(receiver).to receive(:fork) do |&block|
                   block.call
@@ -194,7 +264,6 @@ module Procrastinator
 
                   stub_fork(env)
 
-                  allow(Process).to receive(:setproctitle)
                   allow(Thread).to receive(:new) do |&block|
                      begin
                         block.call(-2)

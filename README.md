@@ -26,14 +26,13 @@ Setup a procrastination environment:
 
 ```ruby
 # you must provide queue definitions and a persistence strategy
-procrastinator = Procrastinator.setup(email: cleanup: )
+procrastinator = Procrastinator.setup(persister, email: {}, cleanup: {})
 ```
 
 And then delay a task:
 
 ```ruby
-# you must provide a queue name if there is more than one queue
-procrastinator.delay()
+procrastinator.delay(queue: :email)
 ```
 
 Read on for more details on each step. 
@@ -73,7 +72,7 @@ and you will be sad.
 
 ###`Environment#delay`
 
-* you must provide a queue name if there is more than one queue definition, otherwise an `AmbiguousTaskError` will be raised. 
+* you must provide a queue name if there is more than one queue definition, otherwise an `ArgumentError` will be raised. 
 * describe what run_at, expire_at, task do 
 
 * When providing a date, it is recommended to store an integer (eg. DateTime#to_i), as that will not have any timezone problems. Procrastinator works with ints internally anyway,.  
