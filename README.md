@@ -53,7 +53,10 @@ Read on for more details on each step.
 <!--TODO: describe max_attempts  --> 
 <!--TODO: describe max_tasks  -->
  
- <!--TODO: explain that neither persister nor queue hash may be nil, and queue hash must have contents  --> 
+ <!--TODO: explain that neither persister nor queue hash may be nil, and queue hash must have contents  -->
+  
+   <!--TODO: explain that if the main process is killed, each queue subprocess will notice within 5 seconds and terminate itself.   --> 
+
 
 
 
