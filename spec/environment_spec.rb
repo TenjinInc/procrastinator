@@ -4,39 +4,54 @@ module Procrastinator
    describe Environment do
       describe '#initialize' do
          it 'should require that the persister not be nil' do
-            expect { Environment.new(nil, email: {}) }.to raise_error(ArgumentError, 'persister cannot be nil')
-         end
-
-         it 'should require that the queue definitions not be nil' do
-            expect { Environment.new(double('persister'), nil) }.to raise_error(ArgumentError, 'queue definitions cannot be nil')
-         end
-
-         it 'should require that the queue definitions have at least one element' do
-            expect { Environment.new(double('persister'), {}) }.to raise_error(ArgumentError, 'queue definition hash is empty')
+            expect { Environment.new(nil) }.to raise_error(ArgumentError, 'persister cannot be nil')
          end
 
          it 'should require the persister respond to #read_tasks' do
             expect do
-               Environment.new(double('persister', create_task: nil, update_task: nil, delete_task: nil), email: {})
+               Environment.new(double('persister', create_task: nil, update_task: nil, delete_task: nil))
             end.to raise_error(MalformedPersisterError, 'persister must repond to #read_tasks')
          end
 
          it 'should require the persister respond to #create_task' do
             expect do
-               Environment.new(double('persister', read_tasks: nil, update_task: nil, delete_task: nil), email: {})
+               Environment.new(double('persister', read_tasks: nil, update_task: nil, delete_task: nil))
             end.to raise_error(MalformedPersisterError, 'persister must repond to #create_task')
          end
 
          it 'should require the persister respond to #update_task' do
             expect do
-               Environment.new(double('persister', read_tasks: nil, create_task: nil, delete_task: nil), email: {})
+               Environment.new(double('persister', read_tasks: nil, create_task: nil, delete_task: nil))
             end.to raise_error(MalformedPersisterError, 'persister must repond to #update_task')
          end
 
          it 'should require the persister respond to #delete_task' do
             expect do
-               Environment.new(double('persister', read_tasks: nil, create_task: nil, update_task: nil), email: {})
+               Environment.new(double('persister', read_tasks: nil, create_task: nil, update_task: nil))
             end.to raise_error(MalformedPersisterError, 'persister must repond to #delete_task')
+         end
+      end
+
+      describe '#define_queue' do
+         let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
+         let(:env) { Environment.new(persister) }
+
+         it 'should require that the queue definitions not be nil' do
+            expect { env.define_queue(nil) }.to raise_error(ArgumentError, 'queue name cannot be nil')
+         end
+
+         it 'should add a queue with its timeout, max_tasks, max_attempts, update_period' do
+            hash = {}
+
+            (1..3).each do |i|
+               attrs = {timeout: i, max_tasks: i+1, max_attempts: i+2, update_period: i+3}
+
+               env.define_queue("queue#{i}", attrs)
+
+               hash["queue#{i}"] = attrs
+
+               expect(env.queues).to eq hash
+            end
          end
       end
 
@@ -46,16 +61,19 @@ module Procrastinator
          let(:procrastinator) { instance_double(Environment) }
 
          let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
-         let(:env) { Environment.new(persister, queue1: {}) }
+         let(:env) { Environment.new(persister) }
          let(:task) { double('task', run: nil) }
 
-         # TODO: api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
+         # api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
 
          it 'should record a task on the given queue' do
-            # these are, at the moment, all of the arguments the dev can pass in
-            expect(persister).to receive(:create_task).with(include(queue: :queue1))
+            [:queue1, :queue2].each do |queue_name|
+               expect(persister).to receive(:create_task).with(include(queue: queue_name))
 
-            env.delay(queue: :queue1, task: task)
+               env.define_queue(queue_name)
+
+               env.delay(queue: queue_name, task: task)
+            end
          end
 
          it 'should record a task with given run_at and expire_at' do
@@ -124,7 +142,10 @@ module Procrastinator
          end
 
          it 'should require queue be provided if there is more than one queue defined' do
-            env = Environment.new(persister, queue1: {}, queue2: {})
+            env = Environment.new(persister)
+            env.define_queue(:queue1)
+            env.define_queue(:queue2)
+
 
             expect { env.delay(run_at: 0, task: task) }.to raise_error(ArgumentError, 'queue must be specified when more than one is registered')
 
@@ -133,7 +154,9 @@ module Procrastinator
          end
 
          it 'should not require queue be provided if there only one queue defined' do
-            env = Environment.new(persister, queue1: {})
+            env = Environment.new(persister)
+            env.define_queue(:queue)
+
 
             expect { env.delay(run_at: 0, task: task) }.to_not raise_error
          end
@@ -144,26 +167,39 @@ module Procrastinator
             end
          end
       end
+
       describe 'spawn_workers' do
          let(:persister) { double('persister', read_tasks: [], create_task: [], update_task: [], delete_task: []) }
-         let(:queues) { {testa: {}, testb: {}, testc: {}} }
+         let(:env) { Environment.new(persister) }
 
          context 'parent process' do
             before(:each) { allow(Process).to receive(:setproctitle) }
 
+            it 'should fork a worker process' do
+               env.define_queue(:test)
+
+               expect(env).to receive(:fork).once
+
+               env.spawn_workers
+            end
+
             it 'should fork a worker process for each queue' do
-               [{test1: {}}, {test2a: {}, test2b: {}, test2c: {}}].each do |queues|
-                  env = Environment.new(persister, queues)
-
-                  expect(env).to receive(:fork).exactly(queues.size).times
-
-                  env.spawn_workers
+               queue_defs = {test2a: {}, test2b: {}, test2c: {}}
+               queue_defs.each do |name, props|
+                  env.define_queue(name, props)
                end
+
+               expect(env).to receive(:fork).exactly(queue_defs.size).times
+
+               env.spawn_workers
             end
 
             it 'should not wait for the QueueWorker' do
+               env.define_queue(:test1)
+               env.define_queue(:test2)
+               env.define_queue(:test3)
+
                Timeout::timeout(1) do
-                  env  = Environment.new(persister, queues)
                   pid  = double('pid')
                   pid2 = double('pid2')
                   pid3 = double('pid3')
@@ -179,7 +215,7 @@ module Procrastinator
             end
 
             it 'should create a QueueWorker in each subprocess' do
-               env = Environment.new(persister, queues)
+               queue_defs = {test2a: {}, test2b: {}, test2c: {}}
 
                allow(env).to receive(:fork) do |&block|
                   block.call
@@ -187,7 +223,9 @@ module Procrastinator
                end
                allow(Process).to receive(:setproctitle)
 
-               queues.each do |name, props|
+               queue_defs.each do |name, props|
+                  env.define_queue(name, props)
+
                   expect(QueueWorker).to receive(:new).with(props.merge(persister: persister, name: name)).and_return(double('worker', work: nil))
                end
 
@@ -195,28 +233,32 @@ module Procrastinator
             end
 
             it 'should tell the worker process to work' do
-               env = Environment.new(persister, queues)
-
                allow(env).to receive(:fork) do |&block|
                   block.call
                   1
                end
 
+               env.define_queue(:test1)
+               env.define_queue(:test2)
+               env.define_queue(:test3)
+
                worker1 = double('worker1')
                worker2 = double('worker2')
                worker3 = double('worker3')
-
-               allow(QueueWorker).to receive(:new).and_return(worker1, worker2, worker3)
 
                expect(worker1).to receive(:work)
                expect(worker2).to receive(:work)
                expect(worker3).to receive(:work)
 
+               allow(QueueWorker).to receive(:new).and_return(worker1, worker2, worker3)
+
                env.spawn_workers
             end
 
             it 'should record its spawned processes' do
-               env = Environment.new(persister, queues)
+               env.define_queue(:test1)
+               env.define_queue(:test2)
+               env.define_queue(:test3)
 
                pid1 = 10
                pid2 = 11
@@ -241,26 +283,28 @@ module Procrastinator
             end
 
             it 'should name each worker process' do
-               [{test1: {}}, {test2a: {}, test2b: {}, test2c: {}}].each do |queues|
-                  env = Environment.new(persister, queues)
-
-                  stub_fork(env)
-
-                  allow_any_instance_of(QueueWorker).to receive(:work)
-
-                  queues.each do |name, props|
-                     expect(Process).to receive(:setproctitle).with("#{name}-queue-worker")
-                  end
-
-                  env.spawn_workers
+               queues = [:test1, :test2, :test3]
+               queues.each do |name|
+                  env.define_queue(name)
                end
+
+               stub_fork(env)
+
+               allow_any_instance_of(QueueWorker).to receive(:work)
+
+               queues.each do |name|
+                  expect(Process).to receive(:setproctitle).with("#{name}-queue-worker")
+               end
+
+               env.spawn_workers
             end
 
             it 'should exit if the parent process dies' do
                exited = false
 
                begin
-                  env = Environment.new(persister, queues)
+                  env = Environment.new(persister)
+                  env.define_queue(:test)
 
                   stub_fork(env)
 

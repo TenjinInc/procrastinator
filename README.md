@@ -25,14 +25,17 @@ Or install it yourself as:
 Setup a procrastination environment:
 
 ```ruby
-# you must provide queue definitions and a persistence strategy
-procrastinator = Procrastinator.setup(persister, email: {}, cleanup: {})
+procrastinator = Procrastinator.setup(TaskPersister.new) do    # MyTaskPersister is a class defined by you 
+  define_queue(:email)
+  define_queue(:cleanup)
+end
 ```
 
-And then delay a task:
+And then delay tasks:
 
 ```ruby
-procrastinator.delay(queue: :email)
+procrastinator.delay(queue: :email, SendInvitationEmail.new)
+procrastinator.delay(queue: :email, SendReminderEmail.new)
 ```
 
 Read on for more details on each step. 
@@ -115,4 +118,5 @@ push git commits and tags, and push the `.gem` file to [rubygems.org](https://ru
 ## License
 
 The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
+
 

@@ -2,18 +2,22 @@ module Procrastinator
    class Environment
       attr_reader :persister, :queues, :processes
 
-      def initialize(persister, queues)
+      def initialize(persister)
          raise ArgumentError.new('persister cannot be nil') if persister.nil?
-         raise ArgumentError.new('queue definitions cannot be nil') if queues.nil?
-         raise ArgumentError.new('queue definition hash is empty') if queues.empty?
 
          [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
             raise MalformedPersisterError.new("persister must repond to ##{method}") unless persister.respond_to? method
          end
 
          @persister = persister
-         @queues    = queues
+         @queues    = {}
          @processes = []
+      end
+
+      def define_queue(name, properties={})
+         raise ArgumentError.new('queue name cannot be nil') if name.nil?
+
+         @queues[name] = properties
       end
 
       def spawn_workers
