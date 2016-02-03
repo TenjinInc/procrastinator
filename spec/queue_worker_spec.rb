@@ -14,7 +14,7 @@ module Procrastinator
    end
 
    describe QueueWorker do
-      let(:persister) { loader = double('loader', read_tasks: [], update_task: nil, delete_task: nil) }
+      let(:persister) { double('loader', read_tasks: [], update_task: nil, delete_task: nil) }
 
       def stub_loop(object, count = 1)
          allow(object).to receive(:loop) do |&block|
