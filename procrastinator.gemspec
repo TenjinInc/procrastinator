@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
    spec.authors = ['Robin Miller']
    spec.email   = ['robin@tenjin.ca']
 
-   spec.summary     = %q{Simple generalized job queues.}
+   spec.summary     = %q{Delayed task queues made simple.}
    spec.description = %q{A strightforward job queue that is not dependent on Rails or any particular database or persistence mechanism.}
    spec.homepage    = 'https://github.com/TenjinInc/procrastinator'
    spec.license     = 'MIT'
