@@ -40,9 +40,10 @@ module Procrastinator
       def delay(queue: nil, run_at: Time.now.to_i, expire_at: nil, task:)
          raise ArgumentError.new('task may not be nil') if task.nil?
          raise MalformedTaskError.new('given task does not support #run method') unless task.respond_to? :run
-         if queue.nil?
-            raise ArgumentError.new('queue must be specified when more than one is registered') if @queues.size > 1
+         if queue.nil? && @queues.size > 1
+            raise ArgumentError.new('queue must be specified when more than one is registered')
          else
+            queue ||= @queues.keys.first
             raise ArgumentError.new(%Q{there is no "#{queue}" queue registered in this environment}) if @queues[queue].nil?
          end
 

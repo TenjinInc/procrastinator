@@ -56,15 +56,15 @@ module Procrastinator
       end
 
       describe '#delay' do
-         # TODO: Procrastinator.setup(task_repo, email:   {timeout: 1.hour, max_attempts: 15, max_tasks: 5},
-         # TODO:                                 cleanup: {timeout: 1.minute, max_attempts: 3, max_tasks: 2} )
-         let(:procrastinator) { instance_double(Environment) }
+         # api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
 
          let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
          let(:env) { Environment.new(persister) }
          let(:task) { double('task', run: nil) }
 
-         # api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
+         before(:each) do
+            env.define_queue(:test)
+         end
 
          it 'should record a task on the given queue' do
             [:queue1, :queue2].each do |queue_name|
@@ -146,7 +146,6 @@ module Procrastinator
             env.define_queue(:queue1)
             env.define_queue(:queue2)
 
-
             expect { env.delay(run_at: 0, task: task) }.to raise_error(ArgumentError, 'queue must be specified when more than one is registered')
 
             # also test the negative
@@ -157,8 +156,16 @@ module Procrastinator
             env = Environment.new(persister)
             env.define_queue(:queue)
 
-
             expect { env.delay(run_at: 0, task: task) }.to_not raise_error
+         end
+
+         it 'should assume the queue if there only one queue defined' do
+            env = Environment.new(persister)
+            env.define_queue(:some_queue)
+
+            expect(persister).to receive(:create_task).with(include(queue: :some_queue))
+
+            env.delay(task: task)
          end
 
          it 'should complain when the given queue is not registered' do
