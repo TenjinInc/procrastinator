@@ -23,7 +23,7 @@ Or install it yourself as:
 Setup a procrastination environment:
 
 ```ruby
-procrastinator = Procrastinator.setup(TaskPersister.new) do |env|   # MyTaskPersister is a class defined by you 
+procrastinator = Procrastinator.setup(TaskPersister.new) do |env| 
   env.define_queue(:email)
   env.define_queue(:cleanup, max_attempts: 3)
 end
@@ -100,7 +100,7 @@ When there are multiple queues defined, you are required to provide a queue name
 ```ruby
 procrastinator = Procrastinator.setup(task_persister) do |env|
    env.define_queue(:email)
-   env.|env|define_queue(:cleanup)
+   env.define_queue(:cleanup)
 end
 
 procrastinator.delay(:email, task: EmailReminder.new('bob@example.com'))
