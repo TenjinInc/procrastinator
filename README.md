@@ -90,9 +90,11 @@ end
 ```
   
 #### Queue Sub-Processes
-Each queue is worked in a separate process, and each process is multi-threaded to handle more than one task at a time. This should help prevent a single task from clogging up the whole queue, or a single queue clogging up the entire system. Tasks are chosen by their `:run_at` property. 
+Each queue is worked in a separate process.  
 
-The sub-processes check ervey 5 seconds that the parent process is still alive. If there is no process with the parent's process ID, the sub-process will self-exit. 
+<!-- , and each process multi-threaded to handle more than one task at a time. This should help prevent a single task from clogging up the whole queue, or a single queue clogging up the entire system. -->
+
+The sub-processes check every 5 seconds that the parent process is still alive. If there is no process with the parent's process ID, the sub-process will self-exit. 
 
 ###`Environment#delay`
 When there are multiple queues defined, you are required to provide a queue name:
