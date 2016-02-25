@@ -19,7 +19,7 @@ module Procrastinator
          @initial_run_at = initial_run_at.to_i
          @expire_at      = expire_at.nil? ? nil : expire_at.to_i
          @task           = YAML.load(task)
-         @attempts       = attempts
+         @attempts       = attempts || 0
          @max_attempts   = max_attempts
          @timeout        = timeout
          @last_fail_at   = last_fail_at

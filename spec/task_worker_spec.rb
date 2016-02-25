@@ -73,6 +73,11 @@ module Procrastinator
                TaskWorker.new(required_args.merge(task: task_str))
             end.to raise_error(MalformedTaskError, 'given task does not support #run method')
          end
+
+         it 'should default nil attempts to 0' do
+            worker = TaskWorker.new(required_args.merge(attempts: nil))
+            expect(worker.attempts).to be 0
+         end
       end
 
       describe '#work' do
