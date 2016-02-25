@@ -53,7 +53,7 @@ module Procrastinator
             else
                try_hook(:fail, e)
 
-               @last_error = 'Task failed: ' + e.backtrace.join("\n")
+               @last_error = %Q[Task failed: #{e.message}\n #{e.backtrace.join("\n")}]
 
                reschedule
             end
