@@ -65,7 +65,7 @@ module Procrastinator
          raise ArgumentError.new('task may not be nil') if task.nil?
          raise MalformedTaskError.new('given task does not support #run method') unless task.respond_to? :run
          if queue.nil? && @queue_definitions.size > 1
-            raise ArgumentError.new('queue must be specified when more than one is registered')
+            raise ArgumentError.new("queue must be specified when more than one is registered. Defined queues are: #{queue_definitions.keys.map { |k| ':' + k.to_s }.join(', ')}")
          else
             queue ||= @queue_definitions.keys.first
             raise ArgumentError.new(%Q{there is no "#{queue}" queue registered in this environment}) if @queue_definitions[queue].nil?

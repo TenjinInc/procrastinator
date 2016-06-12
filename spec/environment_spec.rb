@@ -145,7 +145,7 @@ module Procrastinator
             env.define_queue(:queue1)
             env.define_queue(:queue2)
 
-            expect { env.delay(run_at: 0, task: task) }.to raise_error(ArgumentError, 'queue must be specified when more than one is registered')
+            expect { env.delay(run_at: 0, task: task) }.to raise_error(ArgumentError, 'queue must be specified when more than one is registered. Defined queues are: :test, :queue1, :queue2')
 
             # also test the negative
             expect { env.delay(queue: :queue1, run_at: 0, task: task) }.to_not raise_error
