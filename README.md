@@ -38,12 +38,12 @@ procrastinator.delay(queue: :cleanup, run_at: Time.now + 3600, task: ClearTempDa
 
 Read on for more details on each step. 
 
-###`Procrastinator.setup`
+### Setup Phase
 The setup phase first defines which queues are available and the persistence strategy to use for reading 
 and writing tasks. It then starts up a sub process for working on each queue within that environment.
 
 
-#### Persister Strategy
+#### Declaring a Persistence Strategy
 The persister instance is the last step between Procrastinator and your data storage (eg. database). As core Procrastinator is framework-agnostic, it needs you to provide an object that knows how to read and write task data. 
 
 Your [strategy](https://en.wikipedia.org/wiki/Strategy_pattern) class is required to provide the following methods: 
@@ -71,7 +71,7 @@ If the strategy does not have all of these methods, Procrastinator will explode 
 
 Notice that the times are all given as unix epoch timestamps. This is to avoid any confusion with timezones, and it is recommended that you store times in this manner for the same reason. 
 
-####Defining Queues
+#### Defining Queues
 `Procrastinator.setup` requires a block be provided, and that in the block call `#define_queue` be called on the provided environment. Define queue takes a queue name symbol and these properies as a hash
 
  * :timeout - Time, in seconds, after which it should fail tasks in this queue for taking too long to execute.
@@ -89,15 +89,25 @@ Procrastinator.setup(some_persister) do |env|
 end
 ```
   
-#### Queue Sub-Processes
+#### Sub-Processes
 Each queue is worked in a separate process.  
 
 <!-- , and each process multi-threaded to handle more than one task at a time. This should help prevent a single task from clogging up the whole queue, or a single queue clogging up the entire system. -->
 
-The sub-processes check every 5 seconds that the parent process is still alive. If there is no process with the parent's process ID, the sub-process will self-exit. 
+The sub-processes checks that the parent process is still alive every 5 seconds. If there is no process with the parent's PID, the sub-process will self-exit. 
 
-###`Environment#delay`
-When there are multiple queues defined, you are required to provide a queue name:
+###Scheduling Tasks For Later
+Procrastinator will let you be lazy: 
+
+```ruby
+procrastinator = Procrastinator.setup(task_persister) do |env|
+   env.define_queue(:email)
+end
+
+procrastinator.delay(task: EmailReminder.new('bob@example.com'))
+```
+
+... unless there are multiple queues defined. Thne you must provide a queue name with your task:
 
 ```ruby
 procrastinator = Procrastinator.setup(task_persister) do |env|
@@ -108,17 +118,8 @@ end
 procrastinator.delay(:email, task: EmailReminder.new('bob@example.com'))
 ```
 
-Otherwise, Procrastinator will let you be lazy: 
-
-```ruby
-procrastinator = Procrastinator.setup(task_persister) do |env|
-   env.define_queue(:email)
-end
-
-procrastinator.delay(task: EmailReminder.new('bob@example.com'))
-```
-
-You can set when the particular task is to be run and/or when it should expire. Be aware that neither is guaranteed to be real-time; a task will run as soon as it possible after `run_at` is passed, and will expire once it attempts to run after `expire_at` has passed. 
+You can set when the particular task is to be run and/or when it should expire. Be aware that the task is not guaranteed 
+to run at a precise time; the only promise is that the task will get run some time after `run_at`, unless it's after `expire_at`. 
 
 ```ruby
 procrastinator = Procrastinator.setup(task_persister) do |env|
@@ -145,7 +146,7 @@ procrastinator.delay(expire_at: , task: EmailGreeting.new('bob@example.com'))
 procrastinator.delay(expire_at: nil, task: EmailGreeting.new('bob@example.com'))
 ```
 
-#### Task
+#### Task Definition
 Like the persister provided to `.setup`, your task is a strategy object that fills in the details of what to do. For this, 
 your task **must provide** a `#run` method:
 
@@ -167,6 +168,35 @@ Tasks that fail have their `run_at` rescheduled on an increasing delay according
  * 30 + attempts<sup>4</sup> **(in seconds)**
 
 Both failing and final_failing will cause the error timestamp and reason to be stored in `:last_fail_at` and `:last_error`.
+
+### Testing With Procrastinator
+Procrastinator uses multi-threading and multi-processing internally, which is a nightmare for testing. Fortunately for you, 
+Test Mode will disable all of that, and rely on your tests to tell it when to tick. 
+
+Enable Test Mode by setting `Procrastinator.test_mode` to `true` before setting up, or by calling enable_test_mode on 
+the procrastination environment. 
+
+```ruby
+# all further calls to `Procrastinator.setup` will produce a procrastination environment where Test Mode is enabled
+Procrastinator.test_mode = true
+ 
+# or you can also enable it directly in the setup
+env = Procrastinator.setup do |env|
+   env.enable_test_mode
+    
+   # other settings...
+end
+```
+
+In your tests, tell the procrastinator environment to work off one item from its queues: 
+
+```
+# works one task on all queues
+env.act
+
+# provide queue names to works one task on just those queues
+env.act(:cleanup, :email)
+```
 
 ## Contributing
 Bug reports and pull requests are welcome on GitHub at 

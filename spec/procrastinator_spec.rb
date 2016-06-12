@@ -2,6 +2,15 @@ require 'spec_helper'
 
 module Procrastinator
    describe Procrastinator do
+      around(:each) do |example|
+         # need to store and replace this every test as this is a module level variable
+         original_mode = Procrastinator.test_mode
+
+         example.run
+
+         Procrastinator.test_mode = original_mode
+      end
+
       it 'should have a version number' do
          expect(Procrastinator::VERSION).not_to be nil
       end
@@ -10,9 +19,10 @@ module Procrastinator
 
       describe '.setup' do
          let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
-         let(:queues) { {queue1: {prop1: nil, prop2: nil}, queue2: {prop1: nil, prop2: nil}} }
+         let(:queues) { {queue1: {name: nil, max_tasks: nil}, queue2: {name: nil, max_tasks: nil}} }
 
          it 'should return the configured procrastinator environment' do
+
             env = Procrastinator.setup(persister) do |env|
                queues.each do |name, props|
                   env.define_queue(name, props)
@@ -21,7 +31,7 @@ module Procrastinator
 
             expect(env).to be_a Environment
 
-            expect(env).to have_attributes(persister: persister, queues: queues)
+            expect(env).to have_attributes(persister: persister, queue_definitions: queues)
          end
 
          it 'should call the provided block and provide the environment' do
@@ -48,6 +58,49 @@ module Procrastinator
             Procrastinator.setup(persister) do |env|
                env.define_queue(:test)
             end
+         end
+
+         it 'should create enable test mode if provided' do
+            result = Procrastinator.setup(persister) do |env|
+               env.define_queue(:test)
+               env.enable_test_mode
+            end
+
+            expect(result.test_mode).to be true
+         end
+
+         context 'test mode is enabled' do
+            before(:each) do
+               Procrastinator.test_mode = true
+            end
+
+            it 'should create an environment in test mode' do
+               result = Procrastinator.setup(persister) do |env|
+                  env.define_queue(:test)
+               end
+
+               expect(result.test_mode).to be true
+            end
+
+            it 'should create every environment in test mode' do
+               result1 = Procrastinator.setup(persister) do |env|
+                  env.define_queue(:test)
+               end
+               result2 = Procrastinator.setup(persister) do |env|
+                  env.define_queue(:test)
+               end
+
+               expect(result1.test_mode).to be true
+               expect(result2.test_mode).to be true
+            end
+         end
+      end
+
+      describe '#test_mode=' do
+         it 'should assign test mode' do
+            Procrastinator.test_mode = true
+
+            expect(Procrastinator.test_mode).to be true
          end
       end
    end
