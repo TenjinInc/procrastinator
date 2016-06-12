@@ -15,8 +15,6 @@ module Procrastinator
          expect(Procrastinator::VERSION).not_to be nil
       end
 
-      # TODO: what if a task is found that doesn't match a defined queue? Do we handle this? Maybe document as their responibility?
-
       describe '.setup' do
          let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
          let(:queues) { {queue1: {name: nil, max_tasks: nil}, queue2: {name: nil, max_tasks: nil}} }
