@@ -1,7 +1,9 @@
 # Procrastinator
 
-Procrastinator is a framework-independent job scheduling gem. It creates a subprocess for each queue that performs 
-tasks at the appropriate times. 
+Procrastinator is a framework-independent job scheduling gem to allow your app to put stuff of until later. It creates 
+a subprocess for each queue to performs tasks at the designated times. Or maybe later, depending on how busy it is. 
+
+Don't worry, it'll get done eventually. 
 
 ## Installation
 
