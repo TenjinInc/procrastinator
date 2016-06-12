@@ -25,15 +25,11 @@ module Procrastinator
          end
 
          it 'should call the provided block and provide the environment' do
-            # block = Proc.new do |env|
-            #   env.define_queue(:test)
-            #end
-
             expect do |block|
                begin
-                Procrastinator.setup(persister, &block)
+                  Procrastinator.setup(persister, &block)
                rescue RuntimeError
-                  # becuase block is stubbed, can't get around this raising
+                  # because block is stubbed, can't get around this raising
                end
             end.to yield_with_args(instance_of(Environment))
          end

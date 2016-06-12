@@ -1,6 +1,6 @@
 module Procrastinator
    class QueueWorker
-      DEFAULT_TIMEOUT       = 3600 # seconds = one hour
+      DEFAULT_TIMEOUT       = 3600 # in seconds; one hour total
       DEFAULT_MAX_ATTEMPTS  = 20
       DEFAULT_UPDATE_PERIOD = 10 # seconds
       DEFAULT_MAX_TASKS     = 10
@@ -34,21 +34,25 @@ module Procrastinator
          loop do
             sleep(@update_period)
 
-            # shuffling and re-sorting to avoid worst case O(n^2) on quicksort
-            # when receiving already sorted data. Ideally, we'd use a better algo, but this will do for now
-            tasks = @persister.read_tasks(@name).shuffle.sort_by { |t| t[:run_at] }
+            act
+         end
+      end
 
-            tasks.first(@max_tasks).each do |task_data|
-               if Time.now.to_i >= task_data[:run_at].to_i
-                  tw = TaskWorker.new(task_data)
+      def act
+         # shuffling and re-sorting to avoid worst case O(n^2) on quicksort
+         # when receiving already sorted data. Ideally, we'd use a better algo, but this will do for now
+         tasks = @persister.read_tasks(@name).shuffle.sort_by { |t| t[:run_at] }
 
-                  tw.work
+         tasks.first(@max_tasks).each do |task_data|
+            if Time.now.to_i >= task_data[:run_at].to_i
+               tw = TaskWorker.new(task_data)
 
-                  if tw.successful?
-                     @persister.delete_task(task_data[:id])
-                  else
-                     @persister.update_task(tw.to_hash.merge(queue: @name))
-                  end
+               tw.work
+
+               if tw.successful?
+                  @persister.delete_task(task_data[:id])
+               else
+                  @persister.update_task(tw.to_hash.merge(queue: @name))
                end
             end
          end

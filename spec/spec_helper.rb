@@ -9,3 +9,10 @@ def stub_yaml(payload)
       payload
    end
 end
+
+def stub_fork(receiver)
+   allow(receiver).to receive(:fork) do |&block|
+      block.call
+      nil
+   end
+end

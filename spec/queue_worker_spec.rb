@@ -16,12 +16,6 @@ module Procrastinator
    describe QueueWorker do
       let(:persister) { double('loader', read_tasks: [], update_task: nil, delete_task: nil) }
 
-      def stub_loop(object, count = 1)
-         allow(object).to receive(:loop) do |&block|
-            count.times { block.call }
-         end
-      end
-
       describe '#initialize' do
          it 'should require a name' do
             expect { QueueWorker.new }.to raise_error(ArgumentError)
@@ -129,27 +123,47 @@ module Procrastinator
       end
 
       describe '#work' do
-         context 'loading tasks' do
-            it 'should wait for update_period' do
-               [0.01, 0.02].each do |period|
-                  worker = QueueWorker.new(name: :queue, persister: persister, update_period: period)
+         it 'should wait for update_period' do
+            [0.01, 0.02].each do |period|
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: period)
 
-                  stub_loop(worker)
-
-                  expect(worker).to receive(:sleep).with(period)
-
-                  worker.work
+               expect(worker).to receive(:loop) do |&block|
+                  block.call
                end
+
+               expect(worker).to receive(:sleep).with(period)
+
+               worker.work
+            end
+         end
+
+         it 'should cyclically call #act' do
+            worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.1)
+
+            allow(worker).to receive(:sleep) # stub sleep
+
+            n_loops = 3
+
+            # control looping, otherwise infiniloop by design
+            allow(worker).to receive(:loop) do |&block|
+               n_loops.times { block.call }
             end
 
+            expect(worker).to receive(:act).exactly(n_loops).times
+
+            worker.work
+         end
+      end
+
+      describe '#act' do
+         context 'loading tasks' do
             it 'should pass the given queue to its persister' do
                [:email, :cleanup].each do |queue|
                   worker = QueueWorker.new(name: queue, persister: persister, update_period: 0.01)
-                  stub_loop(worker)
 
                   expect(persister).to receive(:read_tasks).with(queue)
 
-                  worker.work
+                  worker.act
                end
             end
 
@@ -166,24 +180,26 @@ module Procrastinator
 
                persister = double('disorganized persister', read_tasks: [job2, job3, job1], update_task: nil, delete_task: nil)
                worker    = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
-               stub_loop(worker)
 
                expect(task1).to receive(:run).ordered
                expect(task2).to receive(:run).ordered
                expect(task3).to receive(:run).ordered
 
-               worker.work
+               worker.act
             end
 
             it 'should reload tasks every cycle' do
                task1 = double('task1')
                task2 = double('task2')
 
+               task1_duration = 4
+               task2_duration = 6
+
                allow(task1).to receive(:run) do
-                  Timecop.travel(4)
+                  Timecop.travel(task1_duration)
                end
                allow(task2).to receive(:run) do
-                  Timecop.travel(6)
+                  Timecop.travel(task2_duration)
                end
 
                job1 = {run_at: 1, task: task1}
@@ -197,11 +213,11 @@ module Procrastinator
 
                Timecop.freeze(start_time) do
                   worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.00)
-                  stub_loop(worker, 2)
 
-                  worker.work
+                  worker.act
+                  worker.act
 
-                  expect(Time.now.to_i).to eq start_time.to_i + 10
+                  expect(Time.now.to_i).to eq start_time.to_i + task1_duration + task2_duration
                end
             end
 
@@ -218,8 +234,7 @@ module Procrastinator
 
                worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
 
-               stub_loop worker
-               worker.work
+               worker.act
             end
 
             it 'should run a TaskWorker for each ready task' do
@@ -234,9 +249,7 @@ module Procrastinator
 
                worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
 
-               stub_loop worker
-
-               worker.work
+               worker.act
             end
 
             it 'should not start any TaskWorkers for unready tasks' do
@@ -254,9 +267,7 @@ module Procrastinator
                worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
 
                Timecop.freeze(now) do
-                  stub_loop worker
-
-                  worker.work
+                  worker.act
                end
             end
 
@@ -272,12 +283,10 @@ module Procrastinator
 
                worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
 
-               stub_loop worker
-
-               worker.work
+               worker.act
             end
-
          end
+
 
          context 'TaskWorker succeeds' do
             it 'should delete the task' do
@@ -289,9 +298,7 @@ module Procrastinator
 
                expect(persister).to receive(:delete_task).with(task_data[:id])
 
-               stub_loop(worker)
-
-               worker.work
+               worker.act
             end
          end
 
@@ -312,9 +319,7 @@ module Procrastinator
 
                   expect(persister).to receive(:update_task).with(task_hash.merge(queue: worker.name))
 
-                  stub_loop(worker)
-
-                  worker.work
+                  worker.act
                end
             end
          end

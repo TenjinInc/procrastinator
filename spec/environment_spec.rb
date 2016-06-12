@@ -282,13 +282,6 @@ module Procrastinator
          context 'subprocess' do
             before(:each) { allow(Process).to receive(:setproctitle) }
 
-            def stub_fork(receiver)
-               allow(receiver).to receive(:fork) do |&block|
-                  block.call
-                  nil
-               end
-            end
-
             it 'should name each worker process' do
                queues = [:test1, :test2, :test3]
                queues.each do |name|
