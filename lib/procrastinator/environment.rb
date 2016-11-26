@@ -2,6 +2,8 @@ module Procrastinator
    class Environment
       attr_reader :persister, :queue_definitions, :queue_workers, :processes, :test_mode
 
+      DEFAULT_LOG_DIRECTORY = 'log/'
+
       def initialize(persister:, test_mode: false)
          raise ArgumentError.new('persister cannot be nil') if persister.nil?
 
@@ -14,6 +16,7 @@ module Procrastinator
          @queue_definitions = {}
          @queue_workers     = []
          @processes         = []
+         @log_dir           = DEFAULT_LOG_DIRECTORY
       end
 
       def define_queue(name, properties={})
@@ -30,7 +33,11 @@ module Procrastinator
          else
             @queue_definitions.each do |name, props|
                pid = fork do
-                  Process.setproctitle("#{name}-queue-worker")
+                  worker_name = "#{name}-queue-worker"
+
+                  Process.setproctitle(worker_name)
+
+                  create_log(worker_name)
 
                   worker = QueueWorker.new(props.merge(name: name, persister: @persister))
 
@@ -92,6 +99,10 @@ module Procrastinator
          @test_mode = true
       end
 
+      def log_dir(path)
+         @log_dir = path
+      end
+
       private
       def monitor_parent
          heartbeat_thread = Thread.new(Process.ppid) do |ppid|
@@ -103,6 +114,15 @@ module Procrastinator
          end
 
          heartbeat_thread.abort_on_exception = true
+      end
+
+      def create_log(name)
+         log_path = Pathname.new("#{@log_dir}/#{name}.log")
+
+         log_path.dirname.mkpath
+         File.open(log_path, 'a+') do |f|
+            f.write ''
+         end
       end
    end
 

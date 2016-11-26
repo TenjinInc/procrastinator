@@ -1,5 +1,4 @@
 require 'spec_helper'
-
 module Procrastinator
    describe Environment do
       describe '#initialize' do
@@ -223,7 +222,15 @@ module Procrastinator
          let(:persister) { double('persister', read_tasks: [], create_task: [], update_task: [], delete_task: []) }
          let(:env) { Environment.new(persister: persister) }
 
-         context 'test mode enabled' do
+         before do
+            FakeFS.activate!
+         end
+
+         after do
+            FakeFS.deactivate!
+         end
+
+         context 'test mode' do
             let(:env) { Environment.new(persister: persister, test_mode: true) }
 
             it 'should create a worker for each queue definition' do
@@ -265,20 +272,18 @@ module Procrastinator
             end
 
             it 'should NOT open a log file' do
-               fail pending 'need to create a file first'
-
-               env.define_queue(:test)
+               env.define_queue(:queue1)
 
                stub_fork(env)
+               allow_any_instance_of(QueueWorker).to receive(:work)
 
                env.spawn_workers
 
-               expect(File.exists?('log/')).to be false
-               expect(File.exist?('log/')).to be false
+               expect(File.file?("log/queue1-queue-worker.log")).to be false
             end
          end
 
-         context 'test mode disabled' do
+         context 'live mode' do
             context 'parent process' do
                before(:each) { allow(Process).to receive(:setproctitle) }
 
@@ -379,7 +384,7 @@ module Procrastinator
                end
 
                it 'should store the PID of children in the ENV' do
-                  allow(env).to receive(:fork).and_return(1,2,3)
+                  allow(env).to receive(:fork).and_return(1, 2, 3)
 
                   env.define_queue(:test1)
                   env.define_queue(:test2)
@@ -387,7 +392,7 @@ module Procrastinator
 
                   env.spawn_workers
 
-                  expect(env.processes).to eq [1,2,3]
+                  expect(env.processes).to eq [1, 2, 3]
                end
             end
 
@@ -445,15 +450,66 @@ module Procrastinator
                   expect(env.processes).to be_empty
                end
 
-               it 'should create a log file if it does NOT exist' # named after the queue
+               it 'should create the log directory if it does not exist' do
+                  env.define_queue(:queue1)
 
-               it 'should create the log directory if it does NOT exist'
+                  env.log_dir('some_dir/')
 
-               it 'should append to the log file if it already exists'
+                  stub_fork(env)
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  env.spawn_workers
+
+                  expect(File.directory?('some_dir/')).to be true
+               end
+
+               it 'should use a default log directoryif not provided' do
+                  env.define_queue(:queue1)
+
+                  stub_fork(env)
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  env.spawn_workers
+
+                  expect(File.directory?('log/')).to be true
+               end
+
+               it 'should create a log file for each worker' do
+                  env.define_queue(:queue1)
+                  env.define_queue(:queue2)
+
+                  env.log_dir('some_dir/')
+
+                  stub_fork(env)
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  env.spawn_workers
+
+                  expect(File.file?('some_dir/queue1-queue-worker.log')).to be true
+                  expect(File.file?('some_dir/queue2-queue-worker.log')).to be true
+               end
+
+               it 'should append to the log file if it already exists' do
+                  log_path = 'log/queue1-queue-worker.log'
+
+                  existing_data = 'abcdef'
+
+                  FileUtils.mkdir_p('log/')
+                  File.open(log_path, 'a+') do |f|
+                     f.write existing_data
+                  end
+
+                  env.define_queue(:queue1)
+
+                  stub_fork(env)
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  env.spawn_workers
+
+                  expect(File.read(log_path)).to eq(existing_data)
+               end
 
                it 'should log exiting when parent process dies'
-
-               it 'should provide default logging location' # ./log/
             end
 
             after(:each) do
