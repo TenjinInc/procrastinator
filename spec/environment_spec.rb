@@ -264,7 +264,18 @@ module Procrastinator
                env.spawn_workers
             end
 
-            it 'should NOT open a log file'
+            it 'should NOT open a log file' do
+               fail pending 'need to create a file first'
+
+               env.define_queue(:test)
+
+               stub_fork(env)
+
+               env.spawn_workers
+
+               expect(File.exists?('log/')).to be false
+               expect(File.exist?('log/')).to be false
+            end
          end
 
          context 'test mode disabled' do
@@ -367,7 +378,17 @@ module Procrastinator
                   expect(env.processes).to eq [pid1, pid2, pid3]
                end
 
-               it 'should store the PID of children in the ENV'
+               it 'should store the PID of children in the ENV' do
+                  allow(env).to receive(:fork).and_return(1,2,3)
+
+                  env.define_queue(:test1)
+                  env.define_queue(:test2)
+                  env.define_queue(:test3)
+
+                  env.spawn_workers
+
+                  expect(env.processes).to eq [1,2,3]
+               end
             end
 
             context 'subprocess' do
@@ -414,6 +435,14 @@ module Procrastinator
                   end
 
                   expect(exited).to be true
+               end
+
+               it 'should NOT store the PID of children in the ENV' do
+                  allow(env).to receive(:fork).and_return(nil)
+
+                  env.spawn_workers
+
+                  expect(env.processes).to be_empty
                end
 
                it 'should create a log file if it does NOT exist' # named after the queue
