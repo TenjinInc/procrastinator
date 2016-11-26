@@ -16,3 +16,24 @@ def stub_fork(receiver)
       nil
    end
 end
+
+class GoodTask
+   def initialize
+
+   end
+
+   def run
+
+   end
+
+   def success(env)
+
+   end
+
+   def fail(env)
+   end
+
+   def final_fail(env)
+
+   end
+end

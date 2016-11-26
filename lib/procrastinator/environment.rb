@@ -63,7 +63,17 @@ module Procrastinator
 
       def delay(queue: nil, run_at: Time.now.to_i, expire_at: nil, task:)
          raise ArgumentError.new('task may not be nil') if task.nil?
-         raise MalformedTaskError.new('given task does not support #run method') unless task.respond_to? :run
+         raise MalformedTaskError.new('the provided task does not support #run method') unless task.respond_to? :run
+
+         # We're checking these on init because it's one of those extremely rare cases where you'd want to know
+         # incredibly early, because of the sub-processing. It's a bit belt-and suspenders, but UX is important for
+         # devs, too.
+         [:success, :fail, :final_fail].each do |method_name|
+            if task.respond_to?(method_name) && task.method(method_name).arity <= 0
+               raise MalformedTaskError.new("the provided task must accept a parameter to its ##{method_name} method")
+            end
+         end
+
          if queue.nil? && @queue_definitions.size > 1
             raise ArgumentError.new("queue must be specified when more than one is registered. Defined queues are: #{queue_definitions.keys.map { |k| ':' + k.to_s }.join(', ')}")
          else

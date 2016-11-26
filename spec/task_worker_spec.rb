@@ -51,7 +51,7 @@ module Procrastinator
             expect(worker.expire_at).to eq now.to_i
          end
 
-         it 'should not convert nil expire_at to int' do
+         it 'should NOT convert nil expire_at to int' do
             worker = TaskWorker.new(required_args.merge(expire_at: nil))
 
             expect(worker.expire_at).to eq nil
@@ -112,7 +112,7 @@ module Procrastinator
                end
             end
 
-            it 'should not call #run when the expiry time has passed' do
+            it 'should NOT call #run when the expiry time has passed' do
                task = double('task')
 
                expect(task).to_not receive(:run)
@@ -139,7 +139,7 @@ module Procrastinator
                worker.work
             end
 
-            it 'should not call task #success when #run errors' do
+            it 'should NOT call task #success when #run errors' do
                task = FailTask.new
 
                expect(task).to_not receive(:success)
@@ -186,6 +186,8 @@ module Procrastinator
 
                expect(worker.last_fail_at).to be nil
             end
+
+            it 'should pass in the env' # for logging
          end
 
          context 'fail hook' do
@@ -233,7 +235,7 @@ module Procrastinator
                worker.work
             end
 
-            it 'should not #fail when #success errors' do
+            it 'should NOT #fail when #success errors' do
                task = double('task')
 
                stub_yaml(task)
@@ -247,7 +249,7 @@ module Procrastinator
                worker.work
             end
 
-            it 'should not #fail if calling #final_fail' do
+            it 'should NOT call #fail if calling #final_fail' do
                task = double('task')
 
                stub_yaml(task)
@@ -335,6 +337,8 @@ module Procrastinator
                expect(worker.last_error).to include 'derp' # message from the FailTask
                expect(worker.last_error).to match /(.*\n)+/ # poor version of checking for backtrace, but it works for now
             end
+
+            it 'should pass in the env' # for logging
          end
 
          context 'final_fail hook' do
@@ -373,7 +377,7 @@ module Procrastinator
                end
             end
 
-            it 'should not error or call #final_fail if nil max_attempts given' do
+            it 'should NOT error or call #final_fail if nil max_attempts given' do
                task = double('task')
 
                allow(task).to receive(:run).and_raise('fake error')
@@ -455,6 +459,8 @@ module Procrastinator
                expect(worker.last_error).to start_with 'Task failed too many times: '
                expect(worker.last_error).to match /(.*\n)+/ # poor version of checking for backtrace, but it works for now
             end
+
+            it 'should pass in the env' # for logging
          end
       end
 
@@ -523,7 +529,7 @@ module Procrastinator
             expect { worker.successful? }.to raise_error(RuntimeError, 'you cannot check for success before running #work')
          end
 
-         it 'should not complain if the task is expired' do
+         it 'should NOT complain if the task is expired' do
             worker = TaskWorker.new(required_args.merge(expire_at: 0))
 
             expect { worker.successful? }.to_not raise_error

@@ -38,7 +38,7 @@ Read on for more details on each step.
 
 ### Setup Phase
 The setup phase first defines which queues are available and the persistence strategy to use for reading 
-and writing tasks. It then starts up a sub process for working on each queue within that environment.
+and writing tasks. It then spins off a sub process for working on each queue within that environment. 
 
 
 #### Declaring a Persistence Strategy
@@ -162,8 +162,10 @@ If a task reaches `#final_fail` it will be marked to never be run again.
 
 ***Task Failure & Rescheduling***
 
-Tasks that fail have their `run_at` rescheduled on an increasing delay according to this formula: 
- * 30 + attempts<sup>4</sup> **(in seconds)**
+Tasks that fail have their `run_at` rescheduled on an increasing delay **(in seconds)** according to this formula: 
+ * 30 + n<sup>4</sup>
+  
+n = the number of attempts 
 
 Both failing and final_failing will cause the error timestamp and reason to be stored in `:last_fail_at` and `:last_error`.
 
@@ -195,6 +197,21 @@ env.act
 # provide queue names to works one task on just those queues
 env.act(:cleanup, :email)
 ```
+
+### Logging
+Logging is crucial to knowing what went wrong in an application after the fact, and because Procrastinator runs workers
+in separate processes, providing a logger instance isn't really an option. 
+ 
+Instead, provide a directory that your Procrastinator instance should write log entries into:
+
+```ruby
+procrastinator = Procrastinator.setup do |env|
+   env.log_dir('log/')
+end
+```
+ 
+Each worker creates its own log, named after the queue it is working on (eg. `log/email-worker.log`). The default directory
+is `./log/`, relative to wherever the application is running. 
 
 ## Contributing
 Bug reports and pull requests are welcome on GitHub at 

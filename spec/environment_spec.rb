@@ -3,7 +3,7 @@ require 'spec_helper'
 module Procrastinator
    describe Environment do
       describe '#initialize' do
-         it 'should require that the persister not be nil' do
+         it 'should require that the persister NOT be nil' do
             expect { Environment.new(persister: nil) }.to raise_error(ArgumentError, 'persister cannot be nil')
          end
 
@@ -36,7 +36,7 @@ module Procrastinator
          let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
          let(:env) { Environment.new(persister: persister) }
 
-         it 'should require that the queue definitions not be nil' do
+         it 'should require that the queue definitions NOT be nil' do
             expect { env.define_queue(nil) }.to raise_error(ArgumentError, 'queue name cannot be nil')
          end
 
@@ -131,14 +131,59 @@ module Procrastinator
             expect { env.delay }.to raise_error(ArgumentError, 'missing keyword: task')
          end
 
-         it 'should require task not be nil' do
+         it 'should require task NOT be nil' do
             expect { env.delay(task: nil) }.to raise_error(ArgumentError, 'task may not be nil')
          end
 
-         it 'should complain if task does not support #run' do
+         it 'should complain if task does NOT support #run' do
             expect do
                env.delay(task: double('bad_task'))
-            end.to raise_error(MalformedTaskError, 'given task does not support #run method')
+            end.to raise_error(MalformedTaskError, 'the provided task does not support #run method')
+         end
+
+         it 'should NOT complain about well-formed hooks' do
+            [:success, :fail, :final_fail].each do |method|
+               task = GoodTask.new
+
+               # allow(task).to receive(method).with('')
+
+               expect do
+                  env.delay(task: task)
+               end.to_not raise_error
+            end
+         end
+
+         it 'should complain if task does NOT accept a parameter to #success' do
+            task = double('bad_task', run: nil)
+
+            allow(task).to receive(:success) do
+            end
+
+            expect do
+               env.delay(task: task)
+            end.to raise_error(MalformedTaskError, 'the provided task must accept a parameter to its #success method')
+         end
+
+         it 'should complain if task does NOT accept a parameter to #fail' do
+            task = double('bad_task', run: nil)
+
+            allow(task).to receive(:fail) do
+            end
+
+            expect do
+               env.delay(task: task)
+            end.to raise_error(MalformedTaskError, 'the provided task must accept a parameter to its #fail method')
+         end
+
+         it 'should complain if task does NOT accept a parameter to #final_fail' do
+            task = double('bad_task', run: nil)
+
+            allow(task).to receive(:final_fail) do
+            end
+
+            expect do
+               env.delay(task: task)
+            end.to raise_error(MalformedTaskError, 'the provided task must accept a parameter to its #final_fail method')
          end
 
          it 'should require queue be provided if there is more than one queue defined' do
@@ -151,7 +196,7 @@ module Procrastinator
             expect { env.delay(queue: :queue1, run_at: 0, task: task) }.to_not raise_error
          end
 
-         it 'should not require queue be provided if there only one queue defined' do
+         it 'should NOT require queue be provided if there only one queue defined' do
             env = Environment.new(persister: persister)
             env.define_queue(:queue)
 
@@ -178,7 +223,7 @@ module Procrastinator
          let(:persister) { double('persister', read_tasks: [], create_task: [], update_task: [], delete_task: []) }
          let(:env) { Environment.new(persister: persister) }
 
-         context 'text mode enabled' do
+         context 'test mode enabled' do
             let(:env) { Environment.new(persister: persister, test_mode: true) }
 
             it 'should create a worker for each queue definition' do
@@ -210,7 +255,7 @@ module Procrastinator
                env.spawn_workers
             end
 
-            it 'should not change the process title' do
+            it 'should NOT change the process title' do
                env.define_queue(:test)
 
                stub_fork(env)
@@ -218,6 +263,8 @@ module Procrastinator
 
                env.spawn_workers
             end
+
+            it 'should NOT open a log file'
          end
 
          context 'test mode disabled' do
@@ -319,6 +366,8 @@ module Procrastinator
 
                   expect(env.processes).to eq [pid1, pid2, pid3]
                end
+
+               it 'should store the PID of children in the ENV'
             end
 
             context 'subprocess' do
@@ -366,6 +415,16 @@ module Procrastinator
 
                   expect(exited).to be true
                end
+
+               it 'should create a log file if it does NOT exist' # named after the queue
+
+               it 'should create the log directory if it does NOT exist'
+
+               it 'should append to the log file if it already exists'
+
+               it 'should log exiting when parent process dies'
+
+               it 'should provide default logging location' # ./log/
             end
 
             after(:each) do
