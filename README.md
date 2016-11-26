@@ -13,13 +13,9 @@ Add this line to your application's Gemfile:
 gem 'procrastinator'
 ```
 
-And then execute:
+And then run:
 
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install procrastinator
+    bundle install
 
 ## Usage
 Setup a procrastination environment:
