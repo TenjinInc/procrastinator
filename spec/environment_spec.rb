@@ -1,5 +1,5 @@
-require 'spec_helper'
 module Procrastinator
+   require 'spec_helper'
    describe Environment do
       describe '#initialize' do
          it 'should require that the persister NOT be nil' do
@@ -416,38 +416,86 @@ module Procrastinator
                   env.spawn_workers
                end
 
-               it 'should exit if the parent process dies' do
-                  exited = false
-
-                  begin
-                     env = Environment.new(persister: persister)
-                     env.define_queue(:test)
-
-                     stub_fork(env)
-
-                     allow(Thread).to receive(:new) do |&block|
-                        begin
-                           block.call(-2)
-                        rescue Errno::ESRCH
-                           exit
-                        end
-                     end
-
-                     env.spawn_workers
-                  rescue SystemExit
-                     # this is safer than stubbing exit, which can have weird consequences
-                     exited = true
-                  end
-
-                  expect(exited).to be true
-               end
-
-               it 'should NOT store the PID of children in the ENV' do
+               it 'should NOT store any pids' do
                   allow(env).to receive(:fork).and_return(nil)
 
                   env.spawn_workers
 
                   expect(env.processes).to be_empty
+               end
+
+               it 'should monitor the parent process' do
+                  env = Environment.new(persister: persister)
+                  env.define_queue(:test)
+
+                  parent_pid = 10
+                  child_pid  = 2000
+
+                  stub_fork(env, child_pid)
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  allow(Process).to receive(:pid).and_return(parent_pid)
+
+                  allow(Thread).to receive(:new) do |&block|
+                     begin
+                        block.call(parent_pid)
+                     rescue Errno::ESRCH
+                        exit
+                     end
+
+                     thread = double('thread double')
+
+                     allow(thread).to receive(:abort_on_exception=).with(true)
+
+                     thread
+                  end
+
+                  # control looping, otherwise infiniloop by design
+                  allow(env).to receive(:sleep)
+                  allow(env).to receive(:loop) do |&block|
+                     block.call
+                  end
+
+                  expect(Process).to receive(:kill).with(0, parent_pid)
+
+                  env.spawn_workers
+
+                  allow(Process).to receive(:pid).and_call_original
+                  allow(Process).to receive(:kill).and_call_original
+               end
+
+               it 'should exit if the parent process dies' do
+                  exited = false
+
+                  env = Environment.new(persister: persister)
+                  env.define_queue(:test)
+
+                  parent_pid = 10
+                  child_pid  = 2000
+
+                  stub_fork(env, child_pid)
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
+
+                  allow(Thread).to receive(:new) do |&block|
+                     block.call(parent_pid)
+                  end
+
+                  # control looping, otherwise infiniloop by design
+                  allow(env).to receive(:sleep)
+                  allow(env).to receive(:loop) do |&block|
+                     block.call
+                  end
+
+                  begin
+                     env.spawn_workers
+                  rescue SystemExit
+                     # this is safer than stubbing exit, which can have weird consequences on the test system
+                     exited = true
+                  end
+
+                  expect(exited).to be true
                end
 
                it 'should create the log directory if it does not exist' do
@@ -463,7 +511,7 @@ module Procrastinator
                   expect(File.directory?('some_dir/')).to be true
                end
 
-               it 'should use a default log directoryif not provided' do
+               it 'should use a default log directory if not provided' do
                   env.define_queue(:queue1)
 
                   stub_fork(env)
@@ -506,60 +554,126 @@ module Procrastinator
 
                   env.spawn_workers
 
-                  expect(File.read(log_path)).to eq(existing_data)
+                  expect(File.read(log_path)).to include(existing_data)
                end
 
-               it 'should log exiting when parent process dies'
-            end
+               it 'should log starting a queue worker' do
+                  [{parent: 10, child: 2000, queue: :test1},
+                   {parent: 30, child: 4000, queue: :test2}].each do |pid_hash|
+                     parent_pid = pid_hash[:parent]
+                     child_pid  = pid_hash[:child]
+                     queue_name = pid_hash[:queue]
 
-            after(:each) do
-               # need to kill any processes that may be left over from failing tests.
-               `pgrep -f queue-worker`.split.each do |pid|
-                  Process.kill('KILL', pid.to_i)
+                     env = Environment.new(persister: persister)
+                     env.define_queue(queue_name)
+
+                     stub_fork(env, child_pid)
+                     allow_any_instance_of(QueueWorker).to receive(:work)
+
+                     allow(Process).to receive(:ppid).and_return(parent_pid)
+                     allow(Process).to receive(:pid).and_return(child_pid)
+                     allow(env).to receive(:monitor_parent)
+
+                     env.spawn_workers
+
+                     log_path = "log/#{queue_name}-queue-worker.log"
+
+                     log_contents = File.read(log_path)
+
+                     msgs = ['===================================',
+                             "Started worker process, #{queue_name}-queue-worker, to work off queue #{queue_name}.",
+                             "Worker pid=#{child_pid}; parent pid=#{parent_pid}.",
+                             '===================================']
+
+                     expect(log_contents).to include(msgs.join("\n"))
+                  end
+               end
+
+               it 'should log exiting when parent process dies' do
+                  env = Environment.new(persister: persister)
+                  env.define_queue(:test)
+
+                  [{parent: 10, child: 2000}, {parent: 30, child: 4000}].each do |pid_hash|
+                     parent_pid = pid_hash[:parent]
+                     child_pid  = pid_hash[:child]
+
+                     stub_fork(env, child_pid)
+                     allow_any_instance_of(QueueWorker).to receive(:work)
+
+                     allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
+                     allow(Process).to receive(:pid).and_return(parent_pid, child_pid)
+
+                     allow(Thread).to receive(:new) do |&block|
+                        block.call(parent_pid)
+                     end
+
+                     # control looping, otherwise infiniloop by design
+                     allow(env).to receive(:sleep)
+                     allow(env).to receive(:loop) do |&block|
+                        block.call
+                     end
+
+                     begin
+                        env.spawn_workers
+                     rescue SystemExit
+                        # this is safer than stubbing exit, which can have weird consequences on the test system
+                     end
+
+                     log_path = 'log/test-queue-worker.log'
+
+                     expect(File.read(log_path)).to include("Terminated worker process (#{child_pid}) due to main process (#{parent_pid}) disappearing.")
+                  end
+               end
+
+               after(:each) do
+                  # need to kill any processes that may be left over from failing tests.
+                  `pgrep -f queue-worker`.split.each do |pid|
+                     Process.kill('KILL', pid.to_i)
+                  end
                end
             end
          end
-      end
 
-      describe '#act' do
-         let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
+         describe '#act' do
+            let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
 
-         let(:env) do
-            env = Environment.new(persister: persister, test_mode: true)
-            env.define_queue(:test1)
-            env.define_queue(:test2)
-            env.define_queue(:test3)
-            env.spawn_workers
-            env
-         end
-
-         it 'should call QueueWorker#act on every queue worker' do
-            expect(env.queue_workers.size).to eq 3
-            env.queue_workers.each do |worker|
-               expect(worker).to receive(:act)
+            let(:env) do
+               env = Environment.new(persister: persister, test_mode: true)
+               env.define_queue(:test1)
+               env.define_queue(:test2)
+               env.define_queue(:test3)
+               env.spawn_workers
+               env
             end
 
-            env.act
-         end
+            it 'should call QueueWorker#act on every queue worker' do
+               expect(env.queue_workers.size).to eq 3
+               env.queue_workers.each do |worker|
+                  expect(worker).to receive(:act)
+               end
 
-         it 'should call QueueWorker#act on queue worker for given queues only' do
-            expect(env.queue_workers[0]).to_not receive(:act)
-            expect(env.queue_workers[1]).to receive(:act)
-            expect(env.queue_workers[2]).to receive(:act)
+               env.act
+            end
 
-            env.act(:test2, :test3)
-         end
+            it 'should call QueueWorker#act on queue worker for given queues only' do
+               expect(env.queue_workers[0]).to_not receive(:act)
+               expect(env.queue_workers[1]).to receive(:act)
+               expect(env.queue_workers[2]).to receive(:act)
 
-         it 'should not complain when using Procrastinator.act in Test Mode' do
-            test_env = Environment.new(persister: persister, test_mode: true)
+               env.act(:test2, :test3)
+            end
 
-            expect { test_env.act }.to_not raise_error
-         end
+            it 'should not complain when using Procrastinator.act in Test Mode' do
+               test_env = Environment.new(persister: persister, test_mode: true)
 
-         it 'should complain if you try to use Procrastinator.act outside Test Mode' do
-            non_test_env = Environment.new(persister: persister, test_mode: false)
+               expect { test_env.act }.to_not raise_error
+            end
 
-            expect { non_test_env.act }.to raise_error(RuntimeError, 'Procrastinator.act called outside Test Mode. Enable test mode by setting Procrastinator.test_mode = true before running setup')
+            it 'should complain if you try to use Procrastinator.act outside Test Mode' do
+               non_test_env = Environment.new(persister: persister, test_mode: false)
+
+               expect { non_test_env.act }.to raise_error(RuntimeError, 'Procrastinator.act called outside Test Mode. Enable test mode by setting Procrastinator.test_mode = true before running setup')
+            end
          end
       end
    end

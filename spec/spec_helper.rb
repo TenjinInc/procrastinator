@@ -13,10 +13,11 @@ def stub_yaml(payload)
    end
 end
 
-def stub_fork(receiver)
+# leave result+pid nil for parent thread, give int for child pid
+def stub_fork(receiver, result_pid=nil)
    allow(receiver).to receive(:fork) do |&block|
       block.call
-      nil
+      result_pid
    end
 end
 

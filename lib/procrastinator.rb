@@ -2,6 +2,7 @@ require 'procrastinator/version'
 require 'procrastinator/queue_worker'
 require 'procrastinator/task_worker'
 require 'procrastinator/environment'
+require 'logger'
 
 
 module Procrastinator

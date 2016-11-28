@@ -32,16 +32,16 @@ module Procrastinator
             end
          else
             @queue_definitions.each do |name, props|
+               parent_pid = Process.pid
+
                pid = fork do
-                  worker_name = "#{name}-queue-worker"
+                  Process.setproctitle(worker_name(name))
 
-                  Process.setproctitle(worker_name)
-
-                  create_log(worker_name)
+                  logger = create_log(name)
 
                   worker = QueueWorker.new(props.merge(name: name, persister: @persister))
 
-                  monitor_parent
+                  monitor_parent(parent_pid, logger)
 
                   worker.work
                end
@@ -104,10 +104,15 @@ module Procrastinator
       end
 
       private
-      def monitor_parent
-         heartbeat_thread = Thread.new(Process.ppid) do |ppid|
+      def monitor_parent(parent_pid, logger)
+         heartbeat_thread = Thread.new(parent_pid) do |pid|
             loop do
-               Process.kill 0, ppid
+               begin
+                  Process.kill(0, pid) # kill(0) will check if the process exists
+               rescue Errno::ESRCH
+                  logger.info("Terminated worker process (#{Process.pid}) due to main process (#{pid}) disappearing.")
+                  exit
+               end
 
                sleep(5)
             end
@@ -116,13 +121,28 @@ module Procrastinator
          heartbeat_thread.abort_on_exception = true
       end
 
-      def create_log(name)
-         log_path = Pathname.new("#{@log_dir}/#{name}.log")
+      def create_log(queue_name)
+         process_name = worker_name(queue_name)
+         log_path     = Pathname.new("#{@log_dir}/#{process_name}.log")
 
          log_path.dirname.mkpath
          File.open(log_path, 'a+') do |f|
             f.write ''
          end
+
+         logger = Logger.new(log_path.to_path)
+
+         logger.info(['',
+                      '===================================',
+                      "Started worker process, #{process_name}, to work off queue #{queue_name}.",
+                      "Worker pid=#{Process.pid}; parent pid=#{Process.ppid}.",
+                      '==================================='].join("\n"))
+
+         logger
+      end
+
+      def worker_name(queue_name)
+         "#{queue_name}-queue-worker"
       end
    end
 
