@@ -244,7 +244,11 @@ module Procrastinator
                end
 
                queue_defs.each do |name, props|
-                  expect(QueueWorker).to receive(:new).with(props.merge(persister: persister, name: name)).and_return(double('worker', work: nil))
+                  expect(QueueWorker).to receive(:new)
+                                               .with(props.merge(persister: persister,
+                                                                 name:      name,
+                                                                 log_dir:   Environment::DEFAULT_LOG_DIRECTORY))
+                                               .and_return(double('worker', work: nil))
                end
 
                env.spawn_workers
@@ -276,14 +280,16 @@ module Procrastinator
             end
 
             it 'should NOT open a log file' do
-               env.define_queue(:queue1)
+               queue_name = :queue1
+
+               env.define_queue(queue_name)
 
                stub_fork(env)
                allow_any_instance_of(QueueWorker).to receive(:work)
 
                env.spawn_workers
 
-               expect(File.file?("log/queue1-queue-worker.log")).to be false
+               expect(File.file?("log/#{queue_name}-queue-worker.log")).to be false
             end
          end
 
@@ -342,7 +348,14 @@ module Procrastinator
                   queue_defs.each do |name, props|
                      env.define_queue(name, props)
 
-                     expect(QueueWorker).to receive(:new).with(props.merge(persister: persister, name: name)).and_return(double('worker', work: nil))
+                     expect(QueueWorker).to receive(:new)
+                                                  .with(props.merge(persister: persister,
+                                                                    name:      name,
+                                                                    log_dir:   Environment::DEFAULT_LOG_DIRECTORY))
+                                                  .and_return(double('worker',
+                                                                     work:      nil,
+                                                                     start_log: nil,
+                                                                     long_name: ''))
                   end
 
                   env.spawn_workers
@@ -362,9 +375,12 @@ module Procrastinator
                   worker2 = double('worker2')
                   worker3 = double('worker3')
 
-                  expect(worker1).to receive(:work)
-                  expect(worker2).to receive(:work)
-                  expect(worker3).to receive(:work)
+                  [worker1, worker2, worker3].each do |worker|
+                     expect(worker).to receive(:work)
+
+                     allow(worker).to receive(:start_log)
+                     allow(worker).to receive(:long_name)
+                  end
 
                   allow(QueueWorker).to receive(:new).and_return(worker1, worker2, worker3)
 
@@ -479,6 +495,7 @@ module Procrastinator
 
                   stub_fork(env, child_pid)
                   allow_any_instance_of(QueueWorker).to receive(:work)
+                  allow_any_instance_of(QueueWorker).to receive(:log_parent_exit)
 
                   allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
 
@@ -502,162 +519,66 @@ module Procrastinator
                   expect(exited).to be true
                end
 
-               context 'logging directory falsey' do
-                  it 'should NOT create the log directory' do
-                     env.define_queue(:queue1)
+               it 'should use a default log directory if not provided in setup' do
+                  env.define_queue(:queue1)
 
-                     env.log_dir(false)
+                  stub_fork(env)
+                  allow_any_instance_of(QueueWorker).to receive(:work)
 
-                     stub_fork(env)
-                     allow_any_instance_of(QueueWorker).to receive(:work)
+                  env.spawn_workers
 
-                     env.spawn_workers
-
-                     expect(File.directory?('log/')).to be false
-                  end
-
-                  it 'should NOT create a log file for any worker' do
-                     env.define_queue(:queue1)
-                     env.define_queue(:queue2)
-
-                     env.log_dir(false)
-
-                     stub_fork(env)
-                     allow_any_instance_of(QueueWorker).to receive(:work)
-
-                     env.spawn_workers
-
-                     expect(File.file?('log/queue1-queue-worker.log')).to be false
-                     expect(File.file?('log/queue2-queue-worker.log')).to be false
-                  end
+                  expect(File.directory?('log/')).to be true
                end
 
-               context 'logging directory provided' do
-                  it 'should create the log directory if it does not exist' do
-                     env.define_queue(:queue1)
+               it 'should get each worker to start its log' do
+                  env.define_queue(:queue1)
+                  env.define_queue(:queue2)
 
-                     env.log_dir('some_dir/')
+                  env.log_dir('some_dir/')
 
-                     stub_fork(env)
+                  stub_fork(env)
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  env.spawn_workers
+
+                  expect(File.file?('some_dir/queue1-queue-worker.log')).to be true
+                  expect(File.file?('some_dir/queue2-queue-worker.log')).to be true
+               end
+
+               it 'should log exiting when parent process dies' do
+                  env = Environment.new(persister: persister)
+                  env.define_queue(:test)
+
+                  [{parent: 10, child: 2000}, {parent: 30, child: 4000}].each do |pid_hash|
+                     parent_pid = pid_hash[:parent]
+                     child_pid  = pid_hash[:child]
+
+                     stub_fork(env, child_pid)
                      allow_any_instance_of(QueueWorker).to receive(:work)
 
-                     env.spawn_workers
+                     allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
+                     allow(Process).to receive(:ppid).and_return(parent_pid)
+                     allow(Process).to receive(:pid).and_return(child_pid)
 
-                     expect(File.directory?('some_dir/')).to be true
-                  end
-
-                  it 'should use a default log directory if not provided' do
-                     env.define_queue(:queue1)
-
-                     stub_fork(env)
-                     allow_any_instance_of(QueueWorker).to receive(:work)
-
-                     env.spawn_workers
-
-                     expect(File.directory?('log/')).to be true
-                  end
-
-                  it 'should create a log file for each worker' do
-                     env.define_queue(:queue1)
-                     env.define_queue(:queue2)
-
-                     env.log_dir('some_dir/')
-
-                     stub_fork(env)
-                     allow_any_instance_of(QueueWorker).to receive(:work)
-
-                     env.spawn_workers
-
-                     expect(File.file?('some_dir/queue1-queue-worker.log')).to be true
-                     expect(File.file?('some_dir/queue2-queue-worker.log')).to be true
-                  end
-
-                  it 'should append to the log file if it already exists' do
-                     log_path = 'log/queue1-queue-worker.log'
-
-                     existing_data = 'abcdef'
-
-                     FileUtils.mkdir_p('log/')
-                     File.open(log_path, 'a+') do |f|
-                        f.write existing_data
+                     allow(Thread).to receive(:new) do |&block|
+                        block.call(parent_pid)
                      end
 
-                     env.define_queue(:queue1)
+                     # control looping, otherwise infiniloop by design
+                     allow(env).to receive(:sleep)
+                     allow(env).to receive(:loop) do |&block|
+                        block.call
+                     end
 
-                     stub_fork(env)
-                     allow_any_instance_of(QueueWorker).to receive(:work)
-
-                     env.spawn_workers
-
-                     expect(File.read(log_path)).to include(existing_data)
-                  end
-
-                  it 'should log starting a queue worker' do
-                     [{parent: 10, child: 2000, queue: :test1},
-                      {parent: 30, child: 4000, queue: :test2}].each do |pid_hash|
-                        parent_pid = pid_hash[:parent]
-                        child_pid  = pid_hash[:child]
-                        queue_name = pid_hash[:queue]
-
-                        env = Environment.new(persister: persister)
-                        env.define_queue(queue_name)
-
-                        stub_fork(env, child_pid)
-                        allow_any_instance_of(QueueWorker).to receive(:work)
-
-                        allow(Process).to receive(:ppid).and_return(parent_pid)
-                        allow(Process).to receive(:pid).and_return(child_pid)
-                        allow(env).to receive(:monitor_parent)
-
+                     begin
                         env.spawn_workers
-
-                        log_path = "log/#{queue_name}-queue-worker.log"
-
-                        log_contents = File.read(log_path)
-
-                        msgs = ['===================================',
-                                "Started worker process, #{queue_name}-queue-worker, to work off queue #{queue_name}.",
-                                "Worker pid=#{child_pid}; parent pid=#{parent_pid}.",
-                                '===================================']
-
-                        expect(log_contents).to include(msgs.join("\n"))
+                     rescue SystemExit
+                        # this is safer than stubbing exit, which can have weird consequences on the test system
                      end
-                  end
 
-                  it 'should log exiting when parent process dies' do
-                     env = Environment.new(persister: persister)
-                     env.define_queue(:test)
+                     log_path = 'log/test-queue-worker.log'
 
-                     [{parent: 10, child: 2000}, {parent: 30, child: 4000}].each do |pid_hash|
-                        parent_pid = pid_hash[:parent]
-                        child_pid  = pid_hash[:child]
-
-                        stub_fork(env, child_pid)
-                        allow_any_instance_of(QueueWorker).to receive(:work)
-
-                        allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
-                        allow(Process).to receive(:pid).and_return(parent_pid, child_pid)
-
-                        allow(Thread).to receive(:new) do |&block|
-                           block.call(parent_pid)
-                        end
-
-                        # control looping, otherwise infiniloop by design
-                        allow(env).to receive(:sleep)
-                        allow(env).to receive(:loop) do |&block|
-                           block.call
-                        end
-
-                        begin
-                           env.spawn_workers
-                        rescue SystemExit
-                           # this is safer than stubbing exit, which can have weird consequences on the test system
-                        end
-
-                        log_path = 'log/test-queue-worker.log'
-
-                        expect(File.read(log_path)).to include("Terminated worker process (#{child_pid}) due to main process (#{parent_pid}) disappearing.")
-                     end
+                     expect(File.read(log_path)).to include('Terminated worker process')
                   end
                end
 

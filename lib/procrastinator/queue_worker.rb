@@ -10,6 +10,7 @@ module Procrastinator
       # Timeout is in seconds
       def initialize(name:,
                      persister:,
+                     log_dir: nil,
                      max_attempts: DEFAULT_MAX_ATTEMPTS,
                      timeout: DEFAULT_TIMEOUT,
                      update_period: DEFAULT_UPDATE_PERIOD,
@@ -21,13 +22,13 @@ module Procrastinator
          raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #update_task')) unless persister.respond_to? :update_task
          raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #delete_task')) unless persister.respond_to? :delete_task
 
-
          @name          = name.to_s.gsub(/\s/, '_').to_sym
          @timeout       = timeout
          @max_attempts  = max_attempts
          @update_period = update_period
          @max_tasks     = max_tasks
          @persister     = persister
+         @log_dir       = log_dir
       end
 
       def work
@@ -45,6 +46,8 @@ module Procrastinator
 
          tasks.first(@max_tasks).each do |task_data|
             if Time.now.to_i >= task_data[:run_at].to_i
+               task_data.merge!(logger: @logger) if @logger
+
                tw = TaskWorker.new(task_data)
 
                tw.work
@@ -56,6 +59,38 @@ module Procrastinator
                end
             end
          end
+      end
+
+      def long_name
+         "#{@name}-queue-worker"
+      end
+
+      # Starts a log file and stores the logger within this queue worker.
+      #
+      # Separate from init because logging is context-dependent
+      def start_log
+         if @log_dir
+            log_path = Pathname.new("#{@log_dir}/#{long_name}.log")
+
+            log_path.dirname.mkpath
+            File.open(log_path.to_path, 'a+') do |f|
+               f.write ''
+            end
+
+            @logger = Logger.new(log_path.to_path)
+
+            @logger.info(['',
+                          '===================================',
+                          "Started worker process, #{long_name}, to work off queue #{@name}.",
+                          "Worker pid=#{Process.pid}; parent pid=#{Process.ppid}.",
+                          '==================================='].join("\n"))
+         end
+      end
+
+      def log_parent_exit
+         raise RuntimeError.new('Cannot log when logger not defined. Call #start_log first.') unless @logger
+
+         @logger.error("Terminated worker process (#{Process.pid}) due to main process (#{Process.ppid}) disappearing.")
       end
    end
 

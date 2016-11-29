@@ -28,20 +28,24 @@ module Procrastinator
       def spawn_workers
          if @test_mode
             @queue_definitions.each do |name, props|
-               @queue_workers << QueueWorker.new(props.merge(name: name, persister: @persister))
+               @queue_workers << QueueWorker.new(props.merge(name:      name,
+                                                             persister: @persister,
+                                                             log_dir:   @log_dir))
             end
          else
             @queue_definitions.each do |name, props|
                parent_pid = Process.pid
 
                pid = fork do
-                  Process.setproctitle(worker_name(name))
+                  worker = QueueWorker.new(props.merge(name:      name,
+                                                       persister: @persister,
+                                                       log_dir:   @log_dir))
 
-                  logger = create_log(name)
+                  worker.start_log
 
-                  worker = QueueWorker.new(props.merge(name: name, persister: @persister))
+                  Process.setproctitle(worker.long_name) # tODO: add an app name prefix
 
-                  monitor_parent(parent_pid, logger)
+                  monitor_parent(parent_pid, worker)
 
                   worker.work
                end
@@ -104,13 +108,13 @@ module Procrastinator
       end
 
       private
-      def monitor_parent(parent_pid, logger)
+      def monitor_parent(parent_pid, worker)
          heartbeat_thread = Thread.new(parent_pid) do |pid|
             loop do
                begin
                   Process.kill(0, pid) # kill(0) will check if the process exists
                rescue Errno::ESRCH
-                  logger.info("Terminated worker process (#{Process.pid}) due to main process (#{pid}) disappearing.")
+                  worker.log_parent_exit
                   exit
                end
 
@@ -119,34 +123,6 @@ module Procrastinator
          end
 
          heartbeat_thread.abort_on_exception = true
-      end
-
-      def create_log(queue_name)
-         if @log_dir
-            process_name = worker_name(queue_name)
-            log_path     = Pathname.new("#{@log_dir}/#{process_name}.log")
-
-            log_path.dirname.mkpath
-            File.open(log_path.to_path, 'a+') do |f|
-               f.write ''
-            end
-
-            logger = Logger.new(log_path.to_path)
-
-            logger.info(['',
-                         '===================================',
-                         "Started worker process, #{process_name}, to work off queue #{queue_name}.",
-                         "Worker pid=#{Process.pid}; parent pid=#{Process.ppid}.",
-                         '==================================='].join("\n"))
-
-            logger
-         else
-            nil
-         end
-      end
-
-      def worker_name(queue_name)
-         "#{queue_name}-queue-worker"
       end
    end
 

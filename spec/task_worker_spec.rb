@@ -16,7 +16,8 @@ module Procrastinator
    describe TaskWorker do
       let(:required_args) do
          {max_attempts: 2,
-          task:         YAML.dump(SuccessTask.new)}
+          task:         YAML.dump(SuccessTask.new),
+          logger:       Logger.new(StringIO.new)}
       end
 
       describe '#inititalize' do
@@ -187,7 +188,32 @@ module Procrastinator
                expect(worker.last_fail_at).to be nil
             end
 
-            it 'should pass in the env' # for logging
+            it 'should pass in the queue logger to #success' do
+               task   = double('task')
+               logger = Logger.new(StringIO.new())
+
+               stub_yaml(task)
+
+               allow(task).to receive(:run)
+               expect(task).to receive(:success).with(logger)
+
+               worker = TaskWorker.new(required_args.merge(task: task, logger: logger))
+
+               worker.work
+            end
+
+            it 'should log #success at debug level' do
+               logger    = double('logger')
+               task_text = YAML.dump(SuccessTask.new)
+
+               worker = TaskWorker.new(required_args.merge(last_fail_at: double('failtime'),
+                                                           task:         task_text,
+                                                           logger:       logger))
+
+               expect(logger).to receive(:debug).with("Task completed: #{task_text}")
+
+               worker.work
+            end
          end
 
          context 'fail hook' do
@@ -201,7 +227,7 @@ module Procrastinator
 
                worker = TaskWorker.new(required_args.merge(task: task))
 
-               expect(task).to receive(:fail).with(err)
+               expect(task).to receive(:fail).with(anything, err)
 
                worker.work
             end
@@ -215,7 +241,7 @@ module Procrastinator
                allow(task).to receive(:run) do
                   sleep(timeout + 0.1)
                end
-               expect(task).to receive(:fail).with(Timeout::Error)
+               expect(task).to receive(:fail).with(anything, Timeout::Error)
 
                worker = TaskWorker.new(required_args.merge(task: task, timeout: timeout))
 
@@ -338,7 +364,37 @@ module Procrastinator
                expect(worker.last_error).to match /(.*\n)+/ # poor version of checking for backtrace, but it works for now
             end
 
-            it 'should pass in the env' # for logging
+            it 'should pass in the queue logger to #fail' do
+               task   = double('task')
+               err    = StandardError.new('fake error')
+               logger = Logger.new(StringIO.new())
+
+               stub_yaml(task)
+
+               allow(task).to receive(:run).and_raise(err)
+
+               expect(task).to receive(:fail).with(logger, err)
+
+               worker = TaskWorker.new(required_args.merge(task: task, logger: logger))
+
+               worker.work
+            end
+
+            it 'should log #fail at debug level' do
+               task   = FailTask.new
+               err    = StandardError.new('fake error')
+               logger = Logger.new(StringIO.new())
+
+               stub_yaml(task)
+
+               allow(task).to receive(:run).and_raise(err)
+
+               worker = TaskWorker.new(required_args.merge(task: task, logger: logger))
+
+               expect(logger).to receive(:debug).with("Task failed: #{YAML.dump(task)}")
+
+               worker.work
+            end
          end
 
          context 'final_fail hook' do
@@ -353,7 +409,7 @@ module Procrastinator
 
                worker = TaskWorker.new(required_args.merge(task: task, max_attempts: max_attempts))
 
-               expect(task).to receive(:final_fail).with(err)
+               expect(task).to receive(:final_fail).with(anything, err)
 
                max_attempts.times do
                   worker.work
@@ -365,13 +421,14 @@ module Procrastinator
                   task = double('task')
 
                   allow(task).to receive(:run)
-                  expect(task).to receive(:final_fail).with(satisfy do |arg|
+                  expect(task).to receive(:final_fail).with(anything, satisfy do |arg|
                      arg.is_a?(TaskExpiredError) && arg.message == "task is over its expiry time of #{i}"
                   end)
 
                   stub_yaml(task)
 
-                  worker = TaskWorker.new(required_args.merge(task: task, expire_at: i))
+                  worker = TaskWorker.new(required_args.merge(task:      task,
+                                                              expire_at: i))
 
                   worker.work
                end
@@ -460,7 +517,41 @@ module Procrastinator
                expect(worker.last_error).to match /(.*\n)+/ # poor version of checking for backtrace, but it works for now
             end
 
-            it 'should pass in the env' # for logging
+            it 'should pass in the queue logger to #final_fail' do
+               task   = FailTask.new
+               err    = StandardError.new('fake error')
+               logger = Logger.new(StringIO.new())
+
+               stub_yaml(task)
+
+               allow(task).to receive(:run).and_raise(err)
+
+               expect(task).to receive(:final_fail).with(logger, err)
+
+               worker = TaskWorker.new(required_args.merge(task:         YAML.dump(task),
+                                                           max_attempts: 0,
+                                                           logger:       logger))
+
+               worker.work
+            end
+
+            it 'should log #final_fail at debug level' do
+               task   = FailTask.new
+               err    = StandardError.new('fake error')
+               logger = Logger.new(StringIO.new())
+
+               stub_yaml(task)
+
+               allow(task).to receive(:run).and_raise(err)
+
+               worker = TaskWorker.new(required_args.merge(task:         task,
+                                                           max_attempts: 0,
+                                                           logger:       logger))
+
+               expect(logger).to receive(:debug).with("Task failed permanently: #{YAML.dump(task)}")
+
+               worker.work
+            end
          end
       end
 
@@ -574,6 +665,7 @@ module Procrastinator
             attempts       = double('attempts')
             last_fail_at   = double('last_fail_at')
             last_error     = double('last_error')
+            logger         = double('logger')
 
 
             worker = TaskWorker.new(id:             id,
@@ -583,7 +675,8 @@ module Procrastinator
                                     attempts:       attempts,
                                     last_fail_at:   last_fail_at,
                                     last_error:     last_error,
-                                    task:           YAML.dump(task))
+                                    task:           YAML.dump(task),
+                                    logger:         logger)
 
             hash = {id:             id,
                     initial_run_at: initial_run_at.to_i,

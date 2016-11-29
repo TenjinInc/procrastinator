@@ -13,7 +13,8 @@ module Procrastinator
                      max_attempts: nil,
                      last_fail_at: nil,
                      last_error: nil,
-                     task:)
+                     task:,
+                     logger: Logger.new(StringIO.new))
          @id             = id
          @run_at         = run_at.to_i
          @initial_run_at = initial_run_at.to_i
@@ -24,6 +25,7 @@ module Procrastinator
          @timeout        = timeout
          @last_fail_at   = last_fail_at
          @last_error     = last_error
+         @logger         = logger
 
          raise(MalformedTaskError.new('given task does not support #run method')) unless @task.respond_to? :run
          raise(ArgumentError.new('timeout cannot be negative')) if timeout && timeout < 0
@@ -39,21 +41,27 @@ module Procrastinator
                @task.run
             end
 
-            try_hook(:success)
+            try_hook(:success, @logger)
+
+            @logger.debug("Task completed: #{YAML.dump(@task)}")
+
             @last_error   = nil
             @last_fail_at = nil
          rescue StandardError => e
             @last_fail_at = Time.now.to_i
 
             if too_many_fails? || expired?
-               try_hook(:final_fail, e)
+               try_hook(:final_fail, @logger, e)
 
                @run_at     = nil
                @last_error = "#{expired? ? 'Task expired' : 'Task failed too many times'}: #{e.backtrace.join("\n")}"
+
+               @logger.debug("Task failed permanently: #{YAML.dump(@task)}")
             else
-               try_hook(:fail, e)
+               try_hook(:fail, @logger, e)
 
                @last_error = %Q[Task failed: #{e.message}\n#{e.backtrace.join("\n")}]
+               @logger.debug("Task failed: #{YAML.dump(@task)}")
 
                reschedule
             end

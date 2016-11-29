@@ -178,8 +178,12 @@ module Procrastinator
 
                allow(YAML).to receive(:load).and_return(task1, task2, task3)
 
-               persister = double('disorganized persister', read_tasks: [job2, job3, job1], update_task: nil, delete_task: nil)
-               worker    = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
+               persister = double('disorganized persister',
+                                  read_tasks:  [job2, job3, job1],
+                                  update_task: nil,
+                                  delete_task: nil)
+
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
 
                expect(task1).to receive(:run).ordered
                expect(task2).to receive(:run).ordered
@@ -227,12 +231,18 @@ module Procrastinator
 
                allow(YAML).to receive(:load).and_return(task_double)
 
-               expect(TaskWorker).to receive(:new).with(task_data).and_call_original
+               expect(TaskWorker).to receive(:new).with(satisfy do |param_hash|
+                  task_data.all? do |k, v|
+                     param_hash[k] == v
+                  end
+               end).and_call_original
 
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data])
 
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
+               worker = QueueWorker.new(name:          :queue,
+                                        persister:     persister,
+                                        update_period: 0)
 
                worker.act
             end
@@ -275,8 +285,7 @@ module Procrastinator
                task_data1 = {run_at: 1, task: YAML.dump(SuccessTask.new)}
                task_data2 = {run_at: 2, task: YAML.dump(SuccessTask.new)}
 
-               expect(TaskWorker).to receive(:new).with(task_data1).and_call_original
-               expect(TaskWorker).to_not receive(:new).with(task_data2).and_call_original
+               expect(TaskWorker).to receive(:new).once.and_call_original
 
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
@@ -285,8 +294,34 @@ module Procrastinator
 
                worker.act
             end
-         end
 
+            it 'should pass in a logger to the logfile for this queue' do
+               queue_name = :test_queue
+
+               task_double = double('task', run: nil)
+               task_data   = {run_at: 1, task: YAML.dump(task_double)}
+
+               allow(YAML).to receive(:load).and_return(task_double)
+
+               persister = double('persister', update_task: nil, delete_task: nil)
+               allow(persister).to receive(:read_tasks).and_return([task_data])
+
+               expect(TaskWorker).to receive(:new).with(satisfy do |param_hash|
+                  !param_hash[:logger].nil?
+               end).and_call_original
+
+               worker = QueueWorker.new(name:          queue_name,
+                                        persister:     persister,
+                                        log_dir:       '/log',
+                                        update_period: 0)
+
+               FakeFS do
+                  worker.start_log
+
+                  worker.act
+               end
+            end
+         end
 
          context 'TaskWorker succeeds' do
             it 'should delete the task' do
@@ -321,6 +356,138 @@ module Procrastinator
 
                   worker.act
                end
+            end
+         end
+      end
+
+      describe '#start_log' do
+         before do
+            FakeFS.activate!
+
+            if FakeFS.activated?
+               FileUtils.rm_rf('/*')
+            end
+         end
+
+         after do
+            FakeFS.deactivate!
+         end
+
+         # falsey is the default for workers
+         context 'logging directory falsey' do
+            it 'should NOT create the log directory' do
+               worker = QueueWorker.new(name:      :queue,
+                                        persister: persister)
+
+               worker.start_log
+
+               expect(Dir.glob('/*')).to be_empty
+            end
+
+            it 'should NOT create a log file for this worker' do
+               worker = QueueWorker.new(name:      :queue1,
+                                        persister: persister)
+
+               worker.start_log
+
+               expect(File.file?('/queue1-queue-worker.log')).to be false
+            end
+         end
+
+         context 'logging directory provided' do
+            it 'should create the log directory if it does not exist' do
+               worker = QueueWorker.new(name:      :queue1,
+                                        persister: persister,
+                                        log_dir:   'some_dir/')
+
+               worker.start_log
+
+               expect(File.directory?('some_dir/')).to be true
+            end
+
+            it 'should log starting a queue worker' do
+               [{parent: 10, child: 2000, queue: :test1},
+                {parent: 30, child: 4000, queue: :test2}].each do |pid_hash|
+                  parent_pid = pid_hash[:parent]
+                  child_pid  = pid_hash[:child]
+                  queue_name = pid_hash[:queue]
+
+                  log_dir = 'some_dir'
+
+                  worker = QueueWorker.new(name:      queue_name,
+                                           persister: persister,
+                                           log_dir:   log_dir)
+
+                  allow(Process).to receive(:ppid).and_return(parent_pid)
+                  allow(Process).to receive(:pid).and_return(child_pid)
+
+                  worker.start_log
+
+                  log_path = "#{log_dir}/#{worker.long_name}.log"
+
+                  log_contents = File.read(log_path)
+
+                  msgs = ['===================================',
+                          "Started worker process, #{queue_name}-queue-worker, to work off queue #{queue_name}.",
+                          "Worker pid=#{child_pid}; parent pid=#{parent_pid}.",
+                          '===================================']
+
+                  expect(log_contents).to include(msgs.join("\n"))
+               end
+            end
+
+            it 'should append to the log file if it already exists' do
+               log_dir = 'some_dir'
+
+               worker = QueueWorker.new(name:      :queue1,
+                                        persister: persister,
+                                        log_dir:   log_dir)
+
+               log_path = "#{log_dir}/#{worker.long_name}.log"
+
+               existing_data = 'abcdef'
+
+               FileUtils.mkdir_p(log_dir)
+               File.open(log_path, 'a+') do |f|
+                  f.write existing_data
+               end
+
+               worker.start_log
+
+               expect(File.read(log_path)).to include(existing_data)
+            end
+         end
+      end
+
+      describe '#log_parent_exit' do
+         it 'should complain if logger not built' do
+            worker = QueueWorker.new(name:      :queue1,
+                                     persister: persister,
+                                     log_dir:   nil)
+
+            expect { worker.log_parent_exit }.to raise_error('Cannot log when logger not defined. Call #start_log first.')
+         end
+
+         it 'should log exiting when parent process disappears' do
+            worker = QueueWorker.new(name:      :test,
+                                     persister: persister,
+                                     log_dir:   'log/')
+
+            worker.start_log
+
+            [{parent: 10, child: 2000},
+             {parent: 30, child: 4000}].each do |pid_hash|
+               parent_pid = pid_hash[:parent]
+               child_pid  = pid_hash[:child]
+
+               allow(Process).to receive(:ppid).and_return(parent_pid)
+               allow(Process).to receive(:pid).and_return(child_pid)
+
+               worker.log_parent_exit
+
+               log_path = 'log/test-queue-worker.log'
+
+               expect(File.read(log_path)).to include("Terminated worker process (#{child_pid}) due to main process (#{parent_pid}) disappearing.")
             end
          end
       end

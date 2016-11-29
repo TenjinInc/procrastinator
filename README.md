@@ -152,9 +152,9 @@ your task **must provide** a `#run` method:
 
 You may also optionally provide these hook methods, which are run during different points in the process:
 
- * `#success` - run after the task has completed successfully 
- * `#fail` - run after the task has failed due to `#run` producing a `StandardError` or subclass.
- * `#final_fail` - run after the task has failed for the last time because either:
+ * `#success(logger)` - run after the task has completed successfully 
+ * `#fail(logger, error)` - run after the task has failed due to `#run` producing a `StandardError` or subclass.
+ * `#final_fail(logger, error)` - run after the task has failed for the last time because either:
     1. the number of attempts is >= the `max_attempts` defined for the queue; or
     2. the time reported by `Time.now` is past the task's `expire_at` time.
 
@@ -210,10 +210,10 @@ procrastinator = Procrastinator.setup do |env|
 end
 ```
  
-Each worker creates its own log, named after the queue it is working on (eg. `log/email-worker.log`). The default directory
-is `./log/`, relative to wherever the application is running. 
+Each worker creates its own log named after the queue it is working on (eg. `log/email-queue-worker.log`). The default 
+directory is `./log/`, relative to wherever the application is running. Logging will not occur at all if `log_dir` is 
+assigned a falsey value. 
 
-Logging will not occur if `log_dir` is assigned a falsey value.
 
 ## Contributing
 Bug reports and pull requests are welcome on GitHub at 
