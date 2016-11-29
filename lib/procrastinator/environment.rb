@@ -122,23 +122,27 @@ module Procrastinator
       end
 
       def create_log(queue_name)
-         process_name = worker_name(queue_name)
-         log_path     = Pathname.new("#{@log_dir}/#{process_name}.log")
+         if @log_dir
+            process_name = worker_name(queue_name)
+            log_path     = Pathname.new("#{@log_dir}/#{process_name}.log")
 
-         log_path.dirname.mkpath
-         File.open(log_path, 'a+') do |f|
-            f.write ''
+            log_path.dirname.mkpath
+            File.open(log_path.to_path, 'a+') do |f|
+               f.write ''
+            end
+
+            logger = Logger.new(log_path.to_path)
+
+            logger.info(['',
+                         '===================================',
+                         "Started worker process, #{process_name}, to work off queue #{queue_name}.",
+                         "Worker pid=#{Process.pid}; parent pid=#{Process.ppid}.",
+                         '==================================='].join("\n"))
+
+            logger
+         else
+            nil
          end
-
-         logger = Logger.new(log_path.to_path)
-
-         logger.info(['',
-                      '===================================',
-                      "Started worker process, #{process_name}, to work off queue #{queue_name}.",
-                      "Worker pid=#{Process.pid}; parent pid=#{Process.ppid}.",
-                      '==================================='].join("\n"))
-
-         logger
       end
 
       def worker_name(queue_name)

@@ -20,16 +20,17 @@ module Procrastinator
          let(:queues) { {queue1: {name: nil, max_tasks: nil}, queue2: {name: nil, max_tasks: nil}} }
 
          it 'should return the configured procrastinator environment' do
-
-            env = Procrastinator.setup(persister) do |env|
-               queues.each do |name, props|
-                  env.define_queue(name, props)
+            FakeFS do # fakefs enabled to cleanly handle default logging
+               env = Procrastinator.setup(persister) do |env|
+                  queues.each do |name, props|
+                     env.define_queue(name, props)
+                  end
                end
+
+               expect(env).to be_a Environment
+
+               expect(env).to have_attributes(persister: persister, queue_definitions: queues)
             end
-
-            expect(env).to be_a Environment
-
-            expect(env).to have_attributes(persister: persister, queue_definitions: queues)
          end
 
          it 'should call the provided block and provide the environment' do
@@ -58,7 +59,7 @@ module Procrastinator
             end
          end
 
-         it 'should create enable test mode if provided' do
+         it 'should enable test mode when declared' do
             result = Procrastinator.setup(persister) do |env|
                env.define_queue(:test)
                env.enable_test_mode
@@ -95,7 +96,7 @@ module Procrastinator
       end
 
       describe '#test_mode=' do
-         it 'should assign test mode' do
+         it 'should assign global test mode' do
             Procrastinator.test_mode = true
 
             expect(Procrastinator.test_mode).to be true

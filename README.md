@@ -213,6 +213,8 @@ end
 Each worker creates its own log, named after the queue it is working on (eg. `log/email-worker.log`). The default directory
 is `./log/`, relative to wherever the application is running. 
 
+Logging will not occur if `log_dir` is assigned a falsey value.
+
 ## Contributing
 Bug reports and pull requests are welcome on GitHub at 
 [https://github.com/TenjinInc/procrastinator](https://github.com/TenjinInc/procrastinator).
