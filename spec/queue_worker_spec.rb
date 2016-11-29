@@ -486,25 +486,27 @@ module Procrastinator
          end
 
          it 'should log exiting when parent process disappears' do
-            worker = QueueWorker.new(name:      :test,
-                                     persister: persister,
-                                     log_dir:   'log/')
+            FakeFS do
+               worker = QueueWorker.new(name:      :test,
+                                        persister: persister,
+                                        log_dir:   'log/')
 
-            worker.start_log
+               worker.start_log
 
-            [{parent: 10, child: 2000},
-             {parent: 30, child: 4000}].each do |pid_hash|
-               parent_pid = pid_hash[:parent]
-               child_pid  = pid_hash[:child]
+               [{parent: 10, child: 2000},
+                {parent: 30, child: 4000}].each do |pid_hash|
+                  parent_pid = pid_hash[:parent]
+                  child_pid  = pid_hash[:child]
 
-               allow(Process).to receive(:ppid).and_return(parent_pid)
-               allow(Process).to receive(:pid).and_return(child_pid)
+                  allow(Process).to receive(:ppid).and_return(parent_pid)
+                  allow(Process).to receive(:pid).and_return(child_pid)
 
-               worker.log_parent_exit
+                  worker.log_parent_exit
 
-               log_path = 'log/test-queue-worker.log'
+                  log_path = 'log/test-queue-worker.log'
 
-               expect(File.read(log_path)).to include("Terminated worker process (#{child_pid}) due to main process (#{parent_pid}) disappearing.")
+                  expect(File.read(log_path)).to include("Terminated worker process (#{child_pid}) due to main process (#{parent_pid}) disappearing.")
+               end
             end
          end
       end
