@@ -43,7 +43,7 @@ module Procrastinator
 
                   worker.start_log
 
-                  Process.setproctitle(worker.long_name) # tODO: add an app name prefix
+                  Process.setproctitle("#{@process_prefix ? "#{@process_prefix}-" : ''}#{worker.long_name}") # tODO: add an app name prefix
 
                   monitor_parent(worker)
 
@@ -109,6 +109,10 @@ module Procrastinator
 
       def log_level(lvl)
          @log_level = lvl
+      end
+
+      def process_prefix(prefix)
+         @process_prefix = prefix
       end
 
       private

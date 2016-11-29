@@ -94,6 +94,14 @@ Each queue is worked in a separate process.
 
 The sub-processes checks that the parent process is still alive every 5 seconds. If there is no process with the parent's PID, the sub-process will self-exit. 
 
+Sub-processes can be given a name prefix with the process_prefix method: 
+
+```ruby
+procrastinator = Procrastinator.setup(task_persister) do |env|
+   env.process_prefix('myapp')
+end
+```
+
 ###Scheduling Tasks For Later
 Procrastinator will let you be lazy: 
 

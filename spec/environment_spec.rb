@@ -437,6 +437,22 @@ module Procrastinator
                   env.spawn_workers
                end
 
+               it 'should name each worker process with provided prefix' do
+                  [:test1, :test2, :test3].each do |prefix|
+                     env = Environment.new(persister: persister)
+                     env.define_queue(:testQueue)
+                     env.process_prefix(prefix)
+
+                     stub_fork(env)
+
+                     allow_any_instance_of(QueueWorker).to receive(:work)
+
+                     expect(Process).to receive(:setproctitle).with("#{prefix}-testQueue-queue-worker")
+
+                     env.spawn_workers
+                  end
+               end
+
                it 'should NOT store any pids' do
                   allow(env).to receive(:fork).and_return(nil)
 
