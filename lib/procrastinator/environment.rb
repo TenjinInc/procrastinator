@@ -35,8 +35,6 @@ module Procrastinator
             end
          else
             @queue_definitions.each do |name, props|
-               parent_pid = Process.pid
-
                pid = fork do
                   worker = QueueWorker.new(props.merge(name:      name,
                                                        persister: @persister,
@@ -47,7 +45,7 @@ module Procrastinator
 
                   Process.setproctitle(worker.long_name) # tODO: add an app name prefix
 
-                  monitor_parent(parent_pid, worker)
+                  monitor_parent(worker)
 
                   worker.work
                end
@@ -114,7 +112,9 @@ module Procrastinator
       end
 
       private
-      def monitor_parent(parent_pid, worker)
+      def monitor_parent(worker)
+         parent_pid = Process.ppid
+
          heartbeat_thread = Thread.new(parent_pid) do |pid|
             loop do
                begin
