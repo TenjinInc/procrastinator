@@ -17,6 +17,7 @@ module Procrastinator
          @queue_workers     = []
          @processes         = []
          @log_dir           = DEFAULT_LOG_DIRECTORY
+         @log_level         = Logger::INFO
       end
 
       def define_queue(name, properties={})
@@ -39,7 +40,8 @@ module Procrastinator
                pid = fork do
                   worker = QueueWorker.new(props.merge(name:      name,
                                                        persister: @persister,
-                                                       log_dir:   @log_dir))
+                                                       log_dir:   @log_dir,
+                                                       log_level: @log_level))
 
                   worker.start_log
 
@@ -105,6 +107,10 @@ module Procrastinator
 
       def log_dir(path)
          @log_dir = path
+      end
+
+      def log_level(lvl)
+         @log_level = lvl
       end
 
       private

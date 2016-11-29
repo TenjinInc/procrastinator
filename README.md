@@ -214,6 +214,18 @@ Each worker creates its own log named after the queue it is working on (eg. `log
 directory is `./log/`, relative to wherever the application is running. Logging will not occur at all if `log_dir` is 
 assigned a falsey value. 
 
+The logging level can be set using `log_level` and a value from the Ruby standard library 
+[Logger class](https://ruby-doc.org/stdlib-2.2.3/libdoc/logger/rdoc/Logger.html) (eg. `Logger::WARN`, `Logger::DEBUG`, etc.). 
+
+It logs process start at level `INFO`, process termination due to parent disppearance at level `ERROR` and task hooks 
+`#success`, `#fail`, and `#final_fail` are at a level `DEBUG`. 
+
+```ruby
+procrastinator = Procrastinator.setup do |env|
+   env.log_dir('log/')
+   env.log_level(Logger::INFO) # setting the default explicity
+end
+```
 
 ## Contributing
 Bug reports and pull requests are welcome on GitHub at 

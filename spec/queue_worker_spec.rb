@@ -456,6 +456,23 @@ module Procrastinator
 
                expect(File.read(log_path)).to include(existing_data)
             end
+
+            it 'should log at the provided level' do
+               log_dir = 'log/'
+
+               worker = QueueWorker.new(name:      :queue1,
+                                        persister: persister,
+                                        log_dir:   log_dir,
+                                        log_level: Logger::FATAL)
+
+               worker.start_log
+
+               worker.log_parent_exit
+
+               log_path = "#{log_dir}/#{worker.long_name}.log"
+
+               expect(File.read(log_path)).to_not include('Terminated')
+            end
          end
       end
 

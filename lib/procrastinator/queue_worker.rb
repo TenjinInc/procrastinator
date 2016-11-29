@@ -11,6 +11,7 @@ module Procrastinator
       def initialize(name:,
                      persister:,
                      log_dir: nil,
+                     log_level: Logger::INFO,
                      max_attempts: DEFAULT_MAX_ATTEMPTS,
                      timeout: DEFAULT_TIMEOUT,
                      update_period: DEFAULT_UPDATE_PERIOD,
@@ -29,6 +30,7 @@ module Procrastinator
          @max_tasks     = max_tasks
          @persister     = persister
          @log_dir       = log_dir
+         @log_level     = log_level
       end
 
       def work
@@ -78,6 +80,8 @@ module Procrastinator
             end
 
             @logger = Logger.new(log_path.to_path)
+
+            @logger.level = @log_level
 
             @logger.info(['',
                           '===================================',

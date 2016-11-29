@@ -351,7 +351,8 @@ module Procrastinator
                      expect(QueueWorker).to receive(:new)
                                                   .with(props.merge(persister: persister,
                                                                     name:      name,
-                                                                    log_dir:   Environment::DEFAULT_LOG_DIRECTORY))
+                                                                    log_dir:   Environment::DEFAULT_LOG_DIRECTORY,
+                                                                    log_level: Logger::INFO))
                                                   .and_return(double('worker',
                                                                      work:      nil,
                                                                      start_log: nil,
@@ -549,37 +550,51 @@ module Procrastinator
                   env = Environment.new(persister: persister)
                   env.define_queue(:test)
 
-                  [{parent: 10, child: 2000}, {parent: 30, child: 4000}].each do |pid_hash|
-                     parent_pid = pid_hash[:parent]
-                     child_pid  = pid_hash[:child]
+                  parent_pid = 10
+                  child_pid  = 2000
 
-                     stub_fork(env, child_pid)
-                     allow_any_instance_of(QueueWorker).to receive(:work)
+                  stub_fork(env, child_pid)
+                  allow_any_instance_of(QueueWorker).to receive(:work)
 
-                     allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
-                     allow(Process).to receive(:ppid).and_return(parent_pid)
-                     allow(Process).to receive(:pid).and_return(child_pid)
+                  allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
+                  allow(Process).to receive(:ppid).and_return(parent_pid)
+                  allow(Process).to receive(:pid).and_return(child_pid)
 
-                     allow(Thread).to receive(:new) do |&block|
-                        block.call(parent_pid)
-                     end
-
-                     # control looping, otherwise infiniloop by design
-                     allow(env).to receive(:sleep)
-                     allow(env).to receive(:loop) do |&block|
-                        block.call
-                     end
-
-                     begin
-                        env.spawn_workers
-                     rescue SystemExit
-                        # this is safer than stubbing exit, which can have weird consequences on the test system
-                     end
-
-                     log_path = 'log/test-queue-worker.log'
-
-                     expect(File.read(log_path)).to include('Terminated worker process')
+                  allow(Thread).to receive(:new) do |&block|
+                     block.call(parent_pid)
                   end
+
+                  # control looping, otherwise infiniloop by design
+                  allow(env).to receive(:sleep)
+                  allow(env).to receive(:loop) do |&block|
+                     block.call
+                  end
+
+                  begin
+                     env.spawn_workers
+                  rescue SystemExit
+                     # this is safer than stubbing exit, which can have weird consequences on the test system
+                  end
+
+                  log_path = 'log/test-queue-worker.log'
+
+                  expect(File.read(log_path)).to include('Terminated worker process')
+               end
+
+               it 'should set the log level' do
+                  env = Environment.new(persister: persister)
+                  env.define_queue(:test)
+                  env.log_level(Logger::FATAL)
+
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+                  allow(env).to receive(:monitor_parent)
+                  stub_fork(env, 100)
+
+                  env.spawn_workers
+
+                  log_path = 'log/test-queue-worker.log'
+
+                  expect(File.read(log_path)).to be_empty
                end
 
                after(:each) do
