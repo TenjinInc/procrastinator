@@ -116,12 +116,12 @@ module Procrastinator
       def monitor_parent(worker)
          parent_pid = Process.ppid
 
-         heartbeat_thread = Thread.new(parent_pid) do |pid|
+         heartbeat_thread = Thread.new(parent_pid) do |ppid|
             loop do
                begin
-                  Process.kill(0, pid) # kill(0) will check if the process exists
+                  Process.kill(0, ppid) # kill with 0 flag checks if the process exists & has permissions
                rescue Errno::ESRCH
-                  worker.log_parent_exit
+                  worker.log_parent_exit(ppid: ppid, pid: Process.pid)
                   exit
                end
 

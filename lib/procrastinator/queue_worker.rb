@@ -44,7 +44,7 @@ module Procrastinator
             end
          rescue StandardError => e
             @logger.fatal(e)
-               # raise e
+            # raise e
          end
       end
 
@@ -98,10 +98,16 @@ module Procrastinator
          end
       end
 
-      def log_parent_exit
+      # Logs a termination due to parent process termination
+      #
+      # == Parameters:
+      # @param ppid the parent's process id
+      # @param pid the child's process id
+      #
+      def log_parent_exit(ppid:, pid:)
          raise RuntimeError.new('Cannot log when logger not defined. Call #start_log first.') unless @logger
 
-         @logger.error("Terminated worker process (#{Process.pid}) due to main process (#{Process.ppid}) disappearing.")
+         @logger.error("Terminated worker process (pid=#{pid}) due to main process (ppid=#{ppid}) disappearing.")
       end
    end
 

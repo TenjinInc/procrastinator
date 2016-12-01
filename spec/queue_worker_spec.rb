@@ -505,7 +505,7 @@ module Procrastinator
 
                worker.start_log
 
-               worker.log_parent_exit
+               worker.log_parent_exit(ppid: 0, pid: 0)
 
                log_path = "#{log_dir}/#{worker.long_name}.log"
 
@@ -520,7 +520,7 @@ module Procrastinator
                                      persister: persister,
                                      log_dir:   nil)
 
-            expect { worker.log_parent_exit }.to raise_error('Cannot log when logger not defined. Call #start_log first.')
+            expect { worker.log_parent_exit(ppid: 0, pid: 1) }.to raise_error('Cannot log when logger not defined. Call #start_log first.')
          end
 
          it 'should log exiting when parent process disappears' do
@@ -536,14 +536,11 @@ module Procrastinator
                   parent_pid = pid_hash[:parent]
                   child_pid  = pid_hash[:child]
 
-                  allow(Process).to receive(:ppid).and_return(parent_pid)
-                  allow(Process).to receive(:pid).and_return(child_pid)
-
-                  worker.log_parent_exit
+                  worker.log_parent_exit(ppid: parent_pid, pid: child_pid)
 
                   log_path = 'log/test-queue-worker.log'
 
-                  expect(File.read(log_path)).to include("Terminated worker process (#{child_pid}) due to main process (#{parent_pid}) disappearing.")
+                  expect(File.read(log_path)).to include("Terminated worker process (pid=#{child_pid}) due to main process (ppid=#{parent_pid}) disappearing.")
                end
             end
          end
