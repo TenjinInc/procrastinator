@@ -4,20 +4,24 @@ module Procrastinator
 
       DEFAULT_LOG_DIRECTORY = 'log/'
 
-      def initialize(persister:, test_mode: false)
-         raise ArgumentError.new('persister cannot be nil') if persister.nil?
-
-         [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
-            raise MalformedPersisterError.new("persister must repond to ##{method}") unless persister.respond_to? method
-         end
-
-         @persister         = persister
+      def initialize(test_mode: false)
          @test_mode         = test_mode
          @queue_definitions = {}
          @queue_workers     = []
          @processes         = []
          @log_dir           = DEFAULT_LOG_DIRECTORY
          @log_level         = Logger::INFO
+      end
+
+      def persister_factory(&block)
+         @persister_factory = block
+         @persister         = block.call
+
+         raise ArgumentError.new('persister cannot be nil') if @persister.nil?
+
+         [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
+            raise MalformedPersisterError.new("persister must repond to ##{method}") unless @persister.respond_to? method
+         end
       end
 
       def define_queue(name, properties={})

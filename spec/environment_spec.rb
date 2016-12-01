@@ -2,38 +2,59 @@ module Procrastinator
    require 'spec_helper'
    describe Environment do
       describe '#initialize' do
+         it 'should set test mode' do
+            env = Environment.new(test_mode: true)
+
+            expect(env.test_mode).to be true
+         end
+      end
+
+      describe '#persister' do
+         let(:env) { Environment.new }
+
          it 'should require that the persister NOT be nil' do
-            expect { Environment.new(persister: nil) }.to raise_error(ArgumentError, 'persister cannot be nil')
+            expect do
+               env.persister_factory do
+                  nil
+               end
+            end.to raise_error(ArgumentError, 'persister cannot be nil')
          end
 
          it 'should require the persister respond to #read_tasks' do
             expect do
-               Environment.new(persister: double('persister', create_task: nil, update_task: nil, delete_task: nil))
+               env.persister_factory do
+                  double('persister', create_task: nil, update_task: nil, delete_task: nil)
+               end
             end.to raise_error(MalformedPersisterError, 'persister must repond to #read_tasks')
          end
 
          it 'should require the persister respond to #create_task' do
             expect do
-               Environment.new(persister: double('persister', read_tasks: nil, update_task: nil, delete_task: nil))
+               env.persister_factory do
+                  double('persister', read_tasks: nil, update_task: nil, delete_task: nil)
+               end
             end.to raise_error(MalformedPersisterError, 'persister must repond to #create_task')
          end
 
          it 'should require the persister respond to #update_task' do
             expect do
-               Environment.new(persister: double('persister', read_tasks: nil, create_task: nil, delete_task: nil))
+               env.persister_factory do
+                  double('persister', read_tasks: nil, create_task: nil, delete_task: nil)
+               end
             end.to raise_error(MalformedPersisterError, 'persister must repond to #update_task')
          end
 
          it 'should require the persister respond to #delete_task' do
             expect do
-               Environment.new(persister: double('persister', read_tasks: nil, create_task: nil, update_task: nil))
+               env.persister_factory do
+                  double('persister', read_tasks: nil, create_task: nil, update_task: nil)
+               end
             end.to raise_error(MalformedPersisterError, 'persister must repond to #delete_task')
          end
       end
 
       describe '#define_queue' do
-         let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
-         let(:env) { Environment.new(persister: persister) }
+         let(:env) { Environment.new }
 
          it 'should require that the queue definitions NOT be nil' do
             expect { env.define_queue(nil) }.to raise_error(ArgumentError, 'queue name cannot be nil')
@@ -58,7 +79,13 @@ module Procrastinator
          # api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
 
          let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
-         let(:env) { Environment.new(persister: persister) }
+         let(:env) do
+            env = Environment.new
+            env.persister_factory do
+               persister
+            end
+            env
+         end
          let(:task) { double('task', run: nil) }
 
          before(:each) do
@@ -196,14 +223,16 @@ module Procrastinator
          end
 
          it 'should NOT require queue be provided if there only one queue defined' do
-            env = Environment.new(persister: persister)
+            env = Environment.new
+            env.persister_factory do persister end
             env.define_queue(:queue)
 
             expect { env.delay(run_at: 0, task: task) }.to_not raise_error
          end
 
          it 'should assume the queue if there only one queue defined' do
-            env = Environment.new(persister: persister)
+            env = Environment.new
+            env.persister_factory do persister end
             env.define_queue(:some_queue)
 
             expect(persister).to receive(:create_task).with(include(queue: :some_queue))
@@ -220,7 +249,13 @@ module Procrastinator
 
       describe 'spawn_workers' do
          let(:persister) { double('persister', read_tasks: [], create_task: [], update_task: [], delete_task: []) }
-         let(:env) { Environment.new(persister: persister) }
+         let(:env) do
+            env = Environment.new
+            env.persister_factory do
+               persister
+             end
+            env
+         end
 
          before do
             FakeFS.activate!
@@ -235,7 +270,11 @@ module Procrastinator
          end
 
          context 'test mode' do
-            let(:env) { Environment.new(persister: persister, test_mode: true) }
+            let(:env) do
+               env = Environment.new(test_mode: true)
+               env.persister_factory do persister end
+               env
+            end
 
             it 'should create a worker for each queue definition' do
                queue_defs = {test2a: {max_tasks: 1}, test2b: {max_tasks: 2}, test2c: {max_tasks: 3}}
@@ -439,7 +478,10 @@ module Procrastinator
 
                it 'should name each worker process with provided prefix' do
                   [:test1, :test2, :test3].each do |prefix|
-                     env = Environment.new(persister: persister)
+                     env = Environment.new
+                     env.persister_factory do
+                        persister
+                     end
                      env.define_queue(:testQueue)
                      env.process_prefix(prefix)
 
@@ -462,7 +504,10 @@ module Procrastinator
                end
 
                it 'should monitor the parent process' do
-                  env = Environment.new(persister: persister)
+                  env = Environment.new
+                  env.persister_factory do
+                     persister
+                  end
                   env.define_queue(:test)
 
                   parent_pid = 10
@@ -504,7 +549,8 @@ module Procrastinator
                it 'should exit if the parent process dies' do
                   exited = false
 
-                  env = Environment.new(persister: persister)
+                  env = Environment.new
+                  env.persister_factory do persister end
                   env.define_queue(:test)
 
                   parent_pid = 10
@@ -563,7 +609,8 @@ module Procrastinator
                end
 
                it 'should log exiting when parent process dies' do
-                  env = Environment.new(persister: persister)
+                  env = Environment.new
+                  env.persister_factory do persister end
                   env.define_queue(:test)
 
                   parent_pid = 10
@@ -598,7 +645,8 @@ module Procrastinator
                end
 
                it 'should set the log level' do
-                  env = Environment.new(persister: persister)
+                  env = Environment.new
+                  env.persister_factory do persister end
                   env.define_queue(:test)
                   env.log_level(Logger::FATAL)
 
@@ -626,7 +674,8 @@ module Procrastinator
             let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
 
             let(:env) do
-               env = Environment.new(persister: persister, test_mode: true)
+               env = Environment.new(test_mode: true)
+               env.persister_factory do persister end
                env.define_queue(:test1)
                env.define_queue(:test2)
                env.define_queue(:test3)
@@ -652,13 +701,15 @@ module Procrastinator
             end
 
             it 'should not complain when using Procrastinator.act in Test Mode' do
-               test_env = Environment.new(persister: persister, test_mode: true)
+               test_env = Environment.new(test_mode: true)
+               test_env.persister_factory do persister end
 
                expect { test_env.act }.to_not raise_error
             end
 
             it 'should complain if you try to use Procrastinator.act outside Test Mode' do
-               non_test_env = Environment.new(persister: persister, test_mode: false)
+               non_test_env = Environment.new(test_mode: false)
+               non_test_env.persister_factory do persister end
 
                expect { non_test_env.act }.to raise_error(RuntimeError, 'Procrastinator.act called outside Test Mode. Enable test mode by setting Procrastinator.test_mode = true before running setup')
             end

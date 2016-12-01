@@ -8,15 +8,15 @@ require 'logger'
 module Procrastinator
    @@test_mode = false
 
-   def self.setup(persister, &block)
+   def self.setup(&block)
       raise ArgumentError.new('Procrastinator.setup must be given a block') if block.nil?
 
-      env = Environment.new(persister: persister, test_mode: @@test_mode)
+      env = Environment.new(test_mode: @@test_mode)
 
       yield(env)
 
-      raise RuntimeError.new('setup block did not define any queues') if env.queue_definitions.empty?
-
+      raise RuntimeError.new('setup block must call #persister_factory on the environment') if env.persister.nil?
+      raise RuntimeError.new('setup block must call #define_queue on the environment') if env.queue_definitions.empty?
       env.spawn_workers
 
       env

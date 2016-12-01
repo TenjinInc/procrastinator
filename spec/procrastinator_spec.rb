@@ -21,22 +21,27 @@ module Procrastinator
 
          it 'should return the configured procrastinator environment' do
             FakeFS do # fakefs enabled to cleanly handle default logging
-               env = Procrastinator.setup(persister) do |env|
+               env = Procrastinator.setup do |env|
                   queues.each do |name, props|
                      env.define_queue(name, props)
+                  end
+
+                  env.persister_factory do
+                     persister
                   end
                end
 
                expect(env).to be_a Environment
 
-               expect(env).to have_attributes(persister: persister, queue_definitions: queues)
+               expect(env).to have_attributes(persister:         persister,
+                                              queue_definitions: queues)
             end
          end
 
          it 'should call the provided block and provide the environment' do
             expect do |block|
                begin
-                  Procrastinator.setup(persister, &block)
+                  Procrastinator.setup(&block)
                rescue RuntimeError
                   # because block is stubbed, can't get around this raising
                end
@@ -44,24 +49,34 @@ module Procrastinator
          end
 
          it 'should require that a block is provided' do
-            expect { Procrastinator.setup(persister) }.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
+            expect { Procrastinator.setup }.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
+         end
+
+         it 'should require the a persister builder is defined' do
+            expect do
+               Procrastinator.setup {}
+            end.to raise_error(RuntimeError, 'setup block must call #persister_factory on the environment')
          end
 
          it 'should require at least one queue is defined' do
-            expect { Procrastinator.setup(persister) {} }.to raise_error(RuntimeError, 'setup block did not define any queues')
+            expect { Procrastinator.setup do |env|
+               env.persister_factory { double('persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil) }
+            end }.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
          end
 
-         it 'should call spawn_workers on the environement' do
+         it 'should call spawn_workers on the environment' do
             expect_any_instance_of(Environment).to receive(:spawn_workers)
 
-            Procrastinator.setup(persister) do |env|
+            Procrastinator.setup do |env|
                env.define_queue(:test)
+               env.persister_factory { persister }
             end
          end
 
          it 'should enable test mode when declared' do
-            result = Procrastinator.setup(persister) do |env|
+            result = Procrastinator.setup do |env|
                env.define_queue(:test)
+               env.persister_factory { persister }
                env.enable_test_mode
             end
 
@@ -74,7 +89,8 @@ module Procrastinator
             end
 
             it 'should create an environment in test mode' do
-               result = Procrastinator.setup(persister) do |env|
+               result = Procrastinator.setup do |env|
+                  env.persister_factory { persister }
                   env.define_queue(:test)
                end
 
@@ -82,10 +98,12 @@ module Procrastinator
             end
 
             it 'should create every environment in test mode' do
-               result1 = Procrastinator.setup(persister) do |env|
+               result1 = Procrastinator.setup do |env|
+                  env.persister_factory { persister }
                   env.define_queue(:test)
                end
-               result2 = Procrastinator.setup(persister) do |env|
+               result2 = Procrastinator.setup do |env|
+                  env.persister_factory { persister }
                   env.define_queue(:test)
                end
 
