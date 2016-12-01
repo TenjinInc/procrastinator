@@ -1,3 +1,6 @@
+require 'simplecov'
+
+SimpleCov.start
 
 $LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
 
@@ -39,5 +42,17 @@ class GoodTask
 
    def final_fail(env)
 
+   end
+end
+
+class SuccessTask
+   def run
+
+   end
+end
+
+class FailTask
+   def run
+      raise('derp')
    end
 end

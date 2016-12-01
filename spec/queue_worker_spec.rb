@@ -1,18 +1,6 @@
 require 'spec_helper'
 
 module Procrastinator
-   class SuccessTask
-      def run
-
-      end
-   end
-
-   class FailTask
-      def run
-         raise 'derp'
-      end
-   end
-
    describe QueueWorker do
       let(:persister) { double('loader', read_tasks: [], update_task: nil, delete_task: nil) }
 
@@ -393,8 +381,7 @@ module Procrastinator
 
             it 'should update the task' do
                [0, 1].each do |max_attempts|
-                  run_at    = double('run_at', to_i: 0)
-                  task_data = {run_at: run_at, task: YAML.dump(FailTask.new)}
+                  task_data = {run_at: 0, task: YAML.dump(FailTask.new)}
                   task_hash = {stub: :hash}
 
                   allow(persister).to receive(:read_tasks).and_return([task_data])

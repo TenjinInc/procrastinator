@@ -1,18 +1,6 @@
 require 'spec_helper'
 
 module Procrastinator
-   class SuccessTask
-      def run
-
-      end
-   end
-
-   class FailTask
-      def run
-         raise('derp')
-      end
-   end
-
    describe TaskWorker do
       let(:required_args) do
          {max_attempts: 2,
