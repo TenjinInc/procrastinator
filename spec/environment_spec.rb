@@ -246,8 +246,7 @@ module Procrastinator
                queue_defs.each do |name, props|
                   expect(QueueWorker).to receive(:new)
                                                .with(props.merge(persister: persister,
-                                                                 name:      name,
-                                                                 log_dir:   Environment::DEFAULT_LOG_DIRECTORY))
+                                                                 name:      name))
                                                .and_return(double('worker', work: nil))
                end
 
@@ -284,12 +283,13 @@ module Procrastinator
 
                env.define_queue(queue_name)
 
-               stub_fork(env)
                allow_any_instance_of(QueueWorker).to receive(:work)
 
-               env.spawn_workers
+               FakeFS do
+                  env.spawn_workers
 
-               expect(File.file?("log/#{queue_name}-queue-worker.log")).to be false
+                  expect(File.file?("log/#{queue_name}-queue-worker.log")).to be false
+               end
             end
          end
 

@@ -30,24 +30,21 @@ module Procrastinator
          if @test_mode
             @queue_definitions.each do |name, props|
                @queue_workers << QueueWorker.new(props.merge(name:      name,
-                                                             persister: @persister,
-                                                             log_dir:   @log_dir))
+                                                             persister: @persister))
             end
          else
             @queue_definitions.each do |name, props|
                pid = fork do
-                     worker = QueueWorker.new(props.merge(name:      name,
-                                                          persister: @persister,
-                                                          log_dir:   @log_dir,
-                                                          log_level: @log_level))
+                  worker = QueueWorker.new(props.merge(name:      name,
+                                                       persister: @persister,
+                                                       log_dir:   @log_dir,
+                                                       log_level: @log_level))
 
-                     worker.start_log
+                  Process.setproctitle("#{@process_prefix ? "#{@process_prefix}-" : ''}#{worker.long_name}") # tODO: add an app name prefix
 
-                     Process.setproctitle("#{@process_prefix ? "#{@process_prefix}-" : ''}#{worker.long_name}") # tODO: add an app name prefix
+                  monitor_parent(worker)
 
-                     monitor_parent(worker)
-
-                     worker.work
+                  worker.work
                end
 
                Process.detach(pid) unless pid.nil?

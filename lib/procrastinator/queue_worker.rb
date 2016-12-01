@@ -31,6 +31,8 @@ module Procrastinator
          @persister     = persister
          @log_dir       = log_dir
          @log_level     = log_level
+
+         start_log
       end
 
       def work

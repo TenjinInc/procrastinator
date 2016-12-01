@@ -155,30 +155,30 @@ module Procrastinator
          end
 
          it 'should log fatal errors from act' do
-            worker = QueueWorker.new(name:          :test,
-                                     persister:     persister,
-                                     update_period: 0.1,
-                                     log_dir:       'log/')
+            FakeFS do
+               worker = QueueWorker.new(name:          :test,
+                                        persister:     persister,
+                                        update_period: 0.1,
+                                        log_dir:       'log/')
 
-            worker.start_log
+               err = 'some fatal error'
 
-            err = 'some fatal error'
+               allow(worker).to receive(:sleep) # stub sleep
 
-            allow(worker).to receive(:sleep) # stub sleep
+               # control looping, otherwise infiniloop by design
+               allow(worker).to receive(:loop) do |&block|
+                  block.call
+               end
 
-            # control looping, otherwise infiniloop by design
-            allow(worker).to receive(:loop) do |&block|
-               block.call
+               allow(worker).to receive(:act).and_raise(err)
+
+               worker.work
+
+               log = File.read('log/test-queue-worker.log')
+
+               expect(log).to include('F, ') # default fatal error notation in Ruby logger
+               expect(log).to include(err)
             end
-
-            allow(worker).to receive(:act).and_raise(err)
-
-            worker.work
-
-            log = File.read('log/test-queue-worker.log')
-
-            expect(log).to include('F, ') # default fatal error notation in Ruby logger
-            expect(log).to include(err)
          end
       end
 
@@ -345,27 +345,25 @@ module Procrastinator
             end
 
             it 'should pass in a logger to the logfile for this queue' do
-               queue_name = :test_queue
-
-               task_double = double('task', run: nil)
-               task_data   = {run_at: 1, task: YAML.dump(task_double)}
-
-               allow(YAML).to receive(:load).and_return(task_double)
-
-               persister = double('persister', update_task: nil, delete_task: nil)
-               allow(persister).to receive(:read_tasks).and_return([task_data])
-
-               expect(TaskWorker).to receive(:new).with(satisfy do |param_hash|
-                  !param_hash[:logger].nil?
-               end).and_call_original
-
-               worker = QueueWorker.new(name:          queue_name,
-                                        persister:     persister,
-                                        log_dir:       '/log',
-                                        update_period: 0)
-
                FakeFS do
-                  worker.start_log
+                  queue_name = :test_queue
+
+                  task_double = double('task', run: nil)
+                  task_data   = {run_at: 1, task: YAML.dump(task_double)}
+
+                  allow(YAML).to receive(:load).and_return(task_double)
+
+                  persister = double('persister', update_task: nil, delete_task: nil)
+                  allow(persister).to receive(:read_tasks).and_return([task_data])
+
+                  expect(TaskWorker).to receive(:new).with(satisfy do |param_hash|
+                     !param_hash[:logger].nil?
+                  end).and_call_original
+
+                  worker = QueueWorker.new(name:          queue_name,
+                                           persister:     persister,
+                                           log_dir:       'log/',
+                                           update_period: 0)
 
                   worker.act
                end
