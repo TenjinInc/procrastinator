@@ -34,10 +34,15 @@ module Procrastinator
       end
 
       def work
-         loop do
-            sleep(@update_period)
+         begin
+            loop do
+               sleep(@update_period)
 
-            act
+               act
+            end
+         rescue StandardError => e
+            @logger.fatal(e)
+               # raise e
          end
       end
 

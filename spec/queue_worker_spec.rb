@@ -153,6 +153,33 @@ module Procrastinator
 
             worker.work
          end
+
+         it 'should log fatal errors from act' do
+            worker = QueueWorker.new(name:          :test,
+                                     persister:     persister,
+                                     update_period: 0.1,
+                                     log_dir:       'log/')
+
+            worker.start_log
+
+            err = 'some fatal error'
+
+            allow(worker).to receive(:sleep) # stub sleep
+
+            # control looping, otherwise infiniloop by design
+            allow(worker).to receive(:loop) do |&block|
+               block.call
+            end
+
+            allow(worker).to receive(:act).and_raise(err)
+
+            worker.work
+
+            log = File.read('log/test-queue-worker.log')
+
+            expect(log).to include('F, ') # default fatal error notation in Ruby logger
+            expect(log).to include(err)
+         end
       end
 
       describe '#act' do
