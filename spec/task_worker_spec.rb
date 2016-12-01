@@ -16,6 +16,7 @@ module Procrastinator
    describe TaskWorker do
       let(:required_args) do
          {max_attempts: 2,
+          run_at:       0,
           task:         YAML.dump(SuccessTask.new),
           logger:       Logger.new(StringIO.new)}
       end
@@ -52,9 +53,11 @@ module Procrastinator
             expect(worker.expire_at).to eq now.to_i
          end
 
-         it 'should NOT convert nil expire_at to int' do
-            worker = TaskWorker.new(required_args.merge(expire_at: nil))
+         it 'should NOT convert nil run_at, expire_at to int' do
+            worker = TaskWorker.new(required_args.merge(run_at:    nil,
+                                                        expire_at: nil))
 
+            expect(worker.run_at).to eq nil
             expect(worker.expire_at).to eq nil
          end
 
@@ -565,7 +568,9 @@ module Procrastinator
          end
 
          it 'should be false if attempts remain' do
-            worker = TaskWorker.new(required_args.merge(task: YAML.dump(FailTask.new), attempts: 1, max_attempts: 3))
+            worker = TaskWorker.new(required_args.merge(task: YAML.dump(FailTask.new),
+                                                        attempts: 1,
+                                                        max_attempts: 3))
 
             worker.work
 
@@ -573,7 +578,8 @@ module Procrastinator
          end
 
          it 'should be false if nil max_attempts is given' do
-            worker = TaskWorker.new(required_args.merge(task: YAML.dump(FailTask.new), max_attempts: nil))
+            worker = TaskWorker.new(required_args.merge(task: YAML.dump(FailTask.new),
+                                                        max_attempts: nil))
 
             worker.work
 

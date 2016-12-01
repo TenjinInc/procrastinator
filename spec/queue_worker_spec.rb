@@ -172,7 +172,7 @@ module Procrastinator
                task2 = SuccessTask.new
                task3 = SuccessTask.new
 
-               job1 = {id: 4, run_at: nil, initial_run_at: 0, task: YAML.dump(task1)} # consider nil 0
+               job1 = {id: 4, run_at: 1, initial_run_at: 0, task: YAML.dump(task1)} # consider nil 0
                job2 = {id: 5, run_at: 2, initial_run_at: 0, task: YAML.dump(task2)}
                job3 = {id: 6, run_at: 3, initial_run_at: 0, task: YAML.dump(task3)}
 
@@ -188,6 +188,28 @@ module Procrastinator
                expect(task1).to receive(:run).ordered
                expect(task2).to receive(:run).ordered
                expect(task3).to receive(:run).ordered
+
+               worker.act
+            end
+
+            it 'should ignore tasks with nil run_at' do
+               task1 = SuccessTask.new
+               task2 = SuccessTask.new
+
+               job1 = {id: 4, run_at: nil, initial_run_at: 0, task: YAML.dump(task1)} # consider nil 0
+               job2 = {id: 5, run_at: 2, initial_run_at: 0, task: YAML.dump(task2)}
+
+               allow(YAML).to receive(:load).and_return(task2)
+
+               persister = double('disorganized persister',
+                                  read_tasks:  [job2, job1],
+                                  update_task: nil,
+                                  delete_task: nil)
+
+               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
+
+               expect(task1).to_not receive(:run)
+               expect(task2).to receive(:run)
 
                worker.act
             end
@@ -325,7 +347,11 @@ module Procrastinator
 
          context 'TaskWorker succeeds' do
             it 'should delete the task' do
-               task_data = {id: double('id'), task: YAML.dump(SuccessTask.new)}
+               task_data = {
+                     id:     double('id'),
+                     run_at: 0,
+                     task:   YAML.dump(SuccessTask.new)
+               }
 
                allow(persister).to receive(:read_tasks).and_return([task_data])
 

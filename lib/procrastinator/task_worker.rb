@@ -16,7 +16,7 @@ module Procrastinator
                      task:,
                      logger: Logger.new(StringIO.new))
          @id             = id
-         @run_at         = run_at.to_i
+         @run_at         = run_at.nil? ? nil : run_at.to_i
          @initial_run_at = initial_run_at.to_i
          @expire_at      = expire_at.nil? ? nil : expire_at.to_i
          @task           = YAML.load(task)

@@ -42,9 +42,9 @@ module Procrastinator
       end
 
       def act
-         # shuffling and re-sorting to avoid worst case O(n^2) on quicksort
+         # shuffling and re-sorting to avoid worst case O(n^2) on quicksort (which is default ruby sort)
          # when receiving already sorted data. Ideally, we'd use a better algo, but this will do for now
-         tasks = @persister.read_tasks(@name).shuffle.sort_by { |t| t[:run_at] || 0 }
+         tasks = @persister.read_tasks(@name).reject { |t| t[:run_at].nil? }.shuffle.sort_by { |t| t[:run_at] }
 
          tasks.first(@max_tasks).each do |task_data|
             if Time.now.to_i >= task_data[:run_at].to_i
