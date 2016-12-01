@@ -224,7 +224,9 @@ module Procrastinator
 
          it 'should NOT require queue be provided if there only one queue defined' do
             env = Environment.new
-            env.persister_factory do persister end
+            env.persister_factory do
+               persister
+            end
             env.define_queue(:queue)
 
             expect { env.delay(run_at: 0, task: task) }.to_not raise_error
@@ -232,7 +234,9 @@ module Procrastinator
 
          it 'should assume the queue if there only one queue defined' do
             env = Environment.new
-            env.persister_factory do persister end
+            env.persister_factory do
+               persister
+            end
             env.define_queue(:some_queue)
 
             expect(persister).to receive(:create_task).with(include(queue: :some_queue))
@@ -253,7 +257,7 @@ module Procrastinator
             env = Environment.new
             env.persister_factory do
                persister
-             end
+            end
             env
          end
 
@@ -272,7 +276,9 @@ module Procrastinator
          context 'test mode' do
             let(:env) do
                env = Environment.new(test_mode: true)
-               env.persister_factory do persister end
+               env.persister_factory do
+                  persister
+               end
                env
             end
 
@@ -550,7 +556,9 @@ module Procrastinator
                   exited = false
 
                   env = Environment.new
-                  env.persister_factory do persister end
+                  env.persister_factory do
+                     persister
+                  end
                   env.define_queue(:test)
 
                   parent_pid = 10
@@ -582,6 +590,43 @@ module Procrastinator
                   expect(exited).to be true
                end
 
+               it 'should create a new persister instance and pass it to the worker' do
+                  parent_persister = double('parent persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+                  child_persister  = double('child persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+
+                  created_parent = false
+
+                  env = Environment.new
+                  env.persister_factory do
+                     if created_parent
+                        child_persister
+                     else
+                        created_parent = true
+                        parent_persister
+                     end
+                  end
+
+                  env.define_queue(:test)
+
+                  expect(env.persister).to eq parent_persister # sanity check
+
+                  allow(env).to receive(:fork) do |&block|
+                     block.call
+                     nil
+                  end
+
+                  expect(QueueWorker).to receive(:new).with(satisfy do |param_hash|
+                     param_hash[:persister] != parent_persister
+                  end).and_call_original
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  env.spawn_workers
+
+                  # also should keep a new persister
+                  expect(env.persister).to eq child_persister
+                  expect(env.persister).to_not eq parent_persister
+               end
+
                it 'should use a default log directory if not provided in setup' do
                   env.define_queue(:queue1)
 
@@ -610,7 +655,9 @@ module Procrastinator
 
                it 'should log exiting when parent process dies' do
                   env = Environment.new
-                  env.persister_factory do persister end
+                  env.persister_factory do
+                     persister
+                  end
                   env.define_queue(:test)
 
                   parent_pid = 10
@@ -646,7 +693,9 @@ module Procrastinator
 
                it 'should set the log level' do
                   env = Environment.new
-                  env.persister_factory do persister end
+                  env.persister_factory do
+                     persister
+                  end
                   env.define_queue(:test)
                   env.log_level(Logger::FATAL)
 
@@ -675,7 +724,9 @@ module Procrastinator
 
             let(:env) do
                env = Environment.new(test_mode: true)
-               env.persister_factory do persister end
+               env.persister_factory do
+                  persister
+               end
                env.define_queue(:test1)
                env.define_queue(:test2)
                env.define_queue(:test3)
@@ -702,14 +753,18 @@ module Procrastinator
 
             it 'should not complain when using Procrastinator.act in Test Mode' do
                test_env = Environment.new(test_mode: true)
-               test_env.persister_factory do persister end
+               test_env.persister_factory do
+                  persister
+               end
 
                expect { test_env.act }.to_not raise_error
             end
 
             it 'should complain if you try to use Procrastinator.act outside Test Mode' do
                non_test_env = Environment.new(test_mode: false)
-               non_test_env.persister_factory do persister end
+               non_test_env.persister_factory do
+                  persister
+               end
 
                expect { non_test_env.act }.to raise_error(RuntimeError, 'Procrastinator.act called outside Test Mode. Enable test mode by setting Procrastinator.test_mode = true before running setup')
             end

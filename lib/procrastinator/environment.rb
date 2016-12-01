@@ -15,13 +15,8 @@ module Procrastinator
 
       def persister_factory(&block)
          @persister_factory = block
-         @persister         = block.call
 
-         raise ArgumentError.new('persister cannot be nil') if @persister.nil?
-
-         [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
-            raise MalformedPersisterError.new("persister must repond to ##{method}") unless @persister.respond_to? method
-         end
+         build_persister
       end
 
       def define_queue(name, properties={})
@@ -39,6 +34,7 @@ module Procrastinator
          else
             @queue_definitions.each do |name, props|
                pid = fork do
+                  build_persister
                   worker = QueueWorker.new(props.merge(name:      name,
                                                        persister: @persister,
                                                        log_dir:   @log_dir,
@@ -134,6 +130,16 @@ module Procrastinator
          end
 
          heartbeat_thread.abort_on_exception = true
+      end
+
+      def build_persister
+         @persister = @persister_factory.call
+
+         raise ArgumentError.new('persister cannot be nil') if @persister.nil?
+
+         [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
+            raise MalformedPersisterError.new("persister must repond to ##{method}") unless @persister.respond_to? method
+         end
       end
    end
 
