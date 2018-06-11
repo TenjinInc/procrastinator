@@ -14,7 +14,8 @@ module Procrastinator
                      last_fail_at: nil,
                      last_error: nil,
                      task:,
-                     logger: Logger.new(StringIO.new))
+                     logger: Logger.new(StringIO.new),
+                     context: nil)
          @id             = id
          @run_at         = run_at.nil? ? nil : run_at.to_i
          @initial_run_at = initial_run_at.to_i
@@ -26,6 +27,7 @@ module Procrastinator
          @last_fail_at   = last_fail_at
          @last_error     = last_error
          @logger         = logger
+         @context        = context
 
          raise(MalformedTaskError.new('given task does not support #run method')) unless @task.respond_to? :run
          raise(ArgumentError.new('timeout cannot be negative')) if timeout && timeout < 0
@@ -38,10 +40,10 @@ module Procrastinator
             raise(TaskExpiredError.new("task is over its expiry time of #{@expire_at}")) if expired?
 
             Timeout::timeout(@timeout) do
-               @task.run
+               @task.run(@context, @logger)
             end
 
-            try_hook(:success, @logger)
+            try_hook(:success, @context, @logger)
 
             @logger.debug("Task completed: #{YAML.dump(@task)}")
 
@@ -51,14 +53,14 @@ module Procrastinator
             @last_fail_at = Time.now.to_i
 
             if too_many_fails? || expired?
-               try_hook(:final_fail, @logger, e)
+               try_hook(:final_fail, @context, @logger, e)
 
                @run_at     = nil
                @last_error = "#{expired? ? 'Task expired' : 'Task failed too many times'}: #{e.backtrace.join("\n")}"
 
                @logger.debug("Task failed permanently: #{YAML.dump(@task)}")
             else
-               try_hook(:fail, @logger, e)
+               try_hook(:fail, @context, @logger, e)
 
                @last_error = %Q[Task failed: #{e.message}\n#{e.backtrace.join("\n")}]
                @logger.debug("Task failed: #{YAML.dump(@task)}")
@@ -96,6 +98,7 @@ module Procrastinator
       end
 
       private
+
       def try_hook(method, *params)
          begin
             @task.send(method, *params) if @task.respond_to? method
@@ -108,7 +111,7 @@ module Procrastinator
          # (30 + n_attempts^4) seconds is chosen to rapidly expand
          # but with the baseline of 30s to avoid hitting the disc too frequently.
 
-         @run_at += 30 + (@attempts**4)
+         @run_at += 30 + (@attempts ** 4)
       end
    end
 

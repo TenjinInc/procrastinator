@@ -15,8 +15,8 @@ module Procrastinator
 
       yield(env)
 
-      raise RuntimeError.new('setup block must call #persister_factory on the environment') if env.persister.nil?
-      raise RuntimeError.new('setup block must call #define_queue on the environment') if env.queue_definitions.empty?
+      env.verify_configuration
+
       env.spawn_workers
 
       env

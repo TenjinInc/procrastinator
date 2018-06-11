@@ -102,7 +102,7 @@ procrastinator = Procrastinator.setup(task_persister) do |env|
 end
 ```
 
-###Scheduling Tasks For Later
+### Scheduling Tasks For Later
 Procrastinator will let you be lazy: 
 
 ```ruby
@@ -172,8 +172,8 @@ If a task reaches `#final_fail` it will be marked to never be run again.
 
 Tasks that fail have their `run_at` rescheduled on an increasing delay **(in seconds)** according to this formula: 
  * 30 + n<sup>4</sup>
-  
-n = the number of attempts 
+
+Where n = the number of attempts 
 
 Both failing and final_failing will cause the error timestamp and reason to be stored in `:last_fail_at` and `:last_error`.
 

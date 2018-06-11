@@ -17,7 +17,7 @@ def stub_yaml(payload)
 end
 
 # leave result+pid nil for parent thread, give int for child pid
-def stub_fork(receiver, result_pid=nil)
+def stub_fork(receiver, result_pid = nil)
    allow(receiver).to receive(:fork) do |&block|
       block.call
       result_pid
@@ -46,13 +46,13 @@ class GoodTask
 end
 
 class SuccessTask
-   def run
+   def run(context, logger)
 
    end
 end
 
 class FailTask
-   def run
+   def run(context, logger)
       raise('derp')
    end
 end

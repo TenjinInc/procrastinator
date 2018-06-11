@@ -16,8 +16,8 @@ module Procrastinator
       end
 
       describe '.setup' do
-         let(:persister) { double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil) }
-         let(:queues) { {queue1: {name: nil, max_tasks: nil}, queue2: {name: nil, max_tasks: nil}} }
+         let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
+         let(:queues) {{queue1: {name: nil, max_tasks: nil}, queue2: {name: nil, max_tasks: nil}}}
 
          it 'should return the configured procrastinator environment' do
             FakeFS do # fakefs enabled to cleanly handle default logging
@@ -26,15 +26,15 @@ module Procrastinator
                      env.define_queue(name, props)
                   end
 
-                  env.persister_factory do
+                  env.task_loader do
                      persister
                   end
                end
 
                expect(env).to be_a Environment
 
-               expect(env).to have_attributes(persister:         persister,
-                                              queue_definitions: queues)
+               expect(env).to have_attributes(task_loader_instance: persister,
+                                              queue_definitions:    queues)
             end
          end
 
@@ -49,19 +49,29 @@ module Procrastinator
          end
 
          it 'should require that a block is provided' do
-            expect { Procrastinator.setup }.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
+            expect {Procrastinator.setup}.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
          end
 
-         it 'should require the a persister builder is defined' do
+         it 'should require that #task_loader is called' do
             expect do
                Procrastinator.setup {}
-            end.to raise_error(RuntimeError, 'setup block must call #persister_factory on the environment')
+            end.to raise_error(RuntimeError, 'setup block must call #task_loader on the environment')
+         end
+
+         it 'should require that #task_loader is provided a task loader factory block' do
+            err = '#task_loader must be given a block that produces a persistence handler for tasks'
+
+            expect do
+               Procrastinator.setup {|env| env.task_loader}
+            end.to raise_error(RuntimeError, err)
          end
 
          it 'should require at least one queue is defined' do
-            expect { Procrastinator.setup do |env|
-               env.persister_factory { double('persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil) }
-            end }.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
+            expect {Procrastinator.setup do |env|
+               env.task_loader do
+                  double('persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+               end
+            end}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
          end
 
          it 'should call spawn_workers on the environment' do
@@ -69,14 +79,14 @@ module Procrastinator
 
             Procrastinator.setup do |env|
                env.define_queue(:test)
-               env.persister_factory { persister }
+               env.task_loader {persister}
             end
          end
 
          it 'should enable test mode when declared' do
             result = Procrastinator.setup do |env|
                env.define_queue(:test)
-               env.persister_factory { persister }
+               env.task_loader {persister}
                env.enable_test_mode
             end
 
@@ -90,7 +100,7 @@ module Procrastinator
 
             it 'should create an environment in test mode' do
                result = Procrastinator.setup do |env|
-                  env.persister_factory { persister }
+                  env.task_loader {persister}
                   env.define_queue(:test)
                end
 
@@ -99,11 +109,11 @@ module Procrastinator
 
             it 'should create every environment in test mode' do
                result1 = Procrastinator.setup do |env|
-                  env.persister_factory { persister }
+                  env.task_loader {persister}
                   env.define_queue(:test)
                end
                result2 = Procrastinator.setup do |env|
-                  env.persister_factory { persister }
+                  env.task_loader {persister}
                   env.define_queue(:test)
                end
 

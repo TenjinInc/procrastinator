@@ -1,6 +1,6 @@
 module Procrastinator
    class Environment
-      attr_reader :persister, :queue_definitions, :queue_workers, :processes, :test_mode
+      attr_reader :task_loader_instance, :queue_definitions, :queue_workers, :processes, :test_mode
 
       DEFAULT_LOG_DIRECTORY = 'log/'
 
@@ -13,13 +13,31 @@ module Procrastinator
          @log_level         = Logger::INFO
       end
 
-      def persister_factory(&block)
-         @persister_factory = block
-
-         build_persister
+      def verify_configuration
+         raise RuntimeError.new('setup block must call #task_loader on the environment') if @task_loader_factory.nil?
+         raise RuntimeError.new('setup block must call #define_queue on the environment') if @queue_definitions.empty?
       end
 
-      def define_queue(name, properties={})
+      # Accepts a block that will be executed on the queue sub process. This is done to separate resource allocations
+      # like database connections.
+      # The result will be used to load tasks
+      def task_loader(&block)
+         @task_loader_factory = block
+
+         unless @task_loader_factory
+            raise RuntimeError.new('#task_loader must be given a block that produces a persistence handler for tasks')
+         end
+
+         init_task_loader
+      end
+
+      # Accepts a block that will be executed on the queue sub process.
+      # The result will be passed into the task methods.
+      def task_context(&block)
+         @task_context = block
+      end
+
+      def define_queue(name, properties = {})
          raise ArgumentError.new('queue name cannot be nil') if name.nil?
 
          @queue_definitions[name] = properties
@@ -29,14 +47,14 @@ module Procrastinator
          if @test_mode
             @queue_definitions.each do |name, props|
                @queue_workers << QueueWorker.new(props.merge(name:      name,
-                                                             persister: @persister))
+                                                             persister: @task_loader_instance))
             end
          else
             @queue_definitions.each do |name, props|
                pid = fork do
-                  build_persister
+                  init_task_loader
                   worker = QueueWorker.new(props.merge(name:      name,
-                                                       persister: @persister,
+                                                       persister: @task_loader_instance,
                                                        log_dir:   @log_dir,
                                                        log_level: @log_level))
 
@@ -64,7 +82,7 @@ module Procrastinator
             end
          else
             queue_names.each do |name|
-               @queue_workers.find { |worker| worker.name == name }.act
+               @queue_workers.find {|worker| worker.name == name}.act
             end
          end
       end
@@ -83,17 +101,17 @@ module Procrastinator
          end
 
          if queue.nil? && @queue_definitions.size > 1
-            raise ArgumentError.new("queue must be specified when more than one is registered. Defined queues are: #{queue_definitions.keys.map { |k| ':' + k.to_s }.join(', ')}")
+            raise ArgumentError.new("queue must be specified when more than one is registered. Defined queues are: #{queue_definitions.keys.map {|k| ':' + k.to_s}.join(', ')}")
          else
             queue ||= @queue_definitions.keys.first
             raise ArgumentError.new(%Q{there is no "#{queue}" queue registered in this environment}) if @queue_definitions[queue].nil?
          end
 
-         @persister.create_task(queue:          queue,
-                                run_at:         run_at.to_i,
-                                initial_run_at: run_at.to_i,
-                                expire_at:      expire_at.nil? ? nil : expire_at.to_i,
-                                task:           YAML.dump(task))
+         @task_loader_instance.create_task(queue:          queue,
+                                           run_at:         run_at.to_i,
+                                           initial_run_at: run_at.to_i,
+                                           expire_at:      expire_at.nil? ? nil : expire_at.to_i,
+                                           task:           YAML.dump(task))
       end
 
       def enable_test_mode
@@ -113,6 +131,7 @@ module Procrastinator
       end
 
       private
+
       def monitor_parent(worker)
          parent_pid = Process.ppid
 
@@ -132,13 +151,18 @@ module Procrastinator
          heartbeat_thread.abort_on_exception = true
       end
 
-      def build_persister
-         @persister = @persister_factory.call
+      # This is called to construct a new task loader for this env.
+      # It should be called for each fork as well,
+      # so that they get distinct resources (eg. DB connections) from the parent process.
+      def init_task_loader
+         @task_loader_instance = @task_loader_factory.call
 
-         raise ArgumentError.new('persister cannot be nil') if @persister.nil?
+         raise ArgumentError.new('task loader cannot be nil') if @task_loader_instance.nil?
 
          [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
-            raise MalformedPersisterError.new("persister must repond to ##{method}") unless @persister.respond_to? method
+            unless @task_loader_instance.respond_to? method
+               raise MalformedPersisterError.new("task loader must repond to ##{method}")
+            end
          end
       end
    end
