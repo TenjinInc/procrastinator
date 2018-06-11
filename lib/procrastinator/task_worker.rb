@@ -39,11 +39,11 @@ module Procrastinator
          begin
             raise(TaskExpiredError.new("task is over its expiry time of #{@expire_at}")) if expired?
 
-            Timeout::timeout(@timeout) do
+            result = Timeout::timeout(@timeout) do
                @task.run(@context, @logger)
             end
 
-            try_hook(:success, @context, @logger)
+            try_hook(:success, @context, @logger, result)
 
             @logger.debug("Task completed: #{YAML.dump(@task)}")
 

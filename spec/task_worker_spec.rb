@@ -211,7 +211,7 @@ module Procrastinator
                stub_yaml(task)
 
                allow(task).to receive(:run)
-               expect(task).to receive(:success).with(context, anything)
+               expect(task).to receive(:success).with(context, anything, anything)
 
                worker = TaskWorker.new(required_args.merge(task: YAML.dump(task), context: context))
                worker.work
@@ -224,10 +224,23 @@ module Procrastinator
                stub_yaml(task)
 
                allow(task).to receive(:run)
-               expect(task).to receive(:success).with(anything, logger)
+               expect(task).to receive(:success).with(anything, logger, anything)
 
                worker = TaskWorker.new(required_args.merge(task: task, logger: logger))
 
+               worker.work
+            end
+
+            it 'should pass the result of #run to #success as the third arg' do
+               task   = double('task')
+               result = double('run result')
+
+               stub_yaml(task)
+
+               allow(task).to receive(:run).and_return(result)
+               expect(task).to receive(:success).with(anything, anything, result)
+
+               worker = TaskWorker.new(required_args.merge(task: task))
                worker.work
             end
 
@@ -650,7 +663,6 @@ module Procrastinator
       describe '#successful?' do
          it 'should return true when #run completes without error' do
             worker = TaskWorker.new(required_args)
-
             worker.work
 
             expect(worker.successful?).to be true
