@@ -10,6 +10,7 @@ module Procrastinator
       # Timeout is in seconds
       def initialize(name:,
                      persister:,
+                     task_context: nil,
                      log_dir: nil,
                      log_level: Logger::INFO,
                      max_attempts: DEFAULT_MAX_ATTEMPTS,
@@ -31,6 +32,7 @@ module Procrastinator
          @persister     = persister
          @log_dir       = log_dir
          @log_level     = log_level
+         @task_context  = task_context
 
          start_log
       end
@@ -52,11 +54,12 @@ module Procrastinator
          # shuffling and re-sorting to avoid worst case O(n^2) when receiving already sorted data
          # on quicksort (which is default ruby sort).
          # Ideally, we'd use a better algo, but this will do for now
-         tasks = @persister.read_tasks(@name).reject { |t| t[:run_at].nil? }.shuffle.sort_by { |t| t[:run_at] }
+         tasks = @persister.read_tasks(@name).reject {|t| t[:run_at].nil?}.shuffle.sort_by {|t| t[:run_at]}
 
          tasks.first(@max_tasks).each do |task_data|
             if Time.now.to_i >= task_data[:run_at].to_i
                task_data.merge!(logger: @logger) if @logger
+               task_data.merge!(context: @task_context) if @task_context
 
                tw = TaskWorker.new(task_data)
 

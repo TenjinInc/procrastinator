@@ -34,7 +34,7 @@ module Procrastinator
       # Accepts a block that will be executed on the queue sub process.
       # The result will be passed into the task methods.
       def task_context(&block)
-         @task_context = block
+         @task_context_factory = block
       end
 
       def define_queue(name, properties = {})
@@ -53,12 +53,15 @@ module Procrastinator
             @queue_definitions.each do |name, props|
                pid = fork do
                   init_task_loader
+
+                  props[:task_context] = @task_context_factory.call if @task_context_factory
+
                   worker = QueueWorker.new(props.merge(name:      name,
                                                        persister: @task_loader_instance,
                                                        log_dir:   @log_dir,
                                                        log_level: @log_level))
 
-                  Process.setproctitle("#{@process_prefix ? "#{@process_prefix}-" : ''}#{worker.long_name}") # tODO: add an app name prefix
+                  Process.setproctitle("#{@process_prefix ? "#{@process_prefix}-" : ''}#{worker.long_name}")
 
                   monitor_parent(worker)
 

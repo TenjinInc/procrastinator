@@ -251,7 +251,7 @@ module Procrastinator
          end
       end
 
-      describe 'spawn_workers' do
+      describe '#spawn_workers' do
          let(:persister) {double('persister', read_tasks: [], create_task: [], update_task: [], delete_task: [])}
          let(:env) do
             env = Environment.new
@@ -384,10 +384,7 @@ module Procrastinator
                it 'should create a QueueWorker in each subprocess' do
                   queue_defs = {test2a: {}, test2b: {}, test2c: {}}
 
-                  allow(env).to receive(:fork) do |&block|
-                     block.call
-                     nil
-                  end
+                  stub_fork(env, nil)
                   allow(Process).to receive(:setproctitle)
 
                   queue_defs.each do |name, props|
@@ -403,6 +400,27 @@ module Procrastinator
                                                                      start_log: nil,
                                                                      long_name: ''))
                   end
+
+                  env.spawn_workers
+               end
+
+               it 'should provide the QueueWorker with the evaluated task context' do
+                  context = double('task context')
+
+                  stub_fork(env, nil)
+                  allow(Process).to receive(:setproctitle)
+
+                  env.task_context do
+                     context
+                  end
+                  env.define_queue(:queue_name, {})
+
+                  expect(QueueWorker).to receive(:new)
+                                               .with(hash_including(task_context: context))
+                                               .and_return(double('worker',
+                                                                  work:      nil,
+                                                                  start_log: nil,
+                                                                  long_name: ''))
 
                   env.spawn_workers
                end

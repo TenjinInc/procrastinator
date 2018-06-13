@@ -2,11 +2,11 @@ require 'spec_helper'
 
 module Procrastinator
    describe QueueWorker do
-      let(:persister) { double('loader', read_tasks: [], update_task: nil, delete_task: nil) }
+      let(:persister) {double('loader', read_tasks: [], update_task: nil, delete_task: nil)}
 
       describe '#initialize' do
          it 'should require a name' do
-            expect { QueueWorker.new }.to raise_error(ArgumentError)
+            expect {QueueWorker.new}.to raise_error(ArgumentError)
          end
 
          it 'should store name as symbol' do
@@ -134,7 +134,7 @@ module Procrastinator
 
             # control looping, otherwise infiniloop by design
             allow(worker).to receive(:loop) do |&block|
-               n_loops.times { block.call }
+               n_loops.times {block.call}
             end
 
             expect(worker).to receive(:act).exactly(n_loops).times
@@ -278,6 +278,26 @@ module Procrastinator
                allow(persister).to receive(:read_tasks).and_return([task_data])
 
                worker = QueueWorker.new(name:          :queue,
+                                        persister:     persister,
+                                        update_period: 0)
+
+               worker.act
+            end
+
+            it 'should pass the TaskWorker the task context' do
+               task_double = double('task', run: nil)
+               task_data   = {run_at: 1, task: YAML.dump(task_double)}
+               context     = double('context object')
+
+               allow(YAML).to receive(:load).and_return(task_double)
+
+               expect(TaskWorker).to receive(:new).with(hash_including(context: context)).and_call_original
+
+               persister = double('persister', update_task: nil, delete_task: nil)
+               allow(persister).to receive(:read_tasks).and_return([task_data])
+
+               worker = QueueWorker.new(name:          :queue,
+                                        task_context:  context,
                                         persister:     persister,
                                         update_period: 0)
 
@@ -520,7 +540,7 @@ module Procrastinator
                                      persister: persister,
                                      log_dir:   nil)
 
-            expect { worker.log_parent_exit(ppid: 0, pid: 1) }.to raise_error('Cannot log when logger not defined. Call #start_log first.')
+            expect {worker.log_parent_exit(ppid: 0, pid: 1)}.to raise_error('Cannot log when logger not defined. Call #start_log first.')
          end
 
          it 'should log exiting when parent process disappears' do
