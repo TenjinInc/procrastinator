@@ -14,18 +14,18 @@ module Procrastinator
       end
 
       def verify_configuration
-         raise RuntimeError.new('setup block must call #task_loader on the environment') if @task_loader_factory.nil?
+         raise RuntimeError.new('setup block must call #load_with on the environment') if @task_loader_factory.nil?
          raise RuntimeError.new('setup block must call #define_queue on the environment') if @queue_definitions.empty?
       end
 
       # Accepts a block that will be executed on the queue sub process. This is done to separate resource allocations
       # like database connections.
       # The result will be used to load tasks
-      def task_loader(&block)
+      def load_with(&block)
          @task_loader_factory = block
 
          unless @task_loader_factory
-            raise RuntimeError.new('#task_loader must be given a block that produces a persistence handler for tasks')
+            raise RuntimeError.new('#load_with must be given a block that produces a persistence handler for tasks')
          end
 
          init_task_loader

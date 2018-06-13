@@ -26,7 +26,7 @@ module Procrastinator
                      env.define_queue(name, props)
                   end
 
-                  env.task_loader do
+                  env.load_with do
                      persister
                   end
                end
@@ -52,23 +52,23 @@ module Procrastinator
             expect {Procrastinator.setup}.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
          end
 
-         it 'should require that #task_loader is called' do
+         it 'should require that #load_with is called' do
             expect do
                Procrastinator.setup {}
-            end.to raise_error(RuntimeError, 'setup block must call #task_loader on the environment')
+            end.to raise_error(RuntimeError, 'setup block must call #load_with on the environment')
          end
 
-         it 'should require that #task_loader is provided a task loader factory block' do
-            err = '#task_loader must be given a block that produces a persistence handler for tasks'
+         it 'should require that #load_with is provided a task loader factory block' do
+            err = '#load_with must be given a block that produces a persistence handler for tasks'
 
             expect do
-               Procrastinator.setup {|env| env.task_loader}
+               Procrastinator.setup {|env| env.load_with}
             end.to raise_error(RuntimeError, err)
          end
 
          it 'should require at least one queue is defined' do
             expect {Procrastinator.setup do |env|
-               env.task_loader do
+               env.load_with do
                   double('persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
                end
             end}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
@@ -79,14 +79,14 @@ module Procrastinator
 
             Procrastinator.setup do |env|
                env.define_queue(:test)
-               env.task_loader {persister}
+               env.load_with {persister}
             end
          end
 
          it 'should enable test mode when declared' do
             result = Procrastinator.setup do |env|
                env.define_queue(:test)
-               env.task_loader {persister}
+               env.load_with {persister}
                env.enable_test_mode
             end
 
@@ -100,7 +100,7 @@ module Procrastinator
 
             it 'should create an environment in test mode' do
                result = Procrastinator.setup do |env|
-                  env.task_loader {persister}
+                  env.load_with {persister}
                   env.define_queue(:test)
                end
 
@@ -109,11 +109,11 @@ module Procrastinator
 
             it 'should create every environment in test mode' do
                result1 = Procrastinator.setup do |env|
-                  env.task_loader {persister}
+                  env.load_with {persister}
                   env.define_queue(:test)
                end
                result2 = Procrastinator.setup do |env|
-                  env.task_loader {persister}
+                  env.load_with {persister}
                   env.define_queue(:test)
                end
 

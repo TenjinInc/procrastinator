@@ -14,7 +14,7 @@ module Procrastinator
 
          it 'should require that the persister NOT be nil' do
             expect do
-               env.task_loader do
+               env.load_with do
                   nil
                end
             end.to raise_error(ArgumentError, 'task loader cannot be nil')
@@ -22,7 +22,7 @@ module Procrastinator
 
          it 'should require the persister respond to #read_tasks' do
             expect do
-               env.task_loader do
+               env.load_with do
                   double('persister', create_task: nil, update_task: nil, delete_task: nil)
                end
             end.to raise_error(MalformedPersisterError, 'task loader must repond to #read_tasks')
@@ -30,7 +30,7 @@ module Procrastinator
 
          it 'should require the persister respond to #create_task' do
             expect do
-               env.task_loader do
+               env.load_with do
                   double('persister', read_tasks: nil, update_task: nil, delete_task: nil)
                end
             end.to raise_error(MalformedPersisterError, 'task loader must repond to #create_task')
@@ -38,7 +38,7 @@ module Procrastinator
 
          it 'should require the persister respond to #update_task' do
             expect do
-               env.task_loader do
+               env.load_with do
                   double('persister', read_tasks: nil, create_task: nil, delete_task: nil)
                end
             end.to raise_error(MalformedPersisterError, 'task loader must repond to #update_task')
@@ -46,7 +46,7 @@ module Procrastinator
 
          it 'should require the persister respond to #delete_task' do
             expect do
-               env.task_loader do
+               env.load_with do
                   double('persister', read_tasks: nil, create_task: nil, update_task: nil)
                end
             end.to raise_error(MalformedPersisterError, 'task loader must repond to #delete_task')
@@ -81,7 +81,7 @@ module Procrastinator
          let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
          let(:env) do
             env = Environment.new
-            env.task_loader do
+            env.load_with do
                persister
             end
             env
@@ -224,7 +224,7 @@ module Procrastinator
 
          it 'should NOT require queue be provided if there only one queue defined' do
             env = Environment.new
-            env.task_loader do
+            env.load_with do
                persister
             end
             env.define_queue(:queue)
@@ -234,7 +234,7 @@ module Procrastinator
 
          it 'should assume the queue if there only one queue defined' do
             env = Environment.new
-            env.task_loader do
+            env.load_with do
                persister
             end
             env.define_queue(:some_queue)
@@ -255,7 +255,7 @@ module Procrastinator
          let(:persister) {double('persister', read_tasks: [], create_task: [], update_task: [], delete_task: [])}
          let(:env) do
             env = Environment.new
-            env.task_loader do
+            env.load_with do
                persister
             end
             env
@@ -276,7 +276,7 @@ module Procrastinator
          context 'test mode' do
             let(:env) do
                env = Environment.new(test_mode: true)
-               env.task_loader do
+               env.load_with do
                   persister
                end
                env
@@ -485,7 +485,7 @@ module Procrastinator
                it 'should name each worker process with provided prefix' do
                   [:test1, :test2, :test3].each do |prefix|
                      env = Environment.new
-                     env.task_loader do
+                     env.load_with do
                         persister
                      end
                      env.define_queue(:testQueue)
@@ -511,7 +511,7 @@ module Procrastinator
 
                it 'should monitor the parent process' do
                   env = Environment.new
-                  env.task_loader do
+                  env.load_with do
                      persister
                   end
                   env.define_queue(:test)
@@ -556,7 +556,7 @@ module Procrastinator
                   exited = false
 
                   env = Environment.new
-                  env.task_loader do
+                  env.load_with do
                      persister
                   end
                   env.define_queue(:test)
@@ -597,7 +597,7 @@ module Procrastinator
                   created_parent = false
 
                   env = Environment.new
-                  env.task_loader do
+                  env.load_with do
                      if created_parent
                         child_persister
                      else
@@ -655,7 +655,7 @@ module Procrastinator
 
                it 'should log exiting when parent process dies' do
                   env = Environment.new
-                  env.task_loader do
+                  env.load_with do
                      persister
                   end
                   env.define_queue(:test)
@@ -693,7 +693,7 @@ module Procrastinator
 
                it 'should set the log level' do
                   env = Environment.new
-                  env.task_loader do
+                  env.load_with do
                      persister
                   end
                   env.define_queue(:test)
@@ -724,7 +724,7 @@ module Procrastinator
 
             let(:env) do
                env = Environment.new(test_mode: true)
-               env.task_loader do
+               env.load_with do
                   persister
                end
                env.define_queue(:test1)
@@ -753,7 +753,7 @@ module Procrastinator
 
             it 'should not complain when using Procrastinator.act in Test Mode' do
                test_env = Environment.new(test_mode: true)
-               test_env.task_loader do
+               test_env.load_with do
                   persister
                end
 
@@ -762,7 +762,7 @@ module Procrastinator
 
             it 'should complain if you try to use Procrastinator.act outside Test Mode' do
                non_test_env = Environment.new(test_mode: false)
-               non_test_env.task_loader do
+               non_test_env.load_with do
                   persister
                end
 
