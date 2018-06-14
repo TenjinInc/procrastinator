@@ -287,11 +287,15 @@ module Procrastinator
             it 'should pass the TaskWorker the task context' do
                task_double = double('task', run: nil)
                task_data   = {run_at: 1, task: YAML.dump(task_double)}
+               task_worker = double('task worker')
                context     = double('context object')
 
                allow(YAML).to receive(:load).and_return(task_double)
+               allow(TaskWorker).to receive(:new).and_return(task_worker)
 
-               expect(TaskWorker).to receive(:new).with(hash_including(context: context)).and_call_original
+               allow(task_worker).to receive(:successful?)
+               allow(task_worker).to receive(:to_hash).and_return({})
+               expect(task_worker).to receive(:work).with(hash_including(context: context))
 
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data])
@@ -354,6 +358,10 @@ module Procrastinator
 
             it 'should pass in a logger to the logfile for this queue' do
                FakeFS do
+                  task_worker = double('task_worker')
+                  allow(task_worker).to receive(:successful?)
+                  allow(task_worker).to receive(:to_hash).and_return({})
+
                   queue_name = :test_queue
 
                   task_double = double('task', run: nil)
@@ -364,9 +372,9 @@ module Procrastinator
                   persister = double('persister', update_task: nil, delete_task: nil)
                   allow(persister).to receive(:read_tasks).and_return([task_data])
 
-                  expect(TaskWorker).to receive(:new).with(satisfy do |param_hash|
-                     !param_hash[:logger].nil?
-                  end).and_call_original
+                  allow(TaskWorker).to receive(:new).and_return(task_worker)
+
+                  expect(task_worker).to receive(:work).with(hash_including(:logger))
 
                   worker = QueueWorker.new(name:          queue_name,
                                            persister:     persister,

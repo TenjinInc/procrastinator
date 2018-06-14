@@ -5,8 +5,7 @@ module Procrastinator
       let(:required_args) do
          {max_attempts: 2,
           run_at:       0,
-          task:         YAML.dump(SuccessTask.new),
-          logger:       Logger.new(StringIO.new)}
+          task:         YAML.dump(SuccessTask.new)}
       end
 
       describe '#inititalize' do
@@ -124,8 +123,8 @@ module Procrastinator
                expect(task).to receive(:run).with(context, anything)
                allow(task).to receive(:success)
 
-               worker = TaskWorker.new(required_args.merge(task: YAML.dump(task), context: context))
-               worker.work
+               worker = TaskWorker.new(required_args.merge(task: YAML.dump(task)))
+               worker.work(context: context)
             end
 
             it 'should pass in the queue logger to #success as the second arg' do
@@ -137,8 +136,8 @@ module Procrastinator
                expect(task).to receive(:run).with(anything, logger)
                allow(task).to receive(:success)
 
-               worker = TaskWorker.new(required_args.merge(task: task, logger: logger))
-               worker.work
+               worker = TaskWorker.new(required_args.merge(task: task))
+               worker.work(logger: logger)
             end
          end
 
@@ -213,8 +212,8 @@ module Procrastinator
                allow(task).to receive(:run)
                expect(task).to receive(:success).with(context, anything, anything)
 
-               worker = TaskWorker.new(required_args.merge(task: YAML.dump(task), context: context))
-               worker.work
+               worker = TaskWorker.new(required_args.merge(task: YAML.dump(task)))
+               worker.work(context: context)
             end
 
             it 'should pass in the queue logger to #success as the second arg' do
@@ -226,9 +225,9 @@ module Procrastinator
                allow(task).to receive(:run)
                expect(task).to receive(:success).with(anything, logger, anything)
 
-               worker = TaskWorker.new(required_args.merge(task: task, logger: logger))
+               worker = TaskWorker.new(required_args.merge(task: task))
 
-               worker.work
+               worker.work(logger: logger)
             end
 
             it 'should pass the result of #run to #success as the third arg' do
@@ -249,12 +248,11 @@ module Procrastinator
                task_text = YAML.dump(SuccessTask.new)
 
                worker = TaskWorker.new(required_args.merge(last_fail_at: double('failtime'),
-                                                           task:         task_text,
-                                                           logger:       logger))
+                                                           task:         task_text))
 
                expect(logger).to receive(:debug).with("Task completed: #{task_text}")
 
-               worker.work
+               worker.work(logger: logger)
             end
          end
 
@@ -404,8 +402,8 @@ module Procrastinator
                context = double('task_context')
                expect(fail_task).to receive(:fail).with(context, anything, anything)
 
-               worker = TaskWorker.new(required_args.merge(task: fail_task, context: context))
-               worker.work
+               worker = TaskWorker.new(required_args.merge(task: fail_task))
+               worker.work(context: context)
             end
 
             it 'should pass in the queue logger to #fail as second arg' do
@@ -417,8 +415,8 @@ module Procrastinator
                logger = Logger.new(StringIO.new)
                expect(fail_task).to receive(:fail).with(anything, logger, anything)
 
-               worker = TaskWorker.new(required_args.merge(task: fail_task, logger: logger))
-               worker.work
+               worker = TaskWorker.new(required_args.merge(task: fail_task))
+               worker.work(logger: logger)
             end
 
             it 'should pass in the error to #fail as third arg' do
@@ -442,11 +440,11 @@ module Procrastinator
 
                allow(task).to receive(:run).and_raise(err)
 
-               worker = TaskWorker.new(required_args.merge(task: task, logger: logger))
+               worker = TaskWorker.new(required_args.merge(task: task))
 
                expect(logger).to receive(:debug).with("Task failed: #{YAML.dump(task)}")
 
-               worker.work
+               worker.work(logger: logger)
             end
          end
 
@@ -578,14 +576,13 @@ module Procrastinator
                expect(task).to receive(:final_fail).with(context, anything, anything)
 
                worker = TaskWorker.new(required_args.merge(task:         YAML.dump(task),
-                                                           max_attempts: 0,
-                                                           context:      context))
-               worker.work
+                                                           max_attempts: 0))
+               worker.work(context: context)
             end
 
             it 'should pass in the queue logger to #final_fail as the second arg' do
                task   = FailTask.new
-               logger = Logger.new(StringIO.new())
+               logger = Logger.new(StringIO.new)
                allow(task).to receive(:run).and_raise(StandardError.new('fake error'))
 
                stub_yaml(task)
@@ -593,9 +590,8 @@ module Procrastinator
                expect(task).to receive(:final_fail).with(anything, logger, anything)
 
                worker = TaskWorker.new(required_args.merge(task:         YAML.dump(task),
-                                                           max_attempts: 0,
-                                                           logger:       logger))
-               worker.work
+                                                           max_attempts: 0))
+               worker.work(logger: logger)
             end
 
             it 'should pass in the error to #final_fail as the third arg' do
@@ -621,12 +617,11 @@ module Procrastinator
                allow(task).to receive(:run).and_raise(err)
 
                worker = TaskWorker.new(required_args.merge(task:         task,
-                                                           max_attempts: 0,
-                                                           logger:       logger))
+                                                           max_attempts: 0))
 
                expect(logger).to receive(:debug).with("Task failed permanently: #{YAML.dump(task)}")
 
-               worker.work
+               worker.work(logger: logger)
             end
          end
       end
@@ -743,8 +738,6 @@ module Procrastinator
             attempts       = double('attempts')
             last_fail_at   = double('last_fail_at')
             last_error     = double('last_error')
-            logger         = double('logger')
-
 
             worker = TaskWorker.new(id:             id,
                                     initial_run_at: initial_run_at,
@@ -753,8 +746,7 @@ module Procrastinator
                                     attempts:       attempts,
                                     last_fail_at:   last_fail_at,
                                     last_error:     last_error,
-                                    task:           YAML.dump(task),
-                                    logger:         logger)
+                                    task:           YAML.dump(task))
 
             hash = {id:             id,
                     initial_run_at: initial_run_at.to_i,
@@ -765,7 +757,7 @@ module Procrastinator
                     last_error:     last_error,
                     task:           YAML.dump(task)}
 
-            expect(worker.to_hash).to eq hash
+            expect(worker.task_hash).to eq hash
          end
       end
    end

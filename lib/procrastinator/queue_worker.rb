@@ -30,11 +30,9 @@ module Procrastinator
          @update_period = update_period
          @max_tasks     = max_tasks
          @persister     = persister
-         @log_dir       = log_dir
-         @log_level     = log_level
          @task_context  = task_context
 
-         start_log
+         start_log(log_dir, log_level)
       end
 
       def work
@@ -58,12 +56,12 @@ module Procrastinator
 
          tasks.first(@max_tasks).each do |task_data|
             if Time.now.to_i >= task_data[:run_at].to_i
-               task_data.merge!(logger: @logger) if @logger
-               task_data.merge!(context: @task_context) if @task_context
-
                tw = TaskWorker.new(task_data)
 
-               tw.work
+               work_data          = {context: @task_context}
+               work_data[:logger] = @logger if @logger
+
+               tw.work(work_data)
 
                if tw.successful?
                   @persister.delete_task(task_data[:id])
@@ -81,9 +79,9 @@ module Procrastinator
       # Starts a log file and stores the logger within this queue worker.
       #
       # Separate from init because logging is context-dependent
-      def start_log
-         if @log_dir
-            log_path = Pathname.new("#{@log_dir}/#{long_name}.log")
+      def start_log(directory, level)
+         if directory
+            log_path = Pathname.new("#{directory}/#{long_name}.log")
 
             log_path.dirname.mkpath
             File.open(log_path.to_path, 'a+') do |f|
@@ -92,7 +90,7 @@ module Procrastinator
 
             @logger = Logger.new(log_path.to_path)
 
-            @logger.level = @log_level
+            @logger.level = level
 
             @logger.info(['',
                           '===================================',

@@ -1,8 +1,13 @@
 require 'yaml'
+require 'ostruct'
 
 module Procrastinator
    class TaskWorker
-      attr_reader :id, :run_at, :initial_run_at, :expire_at, :task, :attempts, :last_fail_at, :last_error
+      extend Forwardable
+
+      attr_reader :id, :task
+      def_delegators :@timing_data, :run_at, :initial_run_at, :expire_at
+      def_delegators :@failure_data, :attempts, :last_fail_at, :last_error
 
       def initialize(id: nil,
                      run_at: nil,
@@ -13,57 +18,56 @@ module Procrastinator
                      max_attempts: nil,
                      last_fail_at: nil,
                      last_error: nil,
-                     task:,
-                     logger: Logger.new(StringIO.new),
-                     context: nil)
-         @id             = id
-         @run_at         = run_at.nil? ? nil : run_at.to_i
-         @initial_run_at = initial_run_at.to_i
-         @expire_at      = expire_at.nil? ? nil : expire_at.to_i
-         @task           = YAML.load(task)
-         @attempts       = attempts || 0
-         @max_attempts   = max_attempts
-         @timeout        = timeout
-         @last_fail_at   = last_fail_at
-         @last_error     = last_error
-         @logger         = logger
-         @context        = context
+                     task:)
+         @id = id
+
+         @timing_data = OpenStruct.new(run_at:         run_at.nil? ? nil : run_at.to_i,
+                                       initial_run_at: initial_run_at.to_i,
+                                       expire_at:      expire_at.nil? ? nil : expire_at.to_i,
+                                       timeout:        timeout)
+
+         @failure_data = OpenStruct.new(attempts:     attempts || 0,
+                                        max_attempts: max_attempts,
+                                        last_fail_at: last_fail_at,
+                                        last_error:   last_error)
+
+         @task = YAML.load(task)
 
          raise(MalformedTaskError.new('given task does not support #run method')) unless @task.respond_to? :run
          raise(ArgumentError.new('timeout cannot be negative')) if timeout && timeout < 0
       end
 
-      def work
-         @attempts += 1
+      def work(logger: Logger.new(StringIO.new), context: nil)
+         @failure_data.attempts += 1
 
          begin
-            raise(TaskExpiredError.new("task is over its expiry time of #{@expire_at}")) if expired?
+            raise(TaskExpiredError.new("task is over its expiry time of #{@timing_data.expire_at}")) if expired?
 
-            result = Timeout::timeout(@timeout) do
-               @task.run(@context, @logger)
+            result = Timeout::timeout(@timing_data.timeout) do
+               @task.run(context, logger)
             end
 
-            try_hook(:success, @context, @logger, result)
+            try_hook(:success, context, logger, result)
 
-            @logger.debug("Task completed: #{YAML.dump(@task)}")
+            logger.debug("Task completed: #{YAML.dump(@task)}")
 
-            @last_error   = nil
-            @last_fail_at = nil
+            @failure_data.last_error   = nil
+            @failure_data.last_fail_at = nil
          rescue StandardError => e
-            @last_fail_at = Time.now.to_i
+            @failure_data.last_fail_at = Time.now.to_i
 
             if too_many_fails? || expired?
-               try_hook(:final_fail, @context, @logger, e)
+               try_hook(:final_fail, context, logger, e)
 
-               @run_at     = nil
-               @last_error = "#{expired? ? 'Task expired' : 'Task failed too many times'}: #{e.backtrace.join("\n")}"
+               @timing_data.run_at      = nil
+               @failure_data.last_error = "#{expired? ? 'Task expired' : 'Task failed too many times'}: #{e.backtrace.join("\n")}"
 
-               @logger.debug("Task failed permanently: #{YAML.dump(@task)}")
+               logger.debug("Task failed permanently: #{YAML.dump(@task)}")
             else
-               try_hook(:fail, @context, @logger, e)
+               try_hook(:fail, context, logger, e)
 
-               @last_error = %Q[Task failed: #{e.message}\n#{e.backtrace.join("\n")}]
-               @logger.debug("Task failed: #{YAML.dump(@task)}")
+               @failure_data.last_error = %Q[Task failed: #{e.message}\n#{e.backtrace.join("\n")}]
+               logger.debug("Task failed: #{YAML.dump(@task)}")
 
                reschedule
             end
@@ -71,29 +75,29 @@ module Procrastinator
       end
 
       def successful?
-         if !expired? && @attempts <= 0
+         if !expired? && @failure_data.attempts <= 0
             raise(RuntimeError, 'you cannot check for success before running #work')
          end
 
-         @last_error.nil? && @last_fail_at.nil?
+         @failure_data.last_error.nil? && @failure_data.last_fail_at.nil?
       end
 
       def too_many_fails?
-         !@max_attempts.nil? && @attempts >= @max_attempts
+         !@failure_data.max_attempts.nil? && @failure_data.attempts >= @failure_data.max_attempts
       end
 
       def expired?
-         !@expire_at.nil? && Time.now.to_i > @expire_at
+         !@timing_data.expire_at.nil? && Time.now.to_i > @timing_data.expire_at
       end
 
-      def to_hash
+      def task_hash
          {id:             @id,
-          run_at:         @run_at,
-          initial_run_at: @initial_run_at,
-          expire_at:      @expire_at,
-          attempts:       @attempts,
-          last_fail_at:   @last_fail_at,
-          last_error:     @last_error,
+          run_at:         @timing_data.run_at,
+          initial_run_at: @timing_data.initial_run_at,
+          expire_at:      @timing_data.expire_at,
+          attempts:       @failure_data.attempts,
+          last_fail_at:   @failure_data.last_fail_at,
+          last_error:     @failure_data.last_error,
           task:           YAML.dump(@task)}
       end
 
@@ -109,9 +113,8 @@ module Procrastinator
 
       def reschedule
          # (30 + n_attempts^4) seconds is chosen to rapidly expand
-         # but with the baseline of 30s to avoid hitting the disc too frequently.
-
-         @run_at += 30 + (@attempts ** 4)
+         # but with the baseline of 30s to avoid hitting the disk too frequently.
+         @timing_data.run_at += 30 + (@failure_data.attempts ** 4)
       end
    end
 
