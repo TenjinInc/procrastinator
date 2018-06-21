@@ -56,8 +56,12 @@ module Procrastinator
       describe '#define_queue' do
          let(:env) {Environment.new}
 
-         it 'should require that the queue definitions NOT be nil' do
-            expect {env.define_queue(nil)}.to raise_error(ArgumentError, 'queue name cannot be nil')
+         it 'should require that the queue name NOT be nil' do
+            expect {env.define_queue(nil, double('taskClass'))}.to raise_error(ArgumentError, 'queue name cannot be nil')
+         end
+
+         it 'should require that the queue task class NOT be nil' do
+            expect {env.define_queue(:queue_name, nil)}.to raise_error(ArgumentError, 'queue task class cannot be nil')
          end
 
          it 'should add a queue with its timeout, max_tasks, max_attempts, update_period' do
@@ -65,13 +69,60 @@ module Procrastinator
 
             (1..3).each do |i|
                attrs = {timeout: i, max_tasks: i + 1, max_attempts: i + 2, update_period: i + 3}
+               klass = GoodTask
 
-               env.define_queue("queue#{i}", attrs)
+               env.define_queue("queue#{i}", klass, attrs)
 
-               hash["queue#{i}"] = attrs
+               hash["queue#{i}"] = attrs.merge(task_class: klass)
 
                expect(env.queue_definitions).to eq hash
             end
+         end
+
+         it 'should complain if the task class does NOT support #run' do
+            klass = double('bad_task_class')
+
+            expect do
+               allow(klass).to receive(:method_defined?) do |name|
+                  name != :run
+               end
+
+               env.define_queue(:test_queue, klass)
+            end.to raise_error(MalformedTaskError, "task #{klass} does not support #run method")
+         end
+
+         it 'should complain if task does NOT accept 2 parameters to #success' do
+            expect do
+               env.define_queue(:test_queue, BadRun)
+            end.to raise_error(MalformedTaskError, 'the provided task must accept 2 parameters to its #run method')
+         end
+
+         it 'should complain if task does NOT accept 2 parameters to #success' do
+            expect do
+               env.define_queue(:test_queue, BadSuccess)
+            end.to raise_error(MalformedTaskError, 'the provided task must accept 3 parameters to its #success method')
+         end
+
+         it 'should complain if task does NOT accept 3 parameters in #fail' do
+            task = double('bad_task', run: nil)
+
+            allow(task).to receive(:fail) do
+            end
+
+            expect do
+               env.define_queue(:test_queue, BadFail)
+            end.to raise_error(MalformedTaskError, 'the provided task must accept 3 parameters to its #fail method')
+         end
+
+         it 'should complain if task does NOT accept 3 parameters in #final_fail' do
+            task = double('bad_task', run: nil)
+
+            allow(task).to receive(:final_fail) do
+            end
+
+            expect do
+               env.define_queue(:test_queue, BadFinalFail)
+            end.to raise_error(MalformedTaskError, 'the provided task must accept 3 parameters to its #final_fail method')
          end
       end
 
@@ -86,39 +137,44 @@ module Procrastinator
             end
             env
          end
-         let(:task) {double('task', run: nil)}
 
          before(:each) do
-            env.define_queue(:test)
+            env.define_queue(:test_queue, GoodTask)
          end
 
          it 'should record a task on the given queue' do
             [:queue1, :queue2].each do |queue_name|
                expect(persister).to receive(:create_task).with(include(queue: queue_name))
 
-               env.define_queue(queue_name)
+               env.define_queue(queue_name, GoodTask)
 
-               env.delay(queue: queue_name, task: task)
+               env.delay(queue_name)
             end
          end
 
-         it 'should record a task with given run_at and expire_at' do
-            run_stamp    = double('runstamp')
-            expire_stamp = double('expirestamp')
+         it 'should record a task with given run_at' do
+            run_stamp = double('runstamp')
 
-            # these are, at the moment, all of the arguments the dev can pass in
-            args = {run_at: double('run', to_i: run_stamp), expire_at: double('expire', to_i: expire_stamp)}
+            expect(persister).to receive(:create_task).with(include(run_at: run_stamp))
 
-            expect(persister).to receive(:create_task).with(include(run_at: run_stamp, expire_at: expire_stamp))
-
-            env.delay(args.merge(task: task))
+            env.delay(:test_queue, run_at: double('time_object', to_i: run_stamp))
          end
 
-         it 'should record a task with serialized task strategy' do
-            # these are, at the moment, all of the arguments the dev can pass in
-            expect(persister).to receive(:create_task).with(include(task: YAML.dump(task)))
+         it 'should record a task with given expire_at' do
+            expire_stamp = double('expirestamp')
 
-            env.delay(task: task)
+            expect(persister).to receive(:create_task).with(include(expire_at: expire_stamp))
+
+            env.delay(:test_queue, expire_at: double('time_object', to_i: expire_stamp))
+         end
+
+         it 'should record a task with serialized task data' do
+            data = double('some_data')
+
+            # these are, at the moment, all of the arguments the dev can pass in
+            expect(persister).to receive(:create_task).with(include(data: YAML.dump(data)))
+
+            env.delay(data: data)
          end
 
          it 'should default run_at to now' do
@@ -127,44 +183,29 @@ module Procrastinator
             Timecop.freeze(now) do
                expect(persister).to receive(:create_task).with(include(run_at: now.to_i))
 
-               env.delay(task: task)
+               env.delay()
             end
          end
 
-         it 'should record initial_run_at and run_at to be the same' do
+         it 'should record initial_run_at and run_at to be equal' do
             time = Time.now
 
             expect(persister).to receive(:create_task).with(include(run_at: time.to_i, initial_run_at: time.to_i))
 
-            env.delay(run_at: time, task: task)
+            env.delay(run_at: time)
          end
 
          it 'should record convert run_at, initial_run_at, expire_at to ints' do
             expect(persister).to receive(:create_task).with(include(run_at: 0, initial_run_at: 0, expire_at: 1))
 
             env.delay(run_at:    double('time', to_i: 0),
-                      expire_at: double('time', to_i: 1),
-                      task:      task)
+                      expire_at: double('time', to_i: 1))
          end
 
          it 'should default expire_at to nil' do
             expect(persister).to receive(:create_task).with(include(expire_at: nil))
 
-            env.delay(task: task)
-         end
-
-         it 'should require a task be given' do
-            expect {env.delay}.to raise_error(ArgumentError, 'missing keyword: task')
-         end
-
-         it 'should require task NOT be nil' do
-            expect {env.delay(task: nil)}.to raise_error(ArgumentError, 'task may not be nil')
-         end
-
-         it 'should complain if task does NOT support #run' do
-            expect do
-               env.delay(task: double('bad_task'))
-            end.to raise_error(MalformedTaskError, 'the provided task does not support #run method')
+            env.delay
          end
 
          it 'should NOT complain about well-formed hooks' do
@@ -174,52 +215,24 @@ module Procrastinator
                # allow(task).to receive(method).with('')
 
                expect do
-                  env.delay(task: task)
+                  env.delay
                end.to_not raise_error
             end
          end
 
-         it 'should complain if task does NOT accept a parameter to #success' do
-            task = double('bad_task', run: nil)
-
-            allow(task).to receive(:success) do
-            end
-
-            expect do
-               env.delay(task: task)
-            end.to raise_error(MalformedTaskError, 'the provided task must accept a parameter to its #success method')
-         end
-
-         it 'should complain if task does NOT accept a parameter to #fail' do
-            task = double('bad_task', run: nil)
-
-            allow(task).to receive(:fail) do
-            end
-
-            expect do
-               env.delay(task: task)
-            end.to raise_error(MalformedTaskError, 'the provided task must accept a parameter to its #fail method')
-         end
-
-         it 'should complain if task does NOT accept a parameter to #final_fail' do
-            task = double('bad_task', run: nil)
-
-            allow(task).to receive(:final_fail) do
-            end
-
-            expect do
-               env.delay(task: task)
-            end.to raise_error(MalformedTaskError, 'the provided task must accept a parameter to its #final_fail method')
-         end
-
          it 'should require queue be provided if there is more than one queue defined' do
-            env.define_queue(:queue1)
-            env.define_queue(:queue2)
+            env.define_queue(:queue1, GoodTask)
+            env.define_queue(:queue2, GoodTask)
 
-            expect {env.delay(run_at: 0, task: task)}.to raise_error(ArgumentError, 'queue must be specified when more than one is registered. Defined queues are: :test, :queue1, :queue2')
+            msg = "queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2"
+
+            "queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2"
+            "queue must be specified when more than one is registered. Defined queues are: test_queue, queue1, queue2"
+
+            expect {env.delay(run_at: 0)}.to raise_error(ArgumentError, msg)
 
             # also test the negative
-            expect {env.delay(queue: :queue1, run_at: 0, task: task)}.to_not raise_error
+            expect {env.delay(:queue1, run_at: 0)}.to_not raise_error
          end
 
          it 'should NOT require queue be provided if there only one queue defined' do
@@ -227,9 +240,9 @@ module Procrastinator
             env.load_with do
                persister
             end
-            env.define_queue(:queue)
+            env.define_queue(:queue, GoodTask)
 
-            expect {env.delay(run_at: 0, task: task)}.to_not raise_error
+            expect {env.delay}.to_not raise_error
          end
 
          it 'should assume the queue if there only one queue defined' do
@@ -237,16 +250,18 @@ module Procrastinator
             env.load_with do
                persister
             end
-            env.define_queue(:some_queue)
+            env.define_queue(:some_queue, GoodTask)
 
             expect(persister).to receive(:create_task).with(include(queue: :some_queue))
 
-            env.delay(task: task)
+            env.delay
          end
 
          it 'should complain when the given queue is not registered' do
             [:bogus, :other_bogus].each do |name|
-               expect {env.delay(queue: name, run_at: 0, task: task)}.to raise_error(ArgumentError, %Q{there is no "#{name}" queue registered in this environment})
+               err = %[there is no "#{name}" queue registered in this environment]
+
+               expect {env.delay(name, run_at: 0)}.to raise_error(ArgumentError, err)
             end
          end
       end
@@ -283,15 +298,18 @@ module Procrastinator
             end
 
             it 'should create a worker for each queue definition' do
+               klass = GoodTask
+
                queue_defs = {test2a: {max_tasks: 1}, test2b: {max_tasks: 2}, test2c: {max_tasks: 3}}
                queue_defs.each do |name, props|
-                  env.define_queue(name, props)
+                  env.define_queue(name, klass, props)
                end
 
                queue_defs.each do |name, props|
                   expect(QueueWorker).to receive(:new)
-                                               .with(props.merge(persister: persister,
-                                                                 name:      name))
+                                               .with(props.merge(persister:  persister,
+                                                                 name:       name,
+                                                                 task_class: klass))
                                                .and_return(double('worker', work: nil))
                end
 
@@ -299,7 +317,7 @@ module Procrastinator
             end
 
             it 'should not fork' do
-               env.define_queue(:test)
+               env.define_queue(:test, GoodTask)
 
                expect(env).to_not receive(:fork)
 
@@ -307,7 +325,7 @@ module Procrastinator
             end
 
             it 'should not call #work' do
-               env.define_queue(:test)
+               env.define_queue(:test, GoodTask)
 
                expect_any_instance_of(QueueWorker).to_not receive(:work)
 
@@ -315,7 +333,7 @@ module Procrastinator
             end
 
             it 'should NOT change the process title' do
-               env.define_queue(:test)
+               env.define_queue(:test, GoodTask)
 
                stub_fork(env)
                expect(Process).to_not receive(:setproctitle)
@@ -326,7 +344,7 @@ module Procrastinator
             it 'should NOT open a log file' do
                queue_name = :queue1
 
-               env.define_queue(queue_name)
+               env.define_queue(queue_name, GoodTask)
 
                allow_any_instance_of(QueueWorker).to receive(:work)
 
@@ -343,7 +361,7 @@ module Procrastinator
                before(:each) {allow(Process).to receive(:setproctitle)}
 
                it 'should fork a worker process' do
-                  env.define_queue(:test)
+                  env.define_queue(:test, GoodTask)
 
                   expect(env).to receive(:fork).once
 
@@ -353,7 +371,7 @@ module Procrastinator
                it 'should fork a worker process for each queue' do
                   queue_defs = {test2a: {}, test2b: {}, test2c: {}}
                   queue_defs.each do |name, props|
-                     env.define_queue(name, props)
+                     env.define_queue(name, GoodTask, props)
                   end
 
                   expect(env).to receive(:fork).exactly(queue_defs.size).times
@@ -362,9 +380,9 @@ module Procrastinator
                end
 
                it 'should not wait for the QueueWorker' do
-                  env.define_queue(:test1)
-                  env.define_queue(:test2)
-                  env.define_queue(:test3)
+                  env.define_queue(:test1, GoodTask)
+                  env.define_queue(:test2, GoodTask)
+                  env.define_queue(:test3, GoodTask)
 
                   Timeout::timeout(1) do
                      pid  = double('pid')
@@ -382,19 +400,22 @@ module Procrastinator
                end
 
                it 'should create a QueueWorker in each subprocess' do
+                  klass = GoodTask
+
                   queue_defs = {test2a: {}, test2b: {}, test2c: {}}
 
                   stub_fork(env, nil)
                   allow(Process).to receive(:setproctitle)
 
                   queue_defs.each do |name, props|
-                     env.define_queue(name, props)
+                     env.define_queue(name, klass, props)
 
                      expect(QueueWorker).to receive(:new)
-                                                  .with(props.merge(persister: persister,
-                                                                    name:      name,
-                                                                    log_dir:   Environment::DEFAULT_LOG_DIRECTORY,
-                                                                    log_level: Logger::INFO))
+                                                  .with(props.merge(persister:  persister,
+                                                                    name:       name,
+                                                                    task_class: klass,
+                                                                    log_dir:    Environment::DEFAULT_LOG_DIRECTORY,
+                                                                    log_level:  Logger::INFO))
                                                   .and_return(double('worker',
                                                                      work:      nil,
                                                                      start_log: nil,
@@ -413,7 +434,7 @@ module Procrastinator
                   env.task_context do
                      context
                   end
-                  env.define_queue(:queue_name, {})
+                  env.define_queue(:queue_name, GoodTask, {})
 
                   expect(QueueWorker).to receive(:new)
                                                .with(hash_including(task_context: context))
@@ -431,9 +452,9 @@ module Procrastinator
                      1
                   end
 
-                  env.define_queue(:test1)
-                  env.define_queue(:test2)
-                  env.define_queue(:test3)
+                  env.define_queue(:test1, GoodTask)
+                  env.define_queue(:test2, GoodTask)
+                  env.define_queue(:test3, GoodTask)
 
                   worker1 = double('worker1')
                   worker2 = double('worker2')
@@ -452,9 +473,9 @@ module Procrastinator
                end
 
                it 'should record its spawned processes' do
-                  env.define_queue(:test1)
-                  env.define_queue(:test2)
-                  env.define_queue(:test3)
+                  env.define_queue(:test1, GoodTask)
+                  env.define_queue(:test2, GoodTask)
+                  env.define_queue(:test3, GoodTask)
 
                   pid1 = 10
                   pid2 = 11
@@ -470,9 +491,9 @@ module Procrastinator
                it 'should store the PID of children in the ENV' do
                   allow(env).to receive(:fork).and_return(1, 2, 3)
 
-                  env.define_queue(:test1)
-                  env.define_queue(:test2)
-                  env.define_queue(:test3)
+                  env.define_queue(:test1, GoodTask)
+                  env.define_queue(:test2, GoodTask)
+                  env.define_queue(:test3, GoodTask)
 
                   env.spawn_workers
 
@@ -486,7 +507,7 @@ module Procrastinator
                it 'should name each worker process' do
                   queues = [:test1, :test2, :test3]
                   queues.each do |name|
-                     env.define_queue(name)
+                     env.define_queue(name, GoodTask)
                   end
 
                   stub_fork(env)
@@ -506,14 +527,14 @@ module Procrastinator
                      env.load_with do
                         persister
                      end
-                     env.define_queue(:testQueue)
+                     env.define_queue(:test_queue, GoodTask)
                      env.process_prefix(prefix)
 
                      stub_fork(env)
 
                      allow_any_instance_of(QueueWorker).to receive(:work)
 
-                     expect(Process).to receive(:setproctitle).with("#{prefix}-testQueue-queue-worker")
+                     expect(Process).to receive(:setproctitle).with("#{prefix}-test_queue-queue-worker")
 
                      env.spawn_workers
                   end
@@ -532,7 +553,7 @@ module Procrastinator
                   env.load_with do
                      persister
                   end
-                  env.define_queue(:test)
+                  env.define_queue(:test, GoodTask)
 
                   parent_pid = 10
                   child_pid  = 2000
@@ -577,7 +598,7 @@ module Procrastinator
                   env.load_with do
                      persister
                   end
-                  env.define_queue(:test)
+                  env.define_queue(:test, GoodTask)
 
                   parent_pid = 10
                   child_pid  = 2000
@@ -624,7 +645,7 @@ module Procrastinator
                      end
                   end
 
-                  env.define_queue(:test)
+                  env.define_queue(:test, GoodTask)
 
                   expect(env.task_loader_instance).to eq parent_persister # sanity check
 
@@ -646,7 +667,7 @@ module Procrastinator
                end
 
                it 'should use a default log directory if not provided in setup' do
-                  env.define_queue(:queue1)
+                  env.define_queue(:queue1, GoodTask)
 
                   stub_fork(env)
                   allow_any_instance_of(QueueWorker).to receive(:work)
@@ -657,8 +678,8 @@ module Procrastinator
                end
 
                it 'should get each worker to start its log' do
-                  env.define_queue(:queue1)
-                  env.define_queue(:queue2)
+                  env.define_queue(:queue1, GoodTask)
+                  env.define_queue(:queue2, GoodTask)
 
                   env.log_dir('some_dir/')
 
@@ -676,7 +697,7 @@ module Procrastinator
                   env.load_with do
                      persister
                   end
-                  env.define_queue(:test)
+                  env.define_queue(:test, GoodTask)
 
                   parent_pid = 10
                   child_pid  = 2000
@@ -714,7 +735,7 @@ module Procrastinator
                   env.load_with do
                      persister
                   end
-                  env.define_queue(:test)
+                  env.define_queue(:test, GoodTask)
                   env.log_level(Logger::FATAL)
 
                   allow_any_instance_of(QueueWorker).to receive(:work)
@@ -745,9 +766,9 @@ module Procrastinator
                env.load_with do
                   persister
                end
-               env.define_queue(:test1)
-               env.define_queue(:test2)
-               env.define_queue(:test3)
+               env.define_queue(:test1, GoodTask)
+               env.define_queue(:test2, GoodTask)
+               env.define_queue(:test3, GoodTask)
                env.spawn_workers
                env
             end

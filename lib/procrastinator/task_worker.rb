@@ -5,7 +5,7 @@ module Procrastinator
    class TaskWorker
       extend Forwardable
 
-      attr_reader :id, :task
+      attr_reader :id, :data
       def_delegators :@timing_data, :run_at, :initial_run_at, :expire_at
       def_delegators :@failure_data, :attempts, :last_fail_at, :last_error
 
@@ -18,7 +18,8 @@ module Procrastinator
                      max_attempts: nil,
                      last_fail_at: nil,
                      last_error: nil,
-                     task:)
+                     data: nil,
+                     task_class:)
          @id = id
 
          @timing_data = OpenStruct.new(run_at:         run_at.nil? ? nil : run_at.to_i,
@@ -31,7 +32,9 @@ module Procrastinator
                                         last_fail_at: last_fail_at,
                                         last_error:   last_error)
 
-         @task = YAML.load(task)
+         @task_class = task_class
+         @data       = YAML.load(data) if data
+         @task       = @data ? @task_class.new(@data) : @task_class.new
 
          raise(MalformedTaskError.new('given task does not support #run method')) unless @task.respond_to? :run
          raise(ArgumentError.new('timeout cannot be negative')) if timeout && timeout < 0
@@ -49,7 +52,7 @@ module Procrastinator
 
             try_hook(:success, context, logger, result)
 
-            logger.debug("Task completed: #{YAML.dump(@task)}")
+            logger.debug("Task completed: #{@task_class} [#{@data}]")
 
             @failure_data.last_error   = nil
             @failure_data.last_fail_at = nil
@@ -98,7 +101,7 @@ module Procrastinator
           attempts:       @failure_data.attempts,
           last_fail_at:   @failure_data.last_fail_at,
           last_error:     @failure_data.last_error,
-          task:           YAML.dump(@task)}
+          data:           YAML.dump(@data)}
       end
 
       private

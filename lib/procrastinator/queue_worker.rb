@@ -10,6 +10,7 @@ module Procrastinator
       # Timeout is in seconds
       def initialize(name:,
                      persister:,
+                     task_class:,
                      task_context: nil,
                      log_dir: nil,
                      log_level: Logger::INFO,
@@ -17,8 +18,11 @@ module Procrastinator
                      timeout: DEFAULT_TIMEOUT,
                      update_period: DEFAULT_UPDATE_PERIOD,
                      max_tasks: DEFAULT_MAX_TASKS)
-         raise ArgumentError.new('Queue name may not be nil') unless name
-         raise ArgumentError.new('Persister may not be nil') unless persister
+         raise ArgumentError.new(':name may not be nil') unless name
+         raise ArgumentError.new(':task_class may not be nil') unless task_class
+         raise ArgumentError.new(':persister may not be nil') unless persister
+
+         raise ArgumentError.new('Task class must be initializable') unless task_class.respond_to? :new
 
          raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #read_tasks')) unless persister.respond_to? :read_tasks
          raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #update_task')) unless persister.respond_to? :update_task
@@ -31,8 +35,9 @@ module Procrastinator
          @max_tasks     = max_tasks
          @persister     = persister
          @task_context  = task_context
+         @task_class    = task_class
 
-         start_log(log_dir, log_level)
+         start_log(log_dir, level: log_level)
       end
 
       def work
@@ -50,13 +55,14 @@ module Procrastinator
 
       def act
          # shuffling and re-sorting to avoid worst case O(n^2) when receiving already sorted data
-         # on quicksort (which is default ruby sort).
-         # Ideally, we'd use a better algo, but this will do for now
+         # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
+         # results
+         # Ideally, we'd use a better algo than qsort for this, but this will do for now
          tasks = @persister.read_tasks(@name).reject {|t| t[:run_at].nil?}.shuffle.sort_by {|t| t[:run_at]}
 
-         tasks.first(@max_tasks).each do |task_data|
-            if Time.now.to_i >= task_data[:run_at].to_i
-               tw = TaskWorker.new(task_data)
+         tasks.first(@max_tasks).each do |task_hash|
+            if Time.now.to_i >= task_hash[:run_at].to_i
+               tw = TaskWorker.new(task_hash.merge(task_class: @task_class))
 
                work_data          = {context: @task_context}
                work_data[:logger] = @logger if @logger
@@ -64,9 +70,9 @@ module Procrastinator
                tw.work(work_data)
 
                if tw.successful?
-                  @persister.delete_task(task_data[:id])
+                  @persister.delete_task(task_hash[:id])
                else
-                  @persister.update_task(tw.to_hash.merge(queue: @name))
+                  @persister.update_task(tw.task_hash.merge(queue: @name))
                end
             end
          end
@@ -79,7 +85,7 @@ module Procrastinator
       # Starts a log file and stores the logger within this queue worker.
       #
       # Separate from init because logging is context-dependent
-      def start_log(directory, level)
+      def start_log(directory, level: Logger::INFO)
          if directory
             log_path = Pathname.new("#{directory}/#{long_name}.log")
 

@@ -37,10 +37,21 @@ module Procrastinator
          @task_context_factory = block
       end
 
-      def define_queue(name, properties = {})
+      def define_queue(name, task_class, properties = {})
          raise ArgumentError.new('queue name cannot be nil') if name.nil?
+         raise ArgumentError.new('queue task class cannot be nil') if task_class.nil?
+         raise MalformedTaskError.new("task #{task_class} does not support #run method") unless task_class.method_defined? :run
 
-         @queue_definitions[name] = properties
+         # We're checking these on init because it's one of those extremely rare cases where you'd want to know early
+         # because of the sub-processes. It's a bit belt-and suspenders, but UX is important for         # devs, too.
+         expected_arity = {run: 2, success: 3, fail: 3, final_fail: 3}
+         expected_arity.each do |method_name, arity|
+            if task_class.method_defined?(method_name) && task_class.instance_method(method_name).arity < arity
+               raise MalformedTaskError.new("the provided task must accept #{arity} parameters to its ##{method_name} method")
+            end
+         end
+
+         @queue_definitions[name] = properties.merge(task_class: task_class)
       end
 
       def spawn_workers
@@ -90,31 +101,23 @@ module Procrastinator
          end
       end
 
-      def delay(queue: nil, run_at: Time.now.to_i, expire_at: nil, task:)
-         raise ArgumentError.new('task may not be nil') if task.nil?
-         raise MalformedTaskError.new('the provided task does not support #run method') unless task.respond_to? :run
-
-         # We're checking these on init because it's one of those extremely rare cases where you'd want to know
-         # incredibly early, because of the sub-processing. It's a bit belt-and suspenders, but UX is important for
-         # devs, too.
-         [:success, :fail, :final_fail].each do |method_name|
-            if task.respond_to?(method_name) && task.method(method_name).arity <= 0
-               raise MalformedTaskError.new("the provided task must accept a parameter to its ##{method_name} method")
-            end
-         end
-
+      def delay(queue = nil, data: nil, run_at: Time.now.to_i, expire_at: nil)
          if queue.nil? && @queue_definitions.size > 1
-            raise ArgumentError.new("queue must be specified when more than one is registered. Defined queues are: #{queue_definitions.keys.map {|k| ':' + k.to_s}.join(', ')}")
+            err = "queue must be specified when more than one is registered. Defined queues are: #{queue_symbols}"
+
+            raise ArgumentError.new(err)
          else
             queue ||= @queue_definitions.keys.first
-            raise ArgumentError.new(%Q{there is no "#{queue}" queue registered in this environment}) if @queue_definitions[queue].nil?
+            if @queue_definitions[queue].nil?
+               raise ArgumentError.new(%Q{there is no "#{queue}" queue registered in this environment})
+            end
          end
 
          @task_loader_instance.create_task(queue:          queue,
                                            run_at:         run_at.to_i,
                                            initial_run_at: run_at.to_i,
                                            expire_at:      expire_at.nil? ? nil : expire_at.to_i,
-                                           task:           YAML.dump(task))
+                                           data:           YAML.dump(data))
       end
 
       def enable_test_mode
@@ -132,6 +135,12 @@ module Procrastinator
       def process_prefix(prefix)
          @process_prefix = prefix
       end
+
+      def queue_symbols
+         # if you .to_s a symbol, it drops the colon, so this is putting it back in
+         queue_definitions.keys.map {|key| ":#{key}"}.join(', ')
+      end
+
 
       private
 

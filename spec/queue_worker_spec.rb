@@ -6,12 +6,20 @@ module Procrastinator
 
       describe '#initialize' do
          it 'should require a name' do
-            expect {QueueWorker.new}.to raise_error(ArgumentError)
+            expect {QueueWorker.new(task_class: nil, persister: nil)}.to raise_error(ArgumentError, 'missing keyword: name')
+         end
+
+         it 'should require a task_class' do
+            expect {QueueWorker.new(name: nil, persister: nil)}.to raise_error(ArgumentError, 'missing keyword: task_class')
+         end
+
+         it 'should require a persister' do
+            expect {QueueWorker.new(name: nil, task_class: nil)}.to raise_error(ArgumentError, 'missing keyword: persister')
          end
 
          it 'should store name as symbol' do
             [:email, :cleanup, 'a name'].each do |name|
-               queue = QueueWorker.new(name: name, persister: persister)
+               queue = QueueWorker.new(name: name, task_class: GoodTask, persister: persister)
 
                expect(queue.name).to eq name.to_s.gsub(/\s/, '_').to_sym
             end
@@ -19,92 +27,126 @@ module Procrastinator
 
          it 'should require the name not be nil' do
             expect do
-               QueueWorker.new(name: nil, persister: persister)
-            end.to raise_error(ArgumentError, 'Queue name may not be nil')
+               QueueWorker.new(name: nil, task_class: GoodTask, persister: persister)
+            end.to raise_error(ArgumentError, ':name may not be nil')
          end
 
-         it 'should require a persister' do
+         it 'should require the task class not be nil' do
             expect do
-               QueueWorker.new(name: :queue)
-            end.to raise_error(ArgumentError, 'missing keyword: persister')
+               QueueWorker.new(name: :queue, task_class: nil, persister: persister)
+            end.to raise_error(ArgumentError, ':task_class may not be nil')
          end
 
          it 'should require the persister not be nil' do
             expect do
-               QueueWorker.new(name: :queue, persister: nil)
-            end.to raise_error(ArgumentError, 'Persister may not be nil')
+               QueueWorker.new(name: :queue, task_class: GoodTask, persister: nil)
+            end.to raise_error(ArgumentError, ':persister may not be nil')
+         end
+
+         it 'should require the task class respond to .new' do
+            expect do
+               QueueWorker.new(name:       :queue,
+                               task_class: double('struct or whatever'),
+                               persister:  persister)
+            end.to raise_error(ArgumentError, 'Task class must be initializable')
          end
 
          it 'should require the persister respond to #read_tasks' do
             expect do
-               QueueWorker.new(name: :queue, persister: double('broken persister', delete_task: nil, update_task: nil))
+               QueueWorker.new(name:       :queue,
+                               task_class: GoodTask,
+                               persister:  double('broken persister', delete_task: nil, update_task: nil))
             end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #read_tasks')
          end
 
          it 'should require the persister respond to #update_task' do
             expect do
-               QueueWorker.new(name: :queue, persister: double('broken persister', read_tasks: []))
+               QueueWorker.new(name:       :queue,
+                               task_class: GoodTask,
+                               persister:  double('broken persister', read_tasks: []))
             end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #update_task')
          end
 
          it 'should require the persister respond to #delete_task' do
             expect do
-               QueueWorker.new(name: :queue, persister: double('broken persister', read_tasks: [], update_task: nil))
+               QueueWorker.new(name:       :queue,
+                               task_class: GoodTask,
+                               persister:  double('broken persister', read_tasks: [], update_task: nil))
             end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #delete_task')
          end
 
          it 'should accept a timeout' do
             (1..3).each do |t|
-               queue = QueueWorker.new(name: :queue, persister: persister, timeout: t)
+               queue = QueueWorker.new(name:       :queue,
+                                       task_class: GoodTask,
+                                       persister:  persister,
+                                       timeout:    t)
 
                expect(queue.timeout).to eq t
             end
          end
 
          it 'should provide default timeout' do
-            queue = QueueWorker.new(name: :queue, persister: persister)
+            queue = QueueWorker.new(name:       :queue,
+                                    task_class: GoodTask,
+                                    persister:  persister)
 
             expect(queue.timeout).to eq QueueWorker::DEFAULT_TIMEOUT
          end
 
          it 'should accept a max_attempts' do
             (1..3).each do |t|
-               queue = QueueWorker.new(name: :queue, persister: persister, max_attempts: t)
+               queue = QueueWorker.new(name:         :queue,
+                                       task_class:   GoodTask,
+                                       persister:    persister,
+                                       max_attempts: t)
 
                expect(queue.max_attempts).to eq t
             end
          end
 
          it 'should provide default max_attempts' do
-            queue = QueueWorker.new(name: :queue, persister: persister)
+            queue = QueueWorker.new(name:       :queue,
+                                    task_class: GoodTask,
+                                    persister:  persister)
 
             expect(queue.max_attempts).to eq QueueWorker::DEFAULT_MAX_ATTEMPTS
          end
 
          it 'should accept a update_period' do
             (1..3).each do |i|
-               queue = QueueWorker.new(name: :queue, persister: persister, update_period: i)
+               queue = QueueWorker.new(name:          :queue,
+                                       task_class:    GoodTask,
+                                       persister:     persister,
+                                       update_period: i)
 
                expect(queue.update_period).to eq i
             end
          end
 
          it 'should provide a default update_period' do
-            queue = QueueWorker.new(name: :queue, persister: persister)
+            queue = QueueWorker.new(name:       :queue,
+                                    task_class: GoodTask,
+                                    persister:  persister)
 
             expect(queue.update_period).to eq QueueWorker::DEFAULT_UPDATE_PERIOD
          end
 
          it 'should accept a max_tasks' do
             (1..3).each do |i|
-               queue = QueueWorker.new(name: :queue, persister: persister, max_tasks: i)
+               queue = QueueWorker.new(name:       :queue,
+                                       task_class: GoodTask,
+                                       persister:  persister,
+                                       max_tasks:  i)
 
                expect(queue.max_tasks).to eq i
             end
          end
 
          it 'should provide a default max_tasks' do
-            queue = QueueWorker.new(name: :queue, persister: persister)
+            queue = QueueWorker.new(name:       :queue,
+                                    task_class: GoodTask,
+                                    persister:  persister)
 
             expect(queue.max_tasks).to eq QueueWorker::DEFAULT_MAX_TASKS
          end
@@ -113,7 +155,10 @@ module Procrastinator
       describe '#work' do
          it 'should wait for update_period' do
             [0.01, 0.02].each do |period|
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: period)
+               worker = QueueWorker.new(name:          :queue,
+                                        task_class:    GoodTask,
+                                        persister:     persister,
+                                        update_period: period)
 
                expect(worker).to receive(:loop) do |&block|
                   block.call
@@ -126,7 +171,10 @@ module Procrastinator
          end
 
          it 'should cyclically call #act' do
-            worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.1)
+            worker = QueueWorker.new(name:          :queue,
+                                     task_class:    GoodTask,
+                                     persister:     persister,
+                                     update_period: 0.1)
 
             allow(worker).to receive(:sleep) # stub sleep
 
@@ -146,6 +194,7 @@ module Procrastinator
             FakeFS do
                worker = QueueWorker.new(name:          :test,
                                         persister:     persister,
+                                        task_class:    GoodTask,
                                         update_period: 0.1,
                                         log_dir:       'log/')
 
@@ -174,7 +223,10 @@ module Procrastinator
          context 'loading tasks' do
             it 'should pass the given queue to its persister' do
                [:email, :cleanup].each do |queue|
-                  worker = QueueWorker.new(name: queue, persister: persister, update_period: 0.01)
+                  worker = QueueWorker.new(name:          queue,
+                                           task_class:    GoodTask,
+                                           persister:     persister,
+                                           update_period: 0.01)
 
                   expect(persister).to receive(:read_tasks).with(queue)
 
@@ -183,22 +235,25 @@ module Procrastinator
             end
 
             it 'should sort tasks by run_at' do
+               job1 = {id: 4, run_at: 1, initial_run_at: 0} # consider nil = 0
+               job2 = {id: 5, run_at: 2, initial_run_at: 0}
+               job3 = {id: 6, run_at: 3, initial_run_at: 0}
+
                task1 = SuccessTask.new
                task2 = SuccessTask.new
                task3 = SuccessTask.new
 
-               job1 = {id: 4, run_at: 1, initial_run_at: 0, task: YAML.dump(task1)} # consider nil 0
-               job2 = {id: 5, run_at: 2, initial_run_at: 0, task: YAML.dump(task2)}
-               job3 = {id: 6, run_at: 3, initial_run_at: 0, task: YAML.dump(task3)}
-
-               allow(YAML).to receive(:load).and_return(task1, task2, task3)
+               allow(SuccessTask).to receive(:new).and_return(task1, task2, task3)
 
                persister = double('disorganized persister',
                                   read_tasks:  [job2, job3, job1],
                                   update_task: nil,
                                   delete_task: nil)
 
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
+               worker = QueueWorker.new(name:          :queue,
+                                        task_class:    SuccessTask,
+                                        persister:     persister,
+                                        update_period: 0.01)
 
                expect(task1).to receive(:run).ordered
                expect(task2).to receive(:run).ordered
@@ -211,17 +266,20 @@ module Procrastinator
                task1 = SuccessTask.new
                task2 = SuccessTask.new
 
-               job1 = {id: 4, run_at: nil, initial_run_at: 0, task: YAML.dump(task1)} # consider nil 0
-               job2 = {id: 5, run_at: 2, initial_run_at: 0, task: YAML.dump(task2)}
+               job1 = {id: 4, run_at: nil, initial_run_at: 0}
+               job2 = {id: 5, run_at: 2, initial_run_at: 0}
 
-               allow(YAML).to receive(:load).and_return(task2)
+               allow(SuccessTask).to receive(:new).and_return(task2)
 
                persister = double('disorganized persister',
                                   read_tasks:  [job2, job1],
                                   update_task: nil,
                                   delete_task: nil)
 
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.01)
+               worker = QueueWorker.new(name:          :queue,
+                                        task_class:    SuccessTask,
+                                        persister:     persister,
+                                        update_period: 0.01)
 
                expect(task1).to_not receive(:run)
                expect(task2).to receive(:run)
@@ -243,17 +301,20 @@ module Procrastinator
                   Timecop.travel(task2_duration)
                end
 
-               job1 = {run_at: 1, task: task1}
-               job2 = {run_at: 1, task: task2}
+               job1 = {run_at: 1}
+               job2 = {run_at: 1}
 
                allow(persister).to receive(:read_tasks).and_return([job1], [job2])
 
-               allow(YAML).to receive(:load).and_return(task1, task2)
+               allow(GoodTask).to receive(:new).and_return(task1, task2)
 
                start_time = Time.now
 
                Timecop.freeze(start_time) do
-                  worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0.00)
+                  worker = QueueWorker.new(name:          :queue,
+                                           task_class:    GoodTask,
+                                           persister:     persister,
+                                           update_period: 0.00)
 
                   worker.act
                   worker.act
@@ -264,9 +325,9 @@ module Procrastinator
 
             it 'should run a TaskWorker with all the data' do
                task_double = double('task', run: nil)
-               task_data   = {run_at: 1, task: YAML.dump(task_double)}
+               task_data   = {run_at: 1}
 
-               allow(YAML).to receive(:load).and_return(task_double)
+               allow(GoodTask).to receive(:new).and_return(task_double)
 
                expect(TaskWorker).to receive(:new).with(satisfy do |param_hash|
                   task_data.all? do |k, v|
@@ -278,6 +339,7 @@ module Procrastinator
                allow(persister).to receive(:read_tasks).and_return([task_data])
 
                worker = QueueWorker.new(name:          :queue,
+                                        task_class:    GoodTask,
                                         persister:     persister,
                                         update_period: 0)
 
@@ -286,21 +348,22 @@ module Procrastinator
 
             it 'should pass the TaskWorker the task context' do
                task_double = double('task', run: nil)
-               task_data   = {run_at: 1, task: YAML.dump(task_double)}
+               task_data   = {run_at: 1}
                task_worker = double('task worker')
                context     = double('context object')
 
-               allow(YAML).to receive(:load).and_return(task_double)
+               allow(GoodTask).to receive(:new).and_return(task_double)
                allow(TaskWorker).to receive(:new).and_return(task_worker)
 
                allow(task_worker).to receive(:successful?)
-               allow(task_worker).to receive(:to_hash).and_return({})
+               allow(task_worker).to receive(:task_hash).and_return({})
                expect(task_worker).to receive(:work).with(hash_including(context: context))
 
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data])
 
                worker = QueueWorker.new(name:          :queue,
+                                        task_class:    GoodTask,
                                         task_context:  context,
                                         persister:     persister,
                                         update_period: 0)
@@ -309,16 +372,19 @@ module Procrastinator
             end
 
             it 'should run a TaskWorker for each ready task' do
-               task_data1 = {run_at: 1, task: YAML.dump(SuccessTask.new)}
-               task_data2 = {run_at: 1, task: YAML.dump(SuccessTask.new)}
-               task_data3 = {run_at: 1, task: YAML.dump(SuccessTask.new)}
+               task_data1 = {run_at: 1}
+               task_data2 = {run_at: 1}
+               task_data3 = {run_at: 1}
 
                expect(TaskWorker).to receive(:new).exactly(3).times.and_call_original
 
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2, task_data3])
 
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
+               worker = QueueWorker.new(name:          :queue,
+                                        task_class:    GoodTask,
+                                        persister:     persister,
+                                        update_period: 0)
 
                worker.act
             end
@@ -326,8 +392,8 @@ module Procrastinator
             it 'should not start any TaskWorkers for unready tasks' do
                now = Time.now
 
-               task_data1 = {run_at: now, task: YAML.dump(SuccessTask.new)}
-               task_data2 = {run_at: now + 1, task: YAML.dump(SuccessTask.new)}
+               task_data1 = {run_at: now}
+               task_data2 = {run_at: now + 1}
 
                expect(TaskWorker).to receive(:new).ordered.and_call_original
                expect(TaskWorker).to_not receive(:new).ordered.and_call_original
@@ -335,7 +401,10 @@ module Procrastinator
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
 
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0)
+               worker = QueueWorker.new(name:          :queue,
+                                        task_class:    GoodTask,
+                                        persister:     persister,
+                                        update_period: 0)
 
                Timecop.freeze(now) do
                   worker.act
@@ -343,15 +412,19 @@ module Procrastinator
             end
 
             it 'should not start more TaskWorkers than max_tasks' do
-               task_data1 = {run_at: 1, task: YAML.dump(SuccessTask.new)}
-               task_data2 = {run_at: 2, task: YAML.dump(SuccessTask.new)}
+               task_data1 = {run_at: 1}
+               task_data2 = {run_at: 2}
 
                expect(TaskWorker).to receive(:new).once.and_call_original
 
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
 
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
+               worker = QueueWorker.new(name:          :queue,
+                                        task_class:    GoodTask,
+                                        persister:     persister,
+                                        update_period: 0,
+                                        max_tasks:     1)
 
                worker.act
             end
@@ -373,10 +446,12 @@ module Procrastinator
                   allow(persister).to receive(:read_tasks).and_return([task_data])
 
                   allow(TaskWorker).to receive(:new).and_return(task_worker)
+                  allow(task_worker).to receive(:task_hash).and_return({})
 
                   expect(task_worker).to receive(:work).with(hash_including(:logger))
 
                   worker = QueueWorker.new(name:          queue_name,
+                                           task_class:    GoodTask,
                                            persister:     persister,
                                            log_dir:       'log/',
                                            update_period: 0)
@@ -390,13 +465,16 @@ module Procrastinator
             it 'should delete the task' do
                task_data = {
                      id:     double('id'),
-                     run_at: 0,
-                     task:   YAML.dump(SuccessTask.new)
+                     run_at: 0
                }
 
                allow(persister).to receive(:read_tasks).and_return([task_data])
 
-               worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_tasks: 1)
+               worker = QueueWorker.new(name:          :queue,
+                                        task_class:    GoodTask,
+                                        persister:     persister,
+                                        update_period: 0,
+                                        max_tasks:     1)
 
                expect(persister).to receive(:delete_task).with(task_data[:id])
 
@@ -409,14 +487,18 @@ module Procrastinator
 
             it 'should update the task' do
                [0, 1].each do |max_attempts|
-                  task_data = {run_at: 0, task: YAML.dump(FailTask.new)}
+                  task_data = {run_at: 0}
                   task_hash = {stub: :hash}
 
                   allow(persister).to receive(:read_tasks).and_return([task_data])
 
-                  allow_any_instance_of(TaskWorker).to receive(:to_hash).and_return(task_hash)
+                  allow_any_instance_of(TaskWorker).to receive(:task_hash).and_return(task_hash)
 
-                  worker = QueueWorker.new(name: :queue, persister: persister, update_period: 0, max_attempts: max_attempts)
+                  worker = QueueWorker.new(name:          :queue,
+                                           task_class:    FailTask,
+                                           persister:     persister,
+                                           update_period: 0,
+                                           max_attempts:  max_attempts)
 
                   expect(persister).to receive(:update_task).with(task_hash.merge(queue: worker.name))
 
@@ -442,19 +524,21 @@ module Procrastinator
          # falsey is the default for workers
          context 'logging directory falsey' do
             it 'should NOT create the log directory' do
-               worker = QueueWorker.new(name:      :queue,
-                                        persister: persister)
+               worker = QueueWorker.new(name:       :queue,
+                                        task_class: GoodTask,
+                                        persister:  persister)
 
-               worker.start_log
+               worker.start_log(false)
 
                expect(Dir.glob('/*')).to be_empty
             end
 
             it 'should NOT create a log file for this worker' do
-               worker = QueueWorker.new(name:      :queue1,
-                                        persister: persister)
+               worker = QueueWorker.new(name:       :queue1,
+                                        task_class: GoodTask,
+                                        persister:  persister)
 
-               worker.start_log
+               worker.start_log(false)
 
                expect(File.file?('/queue1-queue-worker.log')).to be false
             end
@@ -462,11 +546,11 @@ module Procrastinator
 
          context 'logging directory provided' do
             it 'should create the log directory if it does not exist' do
-               worker = QueueWorker.new(name:      :queue1,
-                                        persister: persister,
-                                        log_dir:   'some_dir/')
+               worker = QueueWorker.new(name:       :queue1,
+                                        task_class: GoodTask,
+                                        persister:  persister)
 
-               worker.start_log
+               worker.start_log('some_dir/')
 
                expect(File.directory?('some_dir/')).to be true
             end
@@ -480,14 +564,14 @@ module Procrastinator
 
                   log_dir = 'some_dir'
 
-                  worker = QueueWorker.new(name:      queue_name,
-                                           persister: persister,
-                                           log_dir:   log_dir)
+                  worker = QueueWorker.new(name:       queue_name,
+                                           task_class: GoodTask,
+                                           persister:  persister)
 
                   allow(Process).to receive(:ppid).and_return(parent_pid)
                   allow(Process).to receive(:pid).and_return(child_pid)
 
-                  worker.start_log
+                  worker.start_log(log_dir)
 
                   log_path = "#{log_dir}/#{worker.long_name}.log"
 
@@ -505,9 +589,9 @@ module Procrastinator
             it 'should append to the log file if it already exists' do
                log_dir = 'some_dir'
 
-               worker = QueueWorker.new(name:      :queue1,
-                                        persister: persister,
-                                        log_dir:   log_dir)
+               worker = QueueWorker.new(name:       :queue1,
+                                        task_class: GoodTask,
+                                        persister:  persister)
 
                log_path = "#{log_dir}/#{worker.long_name}.log"
 
@@ -518,7 +602,7 @@ module Procrastinator
                   f.write existing_data
                end
 
-               worker.start_log
+               worker.start_log(log_dir)
 
                expect(File.read(log_path)).to include(existing_data)
             end
@@ -526,12 +610,11 @@ module Procrastinator
             it 'should log at the provided level' do
                log_dir = 'log/'
 
-               worker = QueueWorker.new(name:      :queue1,
-                                        persister: persister,
-                                        log_dir:   log_dir,
-                                        log_level: Logger::FATAL)
+               worker = QueueWorker.new(name:       :queue1,
+                                        task_class: GoodTask,
+                                        persister:  persister)
 
-               worker.start_log
+               worker.start_log(log_dir, level: Logger::FATAL)
 
                worker.log_parent_exit(ppid: 0, pid: 0)
 
@@ -544,20 +627,21 @@ module Procrastinator
 
       describe '#log_parent_exit' do
          it 'should complain if logger not built' do
-            worker = QueueWorker.new(name:      :queue1,
-                                     persister: persister,
-                                     log_dir:   nil)
+            worker = QueueWorker.new(name:       :queue1,
+                                     task_class: GoodTask,
+                                     persister:  persister,
+                                     log_dir:    nil)
 
             expect {worker.log_parent_exit(ppid: 0, pid: 1)}.to raise_error('Cannot log when logger not defined. Call #start_log first.')
          end
 
          it 'should log exiting when parent process disappears' do
             FakeFS do
-               worker = QueueWorker.new(name:      :test,
-                                        persister: persister,
-                                        log_dir:   'log/')
+               worker = QueueWorker.new(name:       :test,
+                                        task_class: GoodTask,
+                                        persister:  persister)
 
-               worker.start_log
+               worker.start_log('log/')
 
                [{parent: 10, child: 2000},
                 {parent: 30, child: 4000}].each do |pid_hash|
