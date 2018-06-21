@@ -17,86 +17,84 @@ def stub_fork(receiver, result_pid = nil)
    end
 end
 
-class GoodTask
-   def initialize
+module Procrastinator
+   module Test
+      module Task
+         module MissingParam
+            class BadRun
+               def run
 
-   end
+               end
+            end
 
-   def run(context, logger)
+            class BadSuccess
+               def run(context, logger)
 
-   end
+               end
 
-   def success(context, logger, result)
+               def success
 
-   end
+               end
+            end
 
-   def fail(context, logger, error)
+            class BadFail
+               def run(context, logger)
 
-   end
+               end
 
-   def final_fail(context, logger, error)
+               def fail
 
-   end
-end
+               end
+            end
 
-class BadRun
-   def run
+            class BadFinalFail
+               def run(context, logger)
 
-   end
-end
+               end
 
-class BadSuccess
-   def run(context, logger)
+               def final_fail
 
-   end
+               end
+            end
+         end
 
-   def success
+         class AllHooks
+            def initialize(data = nil)
 
-   end
-end
+            end
 
-class BadFail
-   def run(context, logger)
+            def run(context, logger)
 
-   end
+            end
 
-   def fail
+            def success(context, logger, result)
 
-   end
-end
+            end
 
-class BadFinalFail
-   def run(context, logger)
+            def fail(context, logger, error)
 
-   end
+            end
 
-   def final_fail
+            def final_fail(context, logger, error)
 
-   end
-end
+            end
+         end
 
-class InitTask
-   def initialize(data)
+         class RunOnly
+            def run(context, logger)
 
-   end
+            end
+         end
 
-   def run(context, logger)
+         class Fail
+            def run(context, logger)
+               raise('derp')
+            end
 
-   end
-end
+            def fail(context, logger, error)
 
-class SuccessTask
-   def run(context, logger)
-
-   end
-end
-
-class FailTask
-   def run(context, logger)
-      raise('derp')
-   end
-
-   def fail(context, logger, error)
-
+            end
+         end
+      end
    end
 end

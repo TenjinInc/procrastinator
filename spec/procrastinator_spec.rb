@@ -17,14 +17,14 @@ module Procrastinator
 
       describe '.setup' do
          let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
-         let(:queues) {{queue1: {name: nil, max_tasks: nil, task_class: GoodTask},
-                        queue2: {name: nil, max_tasks: nil, task_class: GoodTask}}}
+         let(:queues) {{queue1: {name: nil, max_tasks: nil, task_class: Test::Task::AllHooks},
+                        queue2: {name: nil, max_tasks: nil, task_class: Test::Task::AllHooks}}}
 
          it 'should return the configured procrastinator environment' do
             FakeFS do # fakefs enabled to cleanly handle default logging
                env = Procrastinator.setup do |env|
                   queues.each do |name, props|
-                     env.define_queue(name, GoodTask, props)
+                     env.define_queue(name, Test::Task::AllHooks, props)
                   end
 
                   env.load_with do
@@ -79,14 +79,14 @@ module Procrastinator
             expect_any_instance_of(Environment).to receive(:spawn_workers)
 
             Procrastinator.setup do |env|
-               env.define_queue(:test, GoodTask)
+               env.define_queue(:test, Test::Task::AllHooks)
                env.load_with {persister}
             end
          end
 
          it 'should enable test mode when declared' do
             result = Procrastinator.setup do |env|
-               env.define_queue(:test, GoodTask)
+               env.define_queue(:test, Test::Task::AllHooks)
                env.load_with {persister}
                env.enable_test_mode
             end
@@ -102,7 +102,7 @@ module Procrastinator
             it 'should create an environment in test mode' do
                result = Procrastinator.setup do |env|
                   env.load_with {persister}
-                  env.define_queue(:test, GoodTask)
+                  env.define_queue(:test, Test::Task::AllHooks)
                end
 
                expect(result.test_mode).to be true
@@ -111,11 +111,11 @@ module Procrastinator
             it 'should create every environment in test mode' do
                result1 = Procrastinator.setup do |env|
                   env.load_with {persister}
-                  env.define_queue(:test, GoodTask )
+                  env.define_queue(:test, Test::Task::AllHooks)
                end
                result2 = Procrastinator.setup do |env|
                   env.load_with {persister}
-                  env.define_queue(:test, GoodTask)
+                  env.define_queue(:test, Test::Task::AllHooks)
                end
 
                expect(result1.test_mode).to be true
