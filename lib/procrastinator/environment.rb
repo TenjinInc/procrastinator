@@ -66,7 +66,14 @@ module Procrastinator
             end
          else
             @queue_definitions.each do |name, props|
-               pid = fork do
+               pid = fork
+
+               if pid
+                  # === PARENT PROCESS ===
+                  Process.detach(pid)
+                  @processes << pid
+               else
+                  # === CHILD PROCESS ===
                   init_task_loader
 
                   props[:task_context] = @task_context_factory.call if @task_context_factory
@@ -82,9 +89,6 @@ module Procrastinator
 
                   worker.work
                end
-
-               Process.detach(pid) unless pid.nil?
-               @processes << pid
             end
          end
       end

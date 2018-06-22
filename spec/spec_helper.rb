@@ -9,14 +9,6 @@ require 'fakefs/safe'
 
 require 'procrastinator'
 
-# leave result+pid nil for parent thread, give int for child pid
-def stub_fork(receiver, result_pid = nil)
-   allow(receiver).to receive(:fork) do |&block|
-      block.call
-      result_pid
-   end
-end
-
 module Procrastinator
    module Test
       module Task
@@ -76,6 +68,16 @@ module Procrastinator
             end
 
             def final_fail(context, logger, error)
+
+            end
+         end
+
+         class KeywordInit
+            def initialize(test_data_one:, test_data_two:)
+
+            end
+
+            def run(context, logger)
 
             end
          end

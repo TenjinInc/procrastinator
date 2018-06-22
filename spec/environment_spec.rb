@@ -393,12 +393,14 @@ module Procrastinator
 
          context 'live mode' do
             context 'parent process' do
-               before(:each) {allow(Process).to receive(:setproctitle)}
+               before(:each) do
+                  allow(Process).to receive(:detach)
+               end
 
                it 'should fork a worker process' do
                   env.define_queue(:test, Test::Task::AllHooks)
 
-                  expect(env).to receive(:fork).once
+                  expect(env).to receive(:fork).once.and_return(double('a child pid'))
 
                   env.spawn_workers
                end
@@ -409,7 +411,7 @@ module Procrastinator
                      env.define_queue(name, Test::Task::AllHooks, props)
                   end
 
-                  expect(env).to receive(:fork).exactly(queue_defs.size).times
+                  expect(env).to receive(:fork).exactly(queue_defs.size).times.and_return(double('a child pid'))
 
                   env.spawn_workers
                end
@@ -432,58 +434,6 @@ module Procrastinator
 
                      env.spawn_workers
                   end
-               end
-
-               it 'should create a QueueWorker in each subprocess' do
-                  klass = Test::Task::AllHooks
-
-                  queue_defs = {test2a: {}, test2b: {}, test2c: {}}
-
-                  stub_fork(env, nil)
-                  allow(Process).to receive(:setproctitle)
-
-                  queue_defs.each do |name, props|
-                     env.define_queue(name, klass, props)
-
-                     expect(QueueWorker).to receive(:new)
-                                                  .with(props.merge(persister:  persister,
-                                                                    name:       name,
-                                                                    task_class: klass,
-                                                                    log_dir:    Environment::DEFAULT_LOG_DIRECTORY,
-                                                                    log_level:  Logger::INFO))
-                                                  .and_return(double('worker',
-                                                                     work:      nil,
-                                                                     start_log: nil,
-                                                                     long_name: ''))
-                  end
-
-                  env.spawn_workers
-               end
-
-               it 'should tell the worker process to work' do
-                  allow(env).to receive(:fork) do |&block|
-                     block.call
-                     1
-                  end
-
-                  env.define_queue(:test1, Test::Task::AllHooks)
-                  env.define_queue(:test2, Test::Task::AllHooks)
-                  env.define_queue(:test3, Test::Task::AllHooks)
-
-                  worker1 = double('worker1')
-                  worker2 = double('worker2')
-                  worker3 = double('worker3')
-
-                  [worker1, worker2, worker3].each do |worker|
-                     expect(worker).to receive(:work)
-
-                     allow(worker).to receive(:start_log)
-                     allow(worker).to receive(:long_name)
-                  end
-
-                  allow(QueueWorker).to receive(:new).and_return(worker1, worker2, worker3)
-
-                  env.spawn_workers
                end
 
                it 'should record its spawned processes' do
@@ -516,7 +466,35 @@ module Procrastinator
             end
 
             context 'subprocess' do
-               before(:each) {allow(Process).to receive(:setproctitle)}
+               before(:each) do
+                  allow(Process).to receive(:setproctitle)
+               end
+
+               it 'should create a QueueWorker' do
+                  klass = Test::Task::AllHooks
+
+                  queue_defs = {test2a: {}, test2b: {}, test2c: {}}
+
+                  allow(env).to receive(:fork).and_return(nil)
+                  allow(Process).to receive(:setproctitle)
+
+                  queue_defs.each do |name, props|
+                     env.define_queue(name, klass, props)
+
+                     expect(QueueWorker).to receive(:new)
+                                                  .with(props.merge(persister:  persister,
+                                                                    name:       name,
+                                                                    task_class: klass,
+                                                                    log_dir:    Environment::DEFAULT_LOG_DIRECTORY,
+                                                                    log_level:  Logger::INFO))
+                                                  .and_return(double('worker',
+                                                                     work:      nil,
+                                                                     start_log: nil,
+                                                                     long_name: ''))
+                  end
+
+                  env.spawn_workers
+               end
 
                it 'should name each worker process' do
                   queues = [:test1, :test2, :test3]
@@ -524,7 +502,7 @@ module Procrastinator
                      env.define_queue(name, Test::Task::AllHooks)
                   end
 
-                  stub_fork(env)
+                  allow(env).to receive(:fork).and_return(nil)
 
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
@@ -544,7 +522,7 @@ module Procrastinator
                      env.define_queue(:test_queue, Test::Task::AllHooks)
                      env.process_prefix(prefix)
 
-                     stub_fork(env)
+                     allow(env).to receive(:fork).and_return(nil)
 
                      allow_any_instance_of(QueueWorker).to receive(:work)
 
@@ -552,6 +530,29 @@ module Procrastinator
 
                      env.spawn_workers
                   end
+               end
+
+               it 'should tell the worker process to work' do
+                  allow(env).to receive(:fork).and_return(nil)
+
+                  env.define_queue(:test1, Test::Task::AllHooks)
+                  env.define_queue(:test2, Test::Task::AllHooks)
+                  env.define_queue(:test3, Test::Task::AllHooks)
+
+                  worker1 = double('worker1')
+                  worker2 = double('worker2')
+                  worker3 = double('worker3')
+
+                  [worker1, worker2, worker3].each do |worker|
+                     expect(worker).to receive(:work)
+
+                     allow(worker).to receive(:start_log)
+                     allow(worker).to receive(:long_name)
+                  end
+
+                  allow(QueueWorker).to receive(:new).and_return(worker1, worker2, worker3)
+
+                  env.spawn_workers
                end
 
                it 'should NOT store any pids' do
@@ -570,9 +571,8 @@ module Procrastinator
                   env.define_queue(:test, Test::Task::AllHooks)
 
                   parent_pid = 10
-                  child_pid  = 2000
 
-                  stub_fork(env, child_pid)
+                  allow(env).to receive(:fork).and_return(nil)
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
                   allow(Process).to receive(:pid).and_return(parent_pid)
@@ -615,9 +615,8 @@ module Procrastinator
                   env.define_queue(:test, Test::Task::AllHooks)
 
                   parent_pid = 10
-                  child_pid  = 2000
 
-                  stub_fork(env, child_pid)
+                  allow(env).to receive(:fork).and_return(nil)
                   allow_any_instance_of(QueueWorker).to receive(:work)
                   allow_any_instance_of(QueueWorker).to receive(:log_parent_exit)
 
@@ -663,7 +662,7 @@ module Procrastinator
 
                   expect(env.task_loader_instance).to eq parent_persister # sanity check
 
-                  stub_fork(env, nil)
+                  allow(env).to receive(:fork).and_return(nil)
                   allow(Process).to receive(:setproctitle)
 
                   expect(QueueWorker).to receive(:new).with(satisfy do |param_hash|
@@ -681,7 +680,7 @@ module Procrastinator
                it 'should provide the QueueWorker with the evaluated task context' do
                   context = double('task context')
 
-                  stub_fork(env, nil)
+                  allow(env).to receive(:fork).and_return(nil)
                   allow(Process).to receive(:setproctitle)
 
                   env.task_context do
@@ -703,7 +702,7 @@ module Procrastinator
                it 'should use a default log directory if not provided in setup' do
                   env.define_queue(:queue1, Test::Task::AllHooks)
 
-                  stub_fork(env)
+                  allow(env).to receive(:fork).and_return(nil)
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
                   env.spawn_workers
@@ -717,7 +716,7 @@ module Procrastinator
 
                   env.log_dir('some_dir/')
 
-                  stub_fork(env)
+                  allow(env).to receive(:fork).and_return(nil)
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
                   env.spawn_workers
@@ -736,7 +735,7 @@ module Procrastinator
                   parent_pid = 10
                   child_pid  = 2000
 
-                  stub_fork(env, child_pid)
+                  allow(env).to receive(:fork).and_return(nil)
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
                   allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
@@ -774,7 +773,7 @@ module Procrastinator
 
                   allow_any_instance_of(QueueWorker).to receive(:work)
                   allow(env).to receive(:monitor_parent)
-                  stub_fork(env, 100)
+                  allow(env).to receive(:fork).and_return(nil)
 
                   env.spawn_workers
 
