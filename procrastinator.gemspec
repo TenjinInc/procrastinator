@@ -9,14 +9,14 @@ Gem::Specification.new do |spec|
    spec.authors = ['Robin Miller']
    spec.email   = ['robin@tenjin.ca']
 
-   spec.summary     = %q{Delayed task queues made simple.}
-   spec.description = %q{A strightforward job queue that is not dependent on Rails or any particular database or persistence mechanism.}
+   spec.summary     = %q[Delayed job queues made simple.]
+   spec.description = %q[A straightforward, pure Ruby job queue that you can customize to your needs.]
    spec.homepage    = 'https://github.com/TenjinInc/procrastinator'
    spec.license     = 'MIT'
 
-   spec.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
+   spec.files         = `git ls-files -z`.split("\x0").reject {|f| f.match(%r{^(test|spec|features)/})}
    spec.bindir        = 'exe'
-   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
+   spec.executables   = spec.files.grep(%r{^exe/}) {|f| File.basename(f)}
    spec.require_paths = ['lib']
 
    spec.required_ruby_version = '> 2.0'
