@@ -57,6 +57,10 @@ module Procrastinator
       def spawn_workers
          if @test_mode
             @queue_definitions.each do |name, props|
+               init_task_loader
+
+               props[:task_context] = @task_context_factory.call if @task_context_factory
+
                @queue_workers << QueueWorker.new(props.merge(name:      name,
                                                              persister: @task_loader_instance))
             end

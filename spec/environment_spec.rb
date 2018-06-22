@@ -1,5 +1,7 @@
 module Procrastinator
    require 'spec_helper'
+   require 'timeout'
+
    describe Environment do
       describe '#initialize' do
          it 'should set test mode' do
@@ -335,7 +337,6 @@ module Procrastinator
             it 'should NOT change the process title' do
                env.define_queue(:test, Test::Task::AllHooks)
 
-               stub_fork(env)
                expect(Process).to_not receive(:setproctitle)
 
                env.spawn_workers
@@ -346,13 +347,47 @@ module Procrastinator
 
                env.define_queue(queue_name, Test::Task::AllHooks)
 
-               allow_any_instance_of(QueueWorker).to receive(:work)
-
                FakeFS do
                   env.spawn_workers
 
                   expect(File.file?("log/#{queue_name}-queue-worker.log")).to be false
                end
+            end
+
+            it 'should evaluate load_with and pass it to the worker' do
+               persister = double('persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+
+               env = Environment.new
+               env.enable_test_mode
+               env.load_with do
+                  persister
+               end
+
+               env.define_queue(:test, Test::Task::AllHooks)
+
+               expect(env.task_loader_instance).to eq persister # sanity check
+
+               expect(QueueWorker).to receive(:new).with(hash_including(persister: persister)).and_call_original
+
+               env.spawn_workers
+            end
+
+            it 'should evaluate task_context and pass it to the worker' do
+               context = double('task context')
+
+               env.task_context do
+                  context
+               end
+               env.define_queue(:queue_name, Test::Task::AllHooks)
+
+               expect(QueueWorker).to receive(:new)
+                                            .with(hash_including(task_context: context))
+                                            .and_return(double('worker',
+                                                               work:      nil,
+                                                               start_log: nil,
+                                                               long_name: ''))
+
+               env.spawn_workers
             end
          end
 
@@ -421,27 +456,6 @@ module Procrastinator
                                                                      start_log: nil,
                                                                      long_name: ''))
                   end
-
-                  env.spawn_workers
-               end
-
-               it 'should provide the QueueWorker with the evaluated task context' do
-                  context = double('task context')
-
-                  stub_fork(env, nil)
-                  allow(Process).to receive(:setproctitle)
-
-                  env.task_context do
-                     context
-                  end
-                  env.define_queue(:queue_name, Test::Task::AllHooks, {})
-
-                  expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(task_context: context))
-                                               .and_return(double('worker',
-                                                                  work:      nil,
-                                                                  start_log: nil,
-                                                                  long_name: ''))
 
                   env.spawn_workers
                end
@@ -649,10 +663,8 @@ module Procrastinator
 
                   expect(env.task_loader_instance).to eq parent_persister # sanity check
 
-                  allow(env).to receive(:fork) do |&block|
-                     block.call
-                     nil
-                  end
+                  stub_fork(env, nil)
+                  allow(Process).to receive(:setproctitle)
 
                   expect(QueueWorker).to receive(:new).with(satisfy do |param_hash|
                      param_hash[:persister] != parent_persister
@@ -665,6 +677,28 @@ module Procrastinator
                   expect(env.task_loader_instance).to eq child_persister
                   expect(env.task_loader_instance).to_not eq parent_persister
                end
+
+               it 'should provide the QueueWorker with the evaluated task context' do
+                  context = double('task context')
+
+                  stub_fork(env, nil)
+                  allow(Process).to receive(:setproctitle)
+
+                  env.task_context do
+                     context
+                  end
+                  env.define_queue(:queue_name, Test::Task::AllHooks, {})
+
+                  expect(QueueWorker).to receive(:new)
+                                               .with(hash_including(task_context: context))
+                                               .and_return(double('worker',
+                                                                  work:      nil,
+                                                                  start_log: nil,
+                                                                  long_name: ''))
+
+                  env.spawn_workers
+               end
+
 
                it 'should use a default log directory if not provided in setup' do
                   env.define_queue(:queue1, Test::Task::AllHooks)
