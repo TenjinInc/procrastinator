@@ -365,8 +365,6 @@ module Procrastinator
 
                env.define_queue(:test, Test::Task::AllHooks)
 
-               expect(env.task_loader_instance).to eq persister # sanity check
-
                expect(QueueWorker).to receive(:new).with(hash_including(persister: persister)).and_call_original
 
                env.spawn_workers
@@ -643,38 +641,22 @@ module Procrastinator
                end
 
                it 'should create a new persister instance and pass it to the worker' do
-                  parent_persister = double('parent persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
-                  child_persister  = double('child persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
-
-                  created_parent = false
+                  subprocess_persister = double('child persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
 
                   env = Environment.new
                   env.load_with do
-                     if created_parent
-                        child_persister
-                     else
-                        created_parent = true
-                        parent_persister
-                     end
+                     subprocess_persister
                   end
 
                   env.define_queue(:test, Test::Task::AllHooks)
 
-                  expect(env.task_loader_instance).to eq parent_persister # sanity check
-
                   allow(env).to receive(:fork).and_return(nil)
                   allow(Process).to receive(:setproctitle)
 
-                  expect(QueueWorker).to receive(:new).with(satisfy do |param_hash|
-                     param_hash[:persister] != parent_persister
-                  end).and_call_original
+                  expect(QueueWorker).to receive(:new).with(hash_including(persister: subprocess_persister)).and_call_original
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
                   env.spawn_workers
-
-                  # also should keep a new persister
-                  expect(env.task_loader_instance).to eq child_persister
-                  expect(env.task_loader_instance).to_not eq parent_persister
                end
 
                it 'should provide the QueueWorker with the evaluated task context' do

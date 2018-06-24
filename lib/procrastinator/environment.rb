@@ -28,6 +28,7 @@ module Procrastinator
             raise RuntimeError.new('#load_with must be given a block that produces a persistence handler for tasks')
          end
 
+         # Start a loader for the parent to be able to #delay tasks
          init_task_loader
       end
 
@@ -57,8 +58,6 @@ module Procrastinator
       def spawn_workers
          if @test_mode
             @queue_definitions.each do |name, props|
-               init_task_loader
-
                props[:task_context] = @task_context_factory.call if @task_context_factory
 
                @queue_workers << QueueWorker.new(props.merge(name:      name,
@@ -74,6 +73,7 @@ module Procrastinator
                   @processes << pid
                else
                   # === CHILD PROCESS ===
+                  # Create a new task loader because the one from the parent is now async and unreliable
                   init_task_loader
 
                   props[:task_context] = @task_context_factory.call if @task_context_factory
