@@ -94,37 +94,35 @@ module Procrastinator
          end
 
          it 'should complain if task does NOT accept 2 parameters to #success' do
+            err = 'task Procrastinator::Test::Task::MissingParam::BadRun must accept 2 parameters to its #run method'
+
             expect do
                env.define_queue(:test_queue, Test::Task::MissingParam::BadRun)
-            end.to raise_error(MalformedTaskError, 'the provided task must accept 2 parameters to its #run method')
+            end.to raise_error(MalformedTaskError, err)
          end
 
          it 'should complain if task does NOT accept 2 parameters to #success' do
+            err = 'task Procrastinator::Test::Task::MissingParam::BadSuccess must accept 3 parameters to its #success method'
+
             expect do
                env.define_queue(:test_queue, Test::Task::MissingParam::BadSuccess)
-            end.to raise_error(MalformedTaskError, 'the provided task must accept 3 parameters to its #success method')
+            end.to raise_error(MalformedTaskError, err)
          end
 
          it 'should complain if task does NOT accept 3 parameters in #fail' do
-            task = double('bad_task', run: nil)
-
-            allow(task).to receive(:fail) do
-            end
+            err = 'task Procrastinator::Test::Task::MissingParam::BadFail must accept 3 parameters to its #fail method'
 
             expect do
                env.define_queue(:test_queue, Test::Task::MissingParam::BadFail)
-            end.to raise_error(MalformedTaskError, 'the provided task must accept 3 parameters to its #fail method')
+            end.to raise_error(MalformedTaskError, err)
          end
 
          it 'should complain if task does NOT accept 3 parameters in #final_fail' do
-            task = double('bad_task', run: nil)
-
-            allow(task).to receive(:final_fail) do
-            end
+            err = 'task Procrastinator::Test::Task::MissingParam::BadFinalFail must accept 3 parameters to its #final_fail method'
 
             expect do
                env.define_queue(:test_queue, Test::Task::MissingParam::BadFinalFail)
-            end.to raise_error(MalformedTaskError, 'the provided task must accept 3 parameters to its #final_fail method')
+            end.to raise_error(MalformedTaskError, err)
          end
       end
 

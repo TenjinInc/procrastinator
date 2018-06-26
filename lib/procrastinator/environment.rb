@@ -41,14 +41,18 @@ module Procrastinator
       def define_queue(name, task_class, properties = {})
          raise ArgumentError.new('queue name cannot be nil') if name.nil?
          raise ArgumentError.new('queue task class cannot be nil') if task_class.nil?
-         raise MalformedTaskError.new("task #{task_class} does not support #run method") unless task_class.method_defined? :run
+         unless task_class.method_defined? :run
+            raise MalformedTaskError.new("task #{task_class} does not support #run method")
+         end
 
          # We're checking these on init because it's one of those extremely rare cases where you'd want to know early
          # because of the sub-processes. It's a bit belt-and suspenders, but UX is important for         # devs, too.
          expected_arity = {run: 2, success: 3, fail: 3, final_fail: 3}
          expected_arity.each do |method_name, arity|
             if task_class.method_defined?(method_name) && task_class.instance_method(method_name).arity < arity
-               raise MalformedTaskError.new("the provided task must accept #{arity} parameters to its ##{method_name} method")
+               err = "task #{task_class} must accept #{arity} parameters to its ##{method_name} method"
+
+               raise MalformedTaskError.new(err)
             end
          end
 
