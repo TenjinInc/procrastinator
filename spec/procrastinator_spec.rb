@@ -18,9 +18,6 @@ module Procrastinator
       describe '.setup' do
          let(:test_task) {Test::Task::AllHooks}
          let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
-         let(:queues) {{queue1: {name: nil, max_tasks: nil, task_class: test_task},
-                        queue2: {name: nil, max_tasks: nil, task_class: test_task}}}
-
 
          it 'should return a procrastinator environment configured via the block' do
             env_double    = double('env')
@@ -59,9 +56,7 @@ module Procrastinator
 
          it 'should require at least one queue is defined' do
             expect {Procrastinator.setup do |config|
-               config.load_with do
-                  double('persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
-               end
+               config.load_with {}
             end}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
          end
 

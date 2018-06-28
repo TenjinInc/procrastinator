@@ -12,11 +12,11 @@ module Procrastinator
       end
 
       def spawn_workers
-         @config.queues.each do |name, props|
+         @config.queues.each do |queue|
             if @config.test_mode?
-               @workers << QueueWorker.new(props.merge(name:         name,
-                                                       task_context: @config.context,
-                                                       persister:    @task_loader))
+               @workers << QueueWorker.new(queue:        queue,
+                                           task_context: @config.context,
+                                           persister:    @task_loader)
             else
                pid = fork
 
@@ -29,11 +29,11 @@ module Procrastinator
                   # Create a new task loader because the one from the parent is now async and unreliable
                   @task_loader = @config.loader
 
-                  worker = QueueWorker.new(props.merge(name:         name,
-                                                       persister:    @task_loader,
-                                                       task_context: @config.context,
-                                                       log_dir:      @config.log_dir,
-                                                       log_level:    @config.log_level))
+                  worker = QueueWorker.new(queue:        queue,
+                                           persister:    @task_loader,
+                                           task_context: @config.context,
+                                           log_dir:      @config.log_dir,
+                                           log_level:    @config.log_level)
 
                   title = if @config.prefix
                              "#{@config.prefix}-#{worker.long_name}"
@@ -73,21 +73,21 @@ module Procrastinator
       end
 
       def delay(queue = nil, data: nil, run_at: Time.now.to_i, expire_at: nil)
-         if queue.nil? && @config.many_queues?
+         if queue.nil? && @config.multiqueue?
             err = %[queue must be specified when more than one is registered. Defined queues are: #{@config.queues_string}]
 
             raise ArgumentError.new(err)
          end
 
-         queue ||= @config.queues.keys.first
+         queue = @config.queue.name if @config.single_queue?
 
-         if @config.queues[queue].nil?
+         if @config.queues.find {|q| q.name == queue}.nil?
             err = %[there is no :#{queue} queue registered. Defined queues are: #{@config.queues_string}]
 
             raise ArgumentError.new(err)
          end
 
-         @task_loader.create_task(queues:         queue,
+         @task_loader.create_task(queue:          queue,
                                   run_at:         run_at.to_i,
                                   initial_run_at: run_at.to_i,
                                   expire_at:      expire_at.nil? ? nil : expire_at.to_i,

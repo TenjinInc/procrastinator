@@ -1,8 +1,9 @@
-module Procrastinator
-   require 'spec_helper'
-   require 'timeout'
+require 'spec_helper'
 
+module Procrastinator
    describe QueueManager do
+      let(:test_task) {Test::Task::AllHooks}
+
       describe '#initialize' do
          let(:config) {Config.new}
 
@@ -74,7 +75,7 @@ module Procrastinator
             config.load_with do
                persister
             end
-            config.define_queue(:test_queue, Test::Task::AllHooks)
+            config.define_queue(:test_queue, test_task)
             config
          end
 
@@ -82,9 +83,9 @@ module Procrastinator
 
          it 'should record a task on the given queue' do
             [:queue1, :queue2].each do |queue_name|
-               config.define_queue(queue_name, Test::Task::AllHooks)
+               config.define_queue(queue_name, test_task)
 
-               expect(persister).to receive(:create_task).with(include(queues: queue_name))
+               expect(persister).to receive(:create_task).with(include(queue: queue_name))
 
                manager.delay(queue_name)
             end
@@ -148,9 +149,9 @@ module Procrastinator
 
          it 'should NOT complain about well-formed hooks' do
             [:success, :fail, :final_fail].each do |method|
-               task = Test::Task::AllHooks.new
+               task = test_task.new
 
-               # allow(task).to receive(method).with('')
+               allow(task).to receive(method).with('')
 
                expect do
                   manager.delay
@@ -159,8 +160,8 @@ module Procrastinator
          end
 
          it 'should require queue be provided if there is more than one queue defined' do
-            config.define_queue(:queue1, Test::Task::AllHooks)
-            config.define_queue(:queue2, Test::Task::AllHooks)
+            config.define_queue(:queue1, test_task)
+            config.define_queue(:queue2, test_task)
 
             msg = "queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2"
 
@@ -178,7 +179,7 @@ module Procrastinator
             config.load_with do
                persister
             end
-            config.define_queue(:queue_name, Test::Task::AllHooks)
+            config.define_queue(:queue_name, test_task)
             manager = QueueManager.new config
 
             expect {manager.delay}.to_not raise_error
@@ -189,17 +190,17 @@ module Procrastinator
             config.load_with do
                persister
             end
-            config.define_queue(:some_queue, Test::Task::AllHooks)
+            config.define_queue(:some_queue, test_task)
             manager = QueueManager.new config
 
-            expect(persister).to receive(:create_task).with(include(queues: :some_queue))
+            expect(persister).to receive(:create_task).with(hash_including(queue: :some_queue))
 
             manager.delay
          end
          #there is no :bogus queue registered. Defined queues are: :test_queue, :another_queue
          #there is no :bogus queue registered. Defined queues are: :test_queue, :another_queue
          it 'should complain when the given queue is not registered' do
-            config.define_queue(:another_queue, Test::Task::AllHooks)
+            config.define_queue(:another_queue, test_task)
 
             [:bogus, :other_bogus].each do |name|
                err = %[there is no :#{name} queue registered. Defined queues are: :test_queue, :another_queue]
@@ -238,8 +239,6 @@ module Procrastinator
                config.enable_test_mode
             end
 
-            let(:test_task) {Test::Task::AllHooks}
-
             it 'should create a worker for each queue definition' do
                queue_defs = [:test2a, :test2b, :test2c]
                queue_defs.each do |name|
@@ -248,25 +247,37 @@ module Procrastinator
 
                queue_defs.each do |name|
                   expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(persister:  persister,
-                                                                    name:       name,
-                                                                    task_class: test_task))
+                                               .with(satisfy do |arg|
+                                                  arg[:queue].name == name && arg[:queue].task_class == test_task
+                                               end)
                                                .and_return(double('worker', work: nil))
                end
 
                manager.spawn_workers
             end
 
-            it 'should pass each worker the queue properties' do
-               queue_defs = {test2a: {max_attempts: 1, timeout: 1, update_period: 1, max_tasks: 1},
-                             test2b: {max_attempts: 2, timeout: 2, update_period: 2, max_tasks: 2}}
-               queue_defs.each do |name, props|
-                  config.define_queue(name, test_task, props)
+            it 'should pass each worker a queue object from config' do
+               config.define_queue(:test2a, test_task, max_attempts: 1, timeout: 1, update_period: 1, max_tasks: 1)
+               config.define_queue(:test2b, test_task, max_attempts: 2, timeout: 2, update_period: 2, max_tasks: 2)
+
+               config.queues.each do |queue|
+                  expect(QueueWorker).to receive(:new)
+                                               .with(hash_including(queue: queue))
+                                               .and_return(double('worker', work: nil))
                end
 
-               queue_defs.values.each do |props|
+               manager.spawn_workers
+            end
+
+            it 'should pass each queue the evaluated persister instance' do
+               queue_defs = [:test2a, :test2b, :test2c]
+               queue_defs.each do |name|
+                  config.define_queue(name, test_task)
+               end
+
+               queue_defs.each do
                   expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(props))
+                                               .with(hash_including(persister: persister))
                                                .and_return(double('worker', work: nil))
                end
 
@@ -343,8 +354,6 @@ module Procrastinator
          end
 
          context 'live mode' do
-            let(:test_task) {Test::Task::AllHooks}
-
             context 'parent process' do
                before(:each) do
                   allow(Process).to receive(:detach)
@@ -450,46 +459,40 @@ module Procrastinator
                end
 
                it 'should pass the worker the logging settings' do
-                  props1 = {dir:   '/some/directory/',
-                            level: Logger::DEBUG}
-                  props2 = {dir:   '/another/good/place',
-                            level: Logger::FATAL}
+                  dir = double('dir')
+                  lvl = double('lvl')
 
-                  [props1, props2].each do |log_props|
-                     config.define_queue(:test_queue, test_task)
+                  config.define_queue(:test_queue, test_task)
 
-                     config.log_in(log_props[:dir])
-                     config.log_at_level(log_props[:level])
+                  config.log_in(dir)
+                  config.log_at_level(lvl)
 
-                     expect(QueueWorker).to receive(:new)
-                                                  .with(hash_including(persister:  persister,
-                                                                       task_class: test_task,
-                                                                       log_dir:    log_props[:dir],
-                                                                       log_level:  log_props[:level]))
-                                                  .and_return(double('worker',
-                                                                     work:      nil,
-                                                                     start_log: nil,
-                                                                     long_name: ''))
-                     manager.spawn_workers
-                  end
+                  expect(QueueWorker).to receive(:new)
+                                               .with(hash_including(log_dir:   dir,
+                                                                    log_level: lvl))
+                                               .and_return(double('worker',
+                                                                  work:      nil,
+                                                                  start_log: nil,
+                                                                  long_name: ''))
+                  manager.spawn_workers
+
                end
 
                it 'should pass the worker the queue settings' do
-                  props1 = {timeout:       1,
-                            max_attempts:  1,
-                            update_period: 1,
-                            max_tasks:     1}
-                  props2 = {timeout:       2,
-                            max_attempts:  2,
-                            update_period: 2,
-                            max_tasks:     2}
+                  config.define_queue(:test_queue1, test_task,
+                                      timeout:       1,
+                                      max_attempts:  1,
+                                      update_period: 1,
+                                      max_tasks:     1)
+                  config.define_queue(:test_queue2, test_task,
+                                      timeout:       2,
+                                      max_attempts:  2,
+                                      update_period: 2,
+                                      max_tasks:     2)
 
-                  config.define_queue(:test_queue1, test_task, props1)
-                  config.define_queue(:test_queue2, test_task, props2)
-
-                  [props1, props2].each do |props|
+                  config.queues.each do |queue|
                      expect(QueueWorker).to receive(:new)
-                                                  .with(hash_including(props))
+                                                  .with(hash_including(queue: queue))
                                                   .and_return(double('worker',
                                                                      work:      nil,
                                                                      start_log: nil,
@@ -553,7 +556,7 @@ module Procrastinator
 
                it 'should name each worker process with provided prefix' do
                   [:app1, :app2, :app3].each do |prefix|
-                     config.define_queue(:test_queue, Test::Task::AllHooks)
+                     config.define_queue(:test_queue, test_task)
                      config.prefix_processes(prefix)
 
                      allow_any_instance_of(QueueWorker).to receive(:work)
@@ -565,9 +568,9 @@ module Procrastinator
                end
 
                it 'should tell the worker process to work' do
-                  config.define_queue(:test1, Test::Task::AllHooks)
-                  config.define_queue(:test2, Test::Task::AllHooks)
-                  config.define_queue(:test3, Test::Task::AllHooks)
+                  config.define_queue(:test1, test_task)
+                  config.define_queue(:test2, test_task)
+                  config.define_queue(:test3, test_task)
 
                   worker1 = double('worker1')
                   worker2 = double('worker2')
@@ -661,7 +664,7 @@ module Procrastinator
                end
 
                it 'should use a default log directory if not provided in setup' do
-                  config.define_queue(:queue1, Test::Task::AllHooks)
+                  config.define_queue(:queue1, test_task)
 
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
@@ -734,9 +737,9 @@ module Procrastinator
                config.load_with do
                   persister
                end
-               config.define_queue(:test1, Test::Task::AllHooks)
-               config.define_queue(:test2, Test::Task::AllHooks)
-               config.define_queue(:test3, Test::Task::AllHooks)
+               config.define_queue(:test1, test_task)
+               config.define_queue(:test2, test_task)
+               config.define_queue(:test3, test_task)
                config
             end
 

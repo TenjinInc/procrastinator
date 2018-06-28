@@ -1,6 +1,5 @@
 module Procrastinator
    require 'spec_helper'
-   require 'timeout'
 
    describe Config do
       let(:config) {Config.new}
@@ -36,17 +35,31 @@ module Procrastinator
          end
 
          it 'should add a queue with its timeout, max_tasks, max_attempts, update_period' do
-            hash = {}
+            config.define_queue(:test1, test_task,
+                                timeout:       1,
+                                max_tasks:     2,
+                                max_attempts:  3,
+                                update_period: 4)
+            config.define_queue(:test2, test_task,
+                                timeout:       5,
+                                max_tasks:     6,
+                                max_attempts:  7,
+                                update_period: 8)
 
-            (1..3).each do |i|
-               attrs = {timeout: i, max_tasks: i + 1, max_attempts: i + 2, update_period: i + 3}
+            queue1 = config.queues.first
+            queue2 = config.queues.last
 
-               config.define_queue("queue#{i}", test_task, attrs)
+            expect(queue1.timeout).to eq 1
+            expect(queue1.max_tasks).to eq 2
+            expect(queue1.max_attempts).to eq 3
+            expect(queue1.update_period).to eq 4
+            expect(queue1.task_class).to eq test_task
 
-               hash["queue#{i}"] = attrs.merge(task_class: test_task)
-
-               expect(config.queues).to eq hash
-            end
+            expect(queue2.timeout).to eq 5
+            expect(queue2.max_tasks).to eq 6
+            expect(queue2.max_attempts).to eq 7
+            expect(queue2.update_period).to eq 8
+            expect(queue2.task_class).to eq test_task
          end
 
          it 'should complain if the task class does NOT support #run' do
@@ -224,25 +237,6 @@ module Procrastinator
             err = "task loader #{loader.class} must respond to #delete_task"
 
             expect {config.loader}.to raise_error(MalformedTaskLoaderError, err)
-         end
-      end
-
-      describe '#many_queues?' do
-         it 'should return true if there is more than one queue' do
-            config.define_queue(:test1, test_task)
-            config.define_queue(:test2, test_task)
-
-            expect(config.many_queues?).to be true
-         end
-
-         it 'should return false if there is one queue' do
-            config.define_queue(:test, test_task)
-
-            expect(config.many_queues?).to be false
-         end
-
-         it 'should return false if there are no queues' do
-            expect(config.many_queues?).to be false
          end
       end
 

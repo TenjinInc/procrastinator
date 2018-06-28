@@ -1,6 +1,7 @@
 require 'procrastinator/version'
 require 'procrastinator/queue_worker'
 require 'procrastinator/task_worker'
+require 'procrastinator/queue'
 require 'procrastinator/config'
 require 'procrastinator/queue_manager'
 require 'logger'

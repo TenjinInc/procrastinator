@@ -12,6 +12,7 @@ module Procrastinator
          @log_level       = Logger::INFO
          @loader_factory  = nil
          @context_factory = Proc.new {}
+         @queues          = []
       end
 
       # Accepts a block that will be executed on the queue sub process. This is done to separate resource allocations
@@ -43,7 +44,7 @@ module Procrastinator
 
          verify_task_class(task_class)
 
-         @queues[name] = properties.merge(task_class: task_class)
+         @queues << Queue.new(properties.merge(name: name, task_class: task_class))
       end
 
       def enable_test_mode
@@ -90,11 +91,19 @@ module Procrastinator
 
       def queues_string
          # it drops the colon if you call #to_s on a symbol, so we need to add it back
-         @queues.keys.map {|key| ":#{key}"}.join(', ')
+         @queues.map {|queue| ":#{queue.name}"}.join(', ')
       end
 
-      def many_queues?
-         queues.size > 1
+      def single_queue?
+         @queues.size == 1
+      end
+
+      def multiqueue?
+         @queues.size > 1
+      end
+
+      def queue
+         @queues.first
       end
 
       private

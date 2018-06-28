@@ -1,5 +1,6 @@
 require 'yaml'
 require 'ostruct'
+require 'timeout'
 
 module Procrastinator
    class TaskWorker
