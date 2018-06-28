@@ -1,6 +1,7 @@
 require 'procrastinator/version'
 require 'procrastinator/queue_worker'
 require 'procrastinator/task_worker'
+require 'procrastinator/config'
 require 'procrastinator/environment'
 require 'logger'
 
@@ -11,11 +12,15 @@ module Procrastinator
    def self.setup(&block)
       raise ArgumentError.new('Procrastinator.setup must be given a block') if block.nil?
 
-      env = Environment.new(test_mode: @@test_mode)
+      config = Config.new
 
-      yield(env)
+      yield(config)
 
-      env.verify_configuration
+      config.enable_test_mode if @@test_mode
+
+      config.verify
+
+      env = Environment.new(config)
 
       env.spawn_workers
 

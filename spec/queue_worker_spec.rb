@@ -33,19 +33,19 @@ module Procrastinator
 
          it 'should require the task class not be nil' do
             expect do
-               QueueWorker.new(name: :queue, task_class: nil, persister: persister)
+               QueueWorker.new(name: :queues, task_class: nil, persister: persister)
             end.to raise_error(ArgumentError, ':task_class may not be nil')
          end
 
          it 'should require the persister not be nil' do
             expect do
-               QueueWorker.new(name: :queue, task_class: Test::Task::AllHooks, persister: nil)
+               QueueWorker.new(name: :queues, task_class: Test::Task::AllHooks, persister: nil)
             end.to raise_error(ArgumentError, ':persister may not be nil')
          end
 
          it 'should require the task class respond to .new' do
             expect do
-               QueueWorker.new(name:       :queue,
+               QueueWorker.new(name:       :queues,
                                task_class: double('struct or whatever'),
                                persister:  persister)
             end.to raise_error(ArgumentError, 'Task class must be initializable')
@@ -53,7 +53,7 @@ module Procrastinator
 
          it 'should require the persister respond to #read_tasks' do
             expect do
-               QueueWorker.new(name:       :queue,
+               QueueWorker.new(name:       :queues,
                                task_class: Test::Task::AllHooks,
                                persister:  double('broken persister', delete_task: nil, update_task: nil))
             end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #read_tasks')
@@ -61,7 +61,7 @@ module Procrastinator
 
          it 'should require the persister respond to #update_task' do
             expect do
-               QueueWorker.new(name:       :queue,
+               QueueWorker.new(name:       :queues,
                                task_class: Test::Task::AllHooks,
                                persister:  double('broken persister', read_tasks: []))
             end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #update_task')
@@ -69,7 +69,7 @@ module Procrastinator
 
          it 'should require the persister respond to #delete_task' do
             expect do
-               QueueWorker.new(name:       :queue,
+               QueueWorker.new(name:       :queues,
                                task_class: Test::Task::AllHooks,
                                persister:  double('broken persister', read_tasks: [], update_task: nil))
             end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #delete_task')
@@ -77,7 +77,7 @@ module Procrastinator
 
          it 'should accept a timeout' do
             (1..3).each do |t|
-               queue = QueueWorker.new(name:       :queue,
+               queue = QueueWorker.new(name:       :queues,
                                        task_class: Test::Task::AllHooks,
                                        persister:  persister,
                                        timeout:    t)
@@ -87,7 +87,7 @@ module Procrastinator
          end
 
          it 'should provide default timeout' do
-            queue = QueueWorker.new(name:       :queue,
+            queue = QueueWorker.new(name:       :queues,
                                     task_class: Test::Task::AllHooks,
                                     persister:  persister)
 
@@ -96,7 +96,7 @@ module Procrastinator
 
          it 'should accept a max_attempts' do
             (1..3).each do |t|
-               queue = QueueWorker.new(name:         :queue,
+               queue = QueueWorker.new(name:         :queues,
                                        task_class:   Test::Task::AllHooks,
                                        persister:    persister,
                                        max_attempts: t)
@@ -106,7 +106,7 @@ module Procrastinator
          end
 
          it 'should provide default max_attempts' do
-            queue = QueueWorker.new(name:       :queue,
+            queue = QueueWorker.new(name:       :queues,
                                     task_class: Test::Task::AllHooks,
                                     persister:  persister)
 
@@ -115,7 +115,7 @@ module Procrastinator
 
          it 'should accept a update_period' do
             (1..3).each do |i|
-               queue = QueueWorker.new(name:          :queue,
+               queue = QueueWorker.new(name:          :queues,
                                        task_class:    Test::Task::AllHooks,
                                        persister:     persister,
                                        update_period: i)
@@ -125,7 +125,7 @@ module Procrastinator
          end
 
          it 'should provide a default update_period' do
-            queue = QueueWorker.new(name:       :queue,
+            queue = QueueWorker.new(name:       :queues,
                                     task_class: Test::Task::AllHooks,
                                     persister:  persister)
 
@@ -134,7 +134,7 @@ module Procrastinator
 
          it 'should accept a max_tasks' do
             (1..3).each do |i|
-               queue = QueueWorker.new(name:       :queue,
+               queue = QueueWorker.new(name:       :queues,
                                        task_class: Test::Task::AllHooks,
                                        persister:  persister,
                                        max_tasks:  i)
@@ -144,7 +144,7 @@ module Procrastinator
          end
 
          it 'should provide a default max_tasks' do
-            queue = QueueWorker.new(name:       :queue,
+            queue = QueueWorker.new(name:       :queues,
                                     task_class: Test::Task::AllHooks,
                                     persister:  persister)
 
@@ -155,7 +155,7 @@ module Procrastinator
       describe '#work' do
          it 'should wait for update_period' do
             [0.01, 0.02].each do |period|
-               worker = QueueWorker.new(name:          :queue,
+               worker = QueueWorker.new(name:          :queues,
                                         task_class:    Test::Task::AllHooks,
                                         persister:     persister,
                                         update_period: period)
@@ -171,7 +171,7 @@ module Procrastinator
          end
 
          it 'should cyclically call #act' do
-            worker = QueueWorker.new(name:          :queue,
+            worker = QueueWorker.new(name:          :queues,
                                      task_class:    Test::Task::AllHooks,
                                      persister:     persister,
                                      update_period: 0.1)
@@ -250,7 +250,7 @@ module Procrastinator
                                   update_task: nil,
                                   delete_task: nil)
 
-               worker = QueueWorker.new(name:          :queue,
+               worker = QueueWorker.new(name:          :queues,
                                         task_class:    Test::Task::AllHooks,
                                         persister:     persister,
                                         update_period: 0.01)
@@ -276,7 +276,7 @@ module Procrastinator
                                   update_task: nil,
                                   delete_task: nil)
 
-               worker = QueueWorker.new(name:          :queue,
+               worker = QueueWorker.new(name:          :queues,
                                         task_class:    Test::Task::AllHooks,
                                         persister:     persister,
                                         update_period: 0.01)
@@ -311,7 +311,7 @@ module Procrastinator
                start_time = Time.now
 
                Timecop.freeze(start_time) do
-                  worker = QueueWorker.new(name:          :queue,
+                  worker = QueueWorker.new(name:          :queues,
                                            task_class:    Test::Task::AllHooks,
                                            persister:     persister,
                                            update_period: 0.00)
@@ -338,7 +338,7 @@ module Procrastinator
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data])
 
-               worker = QueueWorker.new(name:          :queue,
+               worker = QueueWorker.new(name:          :queues,
                                         task_class:    Test::Task::AllHooks,
                                         persister:     persister,
                                         update_period: 0)
@@ -362,7 +362,7 @@ module Procrastinator
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data])
 
-               worker = QueueWorker.new(name:          :queue,
+               worker = QueueWorker.new(name:          :queues,
                                         task_class:    Test::Task::AllHooks,
                                         task_context:  context,
                                         persister:     persister,
@@ -381,7 +381,7 @@ module Procrastinator
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2, task_data3])
 
-               worker = QueueWorker.new(name:          :queue,
+               worker = QueueWorker.new(name:          :queues,
                                         task_class:    Test::Task::AllHooks,
                                         persister:     persister,
                                         update_period: 0)
@@ -401,7 +401,7 @@ module Procrastinator
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
 
-               worker = QueueWorker.new(name:          :queue,
+               worker = QueueWorker.new(name:          :queues,
                                         task_class:    Test::Task::AllHooks,
                                         persister:     persister,
                                         update_period: 0)
@@ -420,7 +420,7 @@ module Procrastinator
                persister = double('persister', update_task: nil, delete_task: nil)
                allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
 
-               worker = QueueWorker.new(name:          :queue,
+               worker = QueueWorker.new(name:          :queues,
                                         task_class:    Test::Task::AllHooks,
                                         persister:     persister,
                                         update_period: 0,
@@ -470,7 +470,7 @@ module Procrastinator
 
                allow(persister).to receive(:read_tasks).and_return([task_data])
 
-               worker = QueueWorker.new(name:          :queue,
+               worker = QueueWorker.new(name:          :queues,
                                         task_class:    Test::Task::AllHooks,
                                         persister:     persister,
                                         update_period: 0,
@@ -494,13 +494,13 @@ module Procrastinator
 
                   allow_any_instance_of(TaskWorker).to receive(:task_hash).and_return(task_hash)
 
-                  worker = QueueWorker.new(name:          :queue,
+                  worker = QueueWorker.new(name:          :queues,
                                            task_class:    Test::Task::Fail,
                                            persister:     persister,
                                            update_period: 0,
                                            max_attempts:  max_attempts)
 
-                  expect(persister).to receive(:update_task).with(task_hash.merge(queue: worker.name))
+                  expect(persister).to receive(:update_task).with(task_hash.merge(queues: worker.name))
 
                   worker.act
                end
@@ -524,7 +524,7 @@ module Procrastinator
          # falsey is the default for workers
          context 'logging directory falsey' do
             it 'should NOT create the log directory' do
-               worker = QueueWorker.new(name:       :queue,
+               worker = QueueWorker.new(name:       :queues,
                                         task_class: Test::Task::AllHooks,
                                         persister:  persister)
 
@@ -556,11 +556,11 @@ module Procrastinator
             end
 
             it 'should log starting a queue worker' do
-               [{parent: 10, child: 2000, queue: :test1},
-                {parent: 30, child: 4000, queue: :test2}].each do |pid_hash|
+               [{parent: 10, child: 2000, queues: :test1},
+                {parent: 30, child: 4000, queues: :test2}].each do |pid_hash|
                   parent_pid = pid_hash[:parent]
                   child_pid  = pid_hash[:child]
-                  queue_name = pid_hash[:queue]
+                  queue_name = pid_hash[:queues]
 
                   log_dir = 'some_dir'
 

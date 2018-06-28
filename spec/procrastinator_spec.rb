@@ -16,37 +16,27 @@ module Procrastinator
       end
 
       describe '.setup' do
+         let(:test_task) {Test::Task::AllHooks}
          let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
-         let(:queues) {{queue1: {name: nil, max_tasks: nil, task_class: Test::Task::AllHooks},
-                        queue2: {name: nil, max_tasks: nil, task_class: Test::Task::AllHooks}}}
+         let(:queues) {{queue1: {name: nil, max_tasks: nil, task_class: test_task},
+                        queue2: {name: nil, max_tasks: nil, task_class: test_task}}}
 
-         it 'should return the configured procrastinator environment' do
-            FakeFS do # fakefs enabled to cleanly handle default logging
-               env = Procrastinator.setup do |env|
-                  queues.each do |name, props|
-                     env.define_queue(name, Test::Task::AllHooks, props)
-                  end
 
-                  env.load_with do
-                     persister
-                  end
-               end
+         it 'should return a procrastinator environment configured via the block' do
+            env_double    = double('env')
+            config_double = double('config')
 
-               expect(env).to be_a Environment
+            allow(env_double).to receive(:spawn_workers)
+            allow(config_double).to receive(:verify)
 
-               expect(env).to have_attributes(task_loader_instance: persister,
-                                              queue_definitions:    queues)
+            expect(Config).to receive(:new).and_return(config_double)
+            expect(Environment).to receive(:new).with(config_double).and_return(env_double)
+
+            returned_env = Procrastinator.setup do |config|
+               expect(config).to be config_double
             end
-         end
 
-         it 'should call the provided block and provide the environment' do
-            expect do |block|
-               begin
-                  Procrastinator.setup(&block)
-               rescue RuntimeError
-                  # because block is stubbed, can't get around this raising
-               end
-            end.to yield_with_args(instance_of(Environment))
+            expect(returned_env).to be env_double
          end
 
          it 'should require that a block is provided' do
@@ -63,13 +53,13 @@ module Procrastinator
             err = '#load_with must be given a block that produces a persistence handler for tasks'
 
             expect do
-               Procrastinator.setup {|env| env.load_with}
+               Procrastinator.setup {|config| config.load_with}
             end.to raise_error(RuntimeError, err)
          end
 
          it 'should require at least one queue is defined' do
-            expect {Procrastinator.setup do |env|
-               env.load_with do
+            expect {Procrastinator.setup do |config|
+               config.load_with do
                   double('persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
                end
             end}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
@@ -78,48 +68,111 @@ module Procrastinator
          it 'should call spawn_workers on the environment' do
             expect_any_instance_of(Environment).to receive(:spawn_workers)
 
-            Procrastinator.setup do |env|
-               env.define_queue(:test, Test::Task::AllHooks)
-               env.load_with {persister}
+            Procrastinator.setup do |config|
+               config.define_queue(:test, test_task)
+               config.load_with {persister}
             end
          end
 
-         it 'should enable test mode when declared' do
-            result = Procrastinator.setup do |env|
-               env.define_queue(:test, Test::Task::AllHooks)
-               env.load_with {persister}
-               env.enable_test_mode
-            end
-
-            expect(result.test_mode).to be true
-         end
-
-         context 'test mode is enabled' do
+         context 'test mode is enabled globally' do
             before(:each) do
                Procrastinator.test_mode = true
             end
 
             it 'should create an environment in test mode' do
-               result = Procrastinator.setup do |env|
-                  env.load_with {persister}
-                  env.define_queue(:test, Test::Task::AllHooks)
+               built_config = nil
+
+               Procrastinator.setup do |config|
+                  built_config = config
+
+                  config.load_with {persister}
+                  config.define_queue(:test, test_task)
                end
 
-               expect(result.test_mode).to be true
+               expect(built_config.test_mode?).to be true
             end
 
-            it 'should create every environment in test mode' do
-               result1 = Procrastinator.setup do |env|
-                  env.load_with {persister}
-                  env.define_queue(:test, Test::Task::AllHooks)
+            it 'should create every subsequent environment in test mode' do
+               config_1 = nil
+               config_2 = nil
+
+               Procrastinator.setup do |config|
+                  config_1 = config
+
+                  config.load_with {persister}
+                  config.define_queue(:test, test_task)
                end
-               result2 = Procrastinator.setup do |env|
-                  env.load_with {persister}
-                  env.define_queue(:test, Test::Task::AllHooks)
+               Procrastinator.setup do |config|
+                  config_2 = config
+
+                  config.load_with {persister}
+                  config.define_queue(:test, test_task)
                end
 
-               expect(result1.test_mode).to be true
-               expect(result2.test_mode).to be true
+               expect(config_1.test_mode?).to be true
+               expect(config_2.test_mode?).to be true
+            end
+         end
+
+         context 'test mode is disabled globally' do
+            before(:each) do
+               Procrastinator.test_mode = false
+            end
+
+            it 'should create a normal environment' do
+               built_config = nil
+
+               Procrastinator.setup do |config|
+                  built_config = config
+
+                  config.load_with {persister}
+                  config.define_queue(:test, test_task)
+               end
+
+               expect(built_config.test_mode?).to be false
+            end
+
+            it 'should create every environment without test mode' do
+               config_1 = nil
+               config_2 = nil
+
+               Procrastinator.setup do |config|
+                  config_1 = config
+
+                  config.load_with {persister}
+                  config.define_queue(:test, test_task)
+               end
+               Procrastinator.setup do |config|
+                  config_2 = config
+
+                  config.load_with {persister}
+                  config.define_queue(:test, test_task)
+               end
+
+               expect(config_1.test_mode?).to be false
+               expect(config_2.test_mode?).to be false
+            end
+
+            it 'should override the global if enabled in the environment' do
+               config_1 = nil
+               config_2 = nil
+
+               Procrastinator.setup do |config|
+                  config_1 = config
+
+                  config.enable_test_mode
+                  config.load_with {persister}
+                  config.define_queue(:test, test_task)
+               end
+               Procrastinator.setup do |config|
+                  config_2 = config
+
+                  config.load_with {persister}
+                  config.define_queue(:test, test_task)
+               end
+
+               expect(config_1.test_mode?).to be true
+               expect(config_2.test_mode?).to be false
             end
          end
       end

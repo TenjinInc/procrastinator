@@ -48,7 +48,7 @@ Read on for more details:
 
 1. [Configuration](#configuration)
    1. [Task Loader](#task-loader-load_with)
-   1. [Task Context](#task-context-task_context)
+   1. [Task Context](#task-context-provide_context)
    1. [Defining Queues](#defining-queues-define_queue)
 1. [Scheduling Tasks](#scheduling-tasks)
 1. [Tasks](#tasks)
@@ -130,8 +130,8 @@ The `:data` is serialized with YAML.dump.
 Notice that the times are all given as unix epoch timestamps. This is to avoid any confusion with timezones, 
 and it is recommended that you store times in this manner for the same reason. 
 
-### Task Context: `#task_context`
-Similar to `#load_with`, `#task_context` takes a block that is executed on the sub process and the result is passed 
+### Task Context: `#provide_context`
+Similar to `#load_with`, `#provide_context` takes a block that is executed on the sub process and the result is passed 
 into each of your task's hooks as the first parameter. 
 
 This is useful for things like creating other database connections or passing in shared state. 
@@ -140,7 +140,7 @@ This is useful for things like creating other database connections or passing in
 Procrastinator.setup do |env|
    # .. other setup stuff ...
  
-   env.task_context do 
+   env.provide_context do 
       {message: "This hash will be passed into your task's methods"}
    end
 end
@@ -184,7 +184,7 @@ env.define_queue(:queue_name, YourTaskClass, timeout: 3600, max_attempts: 20, up
 ```
 
 ### Other Setup Methods
-Each queue is worked in a separate process and you can call `#process_prefix` and provide a subprocess prefix.  
+Each queue is worked in a separate process and you can call `#prefix_process` and provide a subprocess prefix.
 
 <!-- , and each process multi-threaded to handle more than one task at a time. 
     This should help prevent a single task from clogging up the whole queue -->
@@ -193,7 +193,7 @@ Each queue is worked in a separate process and you can call `#process_prefix` an
 procrastinator = Procrastinator.setup do |env|
    # ... other setup stuff ...
    
-   env.process_prefix('myapp')
+   env.prefix_processes('myapp')
 end
 ```
 
@@ -303,7 +303,7 @@ end
 It **must provide** a `#run` method, but `#success`, `#fail`, and `#final_fail` are optional. 
 The initializer is required if you provide the `:data` argument when you schedule it with `#delay`. 
 
-See the [Task Context](#task-context-task_context) and [Logging](#logging) sections for explanations of 
+See the [Task Context](#task-context-provide_context) and [Logging](#logging) sections for explanations of 
 the `context` and `logger` parameters.
 
 ### Retries
@@ -353,15 +353,15 @@ procrastinator = Procrastinator.setup do |env|
    # ... other setup stuff ... 
 
    # you can set custom log directory and level:
-   env.log_dir('/var/log/myapp/')
-   env.log_level(Logger::DEBUG)
+   env.log_in('/var/log/myapp/')
+   env.log_at_level(Logger::DEBUG)
    
    # these are the default values:
-   env.log_dir('log/') # relative to the running directory
-   env.log_level(Logger::INFO)
+   env.log_in('log/') # relative to the running directory
+   env.log_at_level(Logger::INFO)
    
    # disable logging entirely:
-   env.log_dir(false)
+   env.log_in(nil)
 end
 ```
 

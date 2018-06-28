@@ -9,8 +9,8 @@ module Procrastinator
 
       # Timeout is in seconds
       def initialize(name:,
-                     persister:,
                      task_class:,
+                     persister:,
                      task_context: nil,
                      log_dir: nil,
                      log_level: Logger::INFO,
@@ -72,7 +72,7 @@ module Procrastinator
                if tw.successful?
                   @persister.delete_task(task_hash[:id])
                else
-                  @persister.update_task(tw.task_hash.merge(queue: @name))
+                  @persister.update_task(tw.task_hash.merge(queues: @name))
                end
             end
          end
