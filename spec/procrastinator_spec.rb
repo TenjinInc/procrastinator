@@ -30,7 +30,7 @@ module Procrastinator
             allow(config_double).to receive(:verify)
 
             expect(Config).to receive(:new).and_return(config_double)
-            expect(Environment).to receive(:new).with(config_double).and_return(env_double)
+            expect(QueueManager).to receive(:new).with(config_double).and_return(env_double)
 
             returned_env = Procrastinator.setup do |config|
                expect(config).to be config_double
@@ -66,7 +66,7 @@ module Procrastinator
          end
 
          it 'should call spawn_workers on the environment' do
-            expect_any_instance_of(Environment).to receive(:spawn_workers)
+            expect_any_instance_of(QueueManager).to receive(:spawn_workers)
 
             Procrastinator.setup do |config|
                config.define_queue(:test, test_task)

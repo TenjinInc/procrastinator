@@ -2,7 +2,7 @@ module Procrastinator
    require 'spec_helper'
    require 'timeout'
 
-   describe Environment do
+   describe QueueManager do
       describe '#initialize' do
          let(:config) {Config.new}
 
@@ -12,7 +12,7 @@ module Procrastinator
             end
 
             expect do
-               Environment.new(config)
+               QueueManager.new(config)
             end.to raise_error(MalformedTaskLoaderError, 'task loader cannot be nil')
          end
 
@@ -24,7 +24,7 @@ module Procrastinator
             end
 
             expect do
-               Environment.new(config)
+               QueueManager.new(config)
             end.to raise_error(MalformedTaskLoaderError, "task loader #{loader.class} must respond to #read_tasks")
          end
 
@@ -36,7 +36,7 @@ module Procrastinator
             end
 
             expect do
-               Environment.new(config)
+               QueueManager.new(config)
             end.to raise_error(MalformedTaskLoaderError, "task loader #{loader.class} must respond to #create_task")
          end
 
@@ -48,7 +48,7 @@ module Procrastinator
             end
 
             expect do
-               Environment.new(config)
+               QueueManager.new(config)
             end.to raise_error(MalformedTaskLoaderError, "task loader #{loader.class} must respond to #update_task")
          end
 
@@ -60,7 +60,7 @@ module Procrastinator
             end
 
             expect do
-               Environment.new(config)
+               QueueManager.new(config)
             end.to raise_error(MalformedTaskLoaderError, "task loader #{loader.class} must respond to #delete_task")
          end
       end
@@ -78,7 +78,7 @@ module Procrastinator
             config
          end
 
-         let(:env) {Environment.new(config)}
+         let(:manager) {QueueManager.new(config)}
 
          it 'should record a task on the given queue' do
             [:queue1, :queue2].each do |queue_name|
@@ -86,7 +86,7 @@ module Procrastinator
 
                expect(persister).to receive(:create_task).with(include(queues: queue_name))
 
-               env.delay(queue_name)
+               manager.delay(queue_name)
             end
          end
 
@@ -95,7 +95,7 @@ module Procrastinator
 
             expect(persister).to receive(:create_task).with(include(run_at: run_stamp))
 
-            env.delay(:test_queue, run_at: double('time_object', to_i: run_stamp))
+            manager.delay(:test_queue, run_at: double('time_object', to_i: run_stamp))
          end
 
          it 'should record a task with given expire_at' do
@@ -103,7 +103,7 @@ module Procrastinator
 
             expect(persister).to receive(:create_task).with(include(expire_at: expire_stamp))
 
-            env.delay(:test_queue, expire_at: double('time_object', to_i: expire_stamp))
+            manager.delay(:test_queue, expire_at: double('time_object', to_i: expire_stamp))
          end
 
          it 'should record a task with serialized task data' do
@@ -112,7 +112,7 @@ module Procrastinator
             # these are, at the moment, all of the arguments the dev can pass in
             expect(persister).to receive(:create_task).with(include(data: YAML.dump(data)))
 
-            env.delay(data: data)
+            manager.delay(data: data)
          end
 
          it 'should default run_at to now' do
@@ -121,7 +121,7 @@ module Procrastinator
             Timecop.freeze(now) do
                expect(persister).to receive(:create_task).with(include(run_at: now.to_i))
 
-               env.delay()
+               manager.delay()
             end
          end
 
@@ -130,20 +130,20 @@ module Procrastinator
 
             expect(persister).to receive(:create_task).with(include(run_at: time.to_i, initial_run_at: time.to_i))
 
-            env.delay(run_at: time)
+            manager.delay(run_at: time)
          end
 
          it 'should record convert run_at, initial_run_at, expire_at to ints' do
             expect(persister).to receive(:create_task).with(include(run_at: 0, initial_run_at: 0, expire_at: 1))
 
-            env.delay(run_at:    double('time', to_i: 0),
-                      expire_at: double('time', to_i: 1))
+            manager.delay(run_at:    double('time', to_i: 0),
+                          expire_at: double('time', to_i: 1))
          end
 
          it 'should default expire_at to nil' do
             expect(persister).to receive(:create_task).with(include(expire_at: nil))
 
-            env.delay
+            manager.delay
          end
 
          it 'should NOT complain about well-formed hooks' do
@@ -153,7 +153,7 @@ module Procrastinator
                # allow(task).to receive(method).with('')
 
                expect do
-                  env.delay
+                  manager.delay
                end.to_not raise_error
             end
          end
@@ -167,10 +167,10 @@ module Procrastinator
             "queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2"
             "queue must be specified when more than one is registered. Defined queues are: test_queue, queue1, queue2"
 
-            expect {env.delay(run_at: 0)}.to raise_error(ArgumentError, msg)
+            expect {manager.delay(run_at: 0)}.to raise_error(ArgumentError, msg)
 
             # also test the negative
-            expect {env.delay(:queue1, run_at: 0)}.to_not raise_error
+            expect {manager.delay(:queue1, run_at: 0)}.to_not raise_error
          end
 
          it 'should NOT require queue be provided if there only one queue defined' do
@@ -179,9 +179,9 @@ module Procrastinator
                persister
             end
             config.define_queue(:queue_name, Test::Task::AllHooks)
-            env = Environment.new config
+            manager = QueueManager.new config
 
-            expect {env.delay}.to_not raise_error
+            expect {manager.delay}.to_not raise_error
          end
 
          it 'should assume the queue name if there only one queue defined' do
@@ -190,11 +190,11 @@ module Procrastinator
                persister
             end
             config.define_queue(:some_queue, Test::Task::AllHooks)
-            env = Environment.new config
+            manager = QueueManager.new config
 
             expect(persister).to receive(:create_task).with(include(queues: :some_queue))
 
-            env.delay
+            manager.delay
          end
          #there is no :bogus queue registered. Defined queues are: :test_queue, :another_queue
          #there is no :bogus queue registered. Defined queues are: :test_queue, :another_queue
@@ -204,7 +204,7 @@ module Procrastinator
             [:bogus, :other_bogus].each do |name|
                err = %[there is no :#{name} queue registered. Defined queues are: :test_queue, :another_queue]
 
-               expect {env.delay(name, run_at: 0)}.to raise_error(ArgumentError, err)
+               expect {manager.delay(name, run_at: 0)}.to raise_error(ArgumentError, err)
             end
          end
       end
@@ -219,7 +219,7 @@ module Procrastinator
             config
          end
 
-         let(:env) {Environment.new(config)}
+         let(:manager) {QueueManager.new(config)}
 
          before do
             FakeFS.activate!
@@ -254,7 +254,7 @@ module Procrastinator
                                                .and_return(double('worker', work: nil))
                end
 
-               env.spawn_workers
+               manager.spawn_workers
             end
 
             it 'should pass each worker the queue properties' do
@@ -270,15 +270,15 @@ module Procrastinator
                                                .and_return(double('worker', work: nil))
                end
 
-               env.spawn_workers
+               manager.spawn_workers
             end
 
             it 'should not fork' do
                config.define_queue(:test, test_task)
 
-               expect(env).to_not receive(:fork)
+               expect(manager).to_not receive(:fork)
 
-               env.spawn_workers
+               manager.spawn_workers
             end
 
             it 'should not call #work' do
@@ -286,7 +286,7 @@ module Procrastinator
 
                expect_any_instance_of(QueueWorker).to_not receive(:work)
 
-               env.spawn_workers
+               manager.spawn_workers
             end
 
             it 'should NOT change the process title' do
@@ -294,7 +294,7 @@ module Procrastinator
 
                expect(Process).to_not receive(:setproctitle)
 
-               env.spawn_workers
+               manager.spawn_workers
             end
 
             it 'should NOT open a log file' do
@@ -303,7 +303,7 @@ module Procrastinator
                config.define_queue(queue_name, test_task)
 
                FakeFS do
-                  env.spawn_workers
+                  manager.spawn_workers
 
                   expect(File.file?("log/#{queue_name}-queue-worker.log")).to be false
                end
@@ -320,7 +320,7 @@ module Procrastinator
 
                expect(QueueWorker).to receive(:new).with(hash_including(persister: persister)).and_call_original
 
-               env.spawn_workers
+               manager.spawn_workers
             end
 
             it 'should evaluate task_context and pass it to the worker' do
@@ -338,7 +338,7 @@ module Procrastinator
                                                                start_log: nil,
                                                                long_name: ''))
 
-               env.spawn_workers
+               manager.spawn_workers
             end
          end
 
@@ -353,9 +353,9 @@ module Procrastinator
                it 'should fork a worker process' do
                   config.define_queue(:test, test_task)
 
-                  expect(env).to receive(:fork).once.and_return(double('a child pid'))
+                  expect(manager).to receive(:fork).once.and_return(double('a child pid'))
 
-                  env.spawn_workers
+                  manager.spawn_workers
                end
 
                it 'should fork a worker process for each queue' do
@@ -364,9 +364,9 @@ module Procrastinator
                      config.define_queue(name, test_task)
                   end
 
-                  expect(env).to receive(:fork).exactly(queue_defs.size).times.and_return(double('a child pid'))
+                  expect(manager).to receive(:fork).exactly(queue_defs.size).times.and_return(double('a child pid'))
 
-                  env.spawn_workers
+                  manager.spawn_workers
                end
 
                it 'should not wait for the QueueWorker' do
@@ -379,13 +379,13 @@ module Procrastinator
                      pid2 = double('pid2')
                      pid3 = double('pid3')
 
-                     allow(env).to receive(:fork).and_return(pid, pid2, pid3)
+                     allow(manager).to receive(:fork).and_return(pid, pid2, pid3)
 
                      expect(Process).to receive(:detach).with(pid)
                      expect(Process).to receive(:detach).with(pid2)
                      expect(Process).to receive(:detach).with(pid3)
 
-                     env.spawn_workers
+                     manager.spawn_workers
                   end
                end
 
@@ -398,30 +398,30 @@ module Procrastinator
                   pid2 = 11
                   pid3 = 12
 
-                  allow(env).to receive(:fork).and_return(pid1, pid2, pid3)
+                  allow(manager).to receive(:fork).and_return(pid1, pid2, pid3)
 
-                  env.spawn_workers
+                  manager.spawn_workers
 
-                  expect(env.processes).to eq [pid1, pid2, pid3]
+                  expect(manager.workers).to eq [pid1, pid2, pid3]
                end
 
-               it 'should store the PID of children in the ENV' do
-                  allow(env).to receive(:fork).and_return(1, 2, 3)
+               it 'should store the PID of children in the manager' do
+                  allow(manager).to receive(:fork).and_return(1, 2, 3)
 
                   config.define_queue(:test1, test_task)
                   config.define_queue(:test2, test_task)
                   config.define_queue(:test3, test_task)
 
-                  env.spawn_workers
+                  manager.spawn_workers
 
-                  expect(env.processes).to eq [1, 2, 3]
+                  expect(manager.workers).to eq [1, 2, 3]
                end
             end
 
             context 'subprocess' do
                before(:each) do
                   allow(Process).to receive(:setproctitle)
-                  allow(env).to receive(:fork).and_return(nil)
+                  allow(manager).to receive(:fork).and_return(nil)
                end
 
                it 'should create a QueueWorker' do
@@ -433,20 +433,20 @@ module Procrastinator
                                                                   work:      nil,
                                                                   start_log: nil,
                                                                   long_name: ''))
-                  env.spawn_workers
+                  manager.spawn_workers
                end
 
                it 'should pass the worker default log settings' do
                   config.define_queue(:test_queue, test_task)
 
                   expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(log_dir:   Environment::DEFAULT_LOG_DIRECTORY,
+                                               .with(hash_including(log_dir:   Config::DEFAULT_LOG_DIRECTORY,
                                                                     log_level: Logger::INFO))
                                                .and_return(double('worker',
                                                                   work:      nil,
                                                                   start_log: nil,
                                                                   long_name: ''))
-                  env.spawn_workers
+                  manager.spawn_workers
                end
 
                it 'should pass the worker the logging settings' do
@@ -470,7 +470,7 @@ module Procrastinator
                                                                      work:      nil,
                                                                      start_log: nil,
                                                                      long_name: ''))
-                     env.spawn_workers
+                     manager.spawn_workers
                   end
                end
 
@@ -496,7 +496,7 @@ module Procrastinator
                                                                      long_name: ''))
                   end
 
-                  env.spawn_workers
+                  manager.spawn_workers
                end
 
                it 'should pass the worker a new loader instance' do
@@ -515,7 +515,7 @@ module Procrastinator
                                                .and_call_original
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
-                  env.spawn_workers
+                  manager.spawn_workers
                end
 
                it 'should provide the worker with a new task context' do
@@ -533,7 +533,7 @@ module Procrastinator
                                                                   start_log: nil,
                                                                   long_name: ''))
 
-                  env.spawn_workers
+                  manager.spawn_workers
                end
 
                it 'should name each worker process' do
@@ -548,7 +548,7 @@ module Procrastinator
                      expect(Process).to receive(:setproctitle).with("#{name}-queue-worker")
                   end
 
-                  env.spawn_workers
+                  manager.spawn_workers
                end
 
                it 'should name each worker process with provided prefix' do
@@ -560,7 +560,7 @@ module Procrastinator
 
                      expect(Process).to receive(:setproctitle).with("#{prefix}-test_queue-queue-worker")
 
-                     env.spawn_workers
+                     manager.spawn_workers
                   end
                end
 
@@ -582,13 +582,13 @@ module Procrastinator
 
                   allow(QueueWorker).to receive(:new).and_return(worker1, worker2, worker3)
 
-                  env.spawn_workers
+                  manager.spawn_workers
                end
 
                it 'should NOT store any pids' do
-                  env.spawn_workers
+                  manager.spawn_workers
 
-                  expect(env.processes).to be_empty
+                  expect(manager.workers).to be_empty
                end
 
                it 'should monitor the parent process' do
@@ -615,14 +615,14 @@ module Procrastinator
                   end
 
                   # control looping, otherwise infiniloop by design
-                  allow(env).to receive(:sleep)
-                  allow(env).to receive(:loop) do |&block|
+                  allow(manager).to receive(:sleep)
+                  allow(manager).to receive(:loop) do |&block|
                      block.call
                   end
 
                   expect(Process).to receive(:kill).with(0, parent_pid)
 
-                  env.spawn_workers
+                  manager.spawn_workers
 
                   allow(Process).to receive(:pid).and_call_original
                   allow(Process).to receive(:kill).and_call_original
@@ -645,13 +645,13 @@ module Procrastinator
                   end
 
                   # control looping, otherwise infiniloop by design
-                  allow(env).to receive(:sleep)
-                  allow(env).to receive(:loop) do |&block|
+                  allow(manager).to receive(:sleep)
+                  allow(manager).to receive(:loop) do |&block|
                      block.call
                   end
 
                   begin
-                     env.spawn_workers
+                     manager.spawn_workers
                   rescue SystemExit
                      # this is safer than stubbing exit, which can have weird consequences on the test system
                      exited = true
@@ -665,7 +665,7 @@ module Procrastinator
 
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
-                  env.spawn_workers
+                  manager.spawn_workers
 
                   expect(File.directory?('log/')).to be true
                end
@@ -678,7 +678,7 @@ module Procrastinator
 
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
-                  env.spawn_workers
+                  manager.spawn_workers
 
                   expect(File.file?('some_dir/queue1-queue-worker.log')).to be true
                   expect(File.file?('some_dir/queue2-queue-worker.log')).to be true
@@ -701,13 +701,13 @@ module Procrastinator
                   end
 
                   # control looping, otherwise infiniloop by design
-                  allow(env).to receive(:sleep)
-                  allow(env).to receive(:loop) do |&block|
+                  allow(manager).to receive(:sleep)
+                  allow(manager).to receive(:loop) do |&block|
                      block.call
                   end
 
                   begin
-                     env.spawn_workers
+                     manager.spawn_workers
                   rescue SystemExit
                      # this is safer than stubbing exit, which can have weird consequences on the test system
                   end
@@ -740,32 +740,32 @@ module Procrastinator
                config
             end
 
-            let(:env) {Environment.new(config)}
+            let(:manager) {QueueManager.new(config)}
 
             before(:each) do
                config.enable_test_mode
-               env.spawn_workers
+               manager.spawn_workers
             end
 
             it 'should call QueueWorker#act on every queue worker' do
-               expect(env.queue_workers.size).to eq 3
-               env.queue_workers.each do |worker|
+               expect(manager.workers.size).to eq 3
+               manager.workers.each do |worker|
                   expect(worker).to receive(:act)
                end
 
-               env.act
+               manager.act
             end
 
             it 'should call QueueWorker#act on queue worker for given queues only' do
-               expect(env.queue_workers[0]).to_not receive(:act)
-               expect(env.queue_workers[1]).to receive(:act)
-               expect(env.queue_workers[2]).to receive(:act)
+               expect(manager.workers[0]).to_not receive(:act)
+               expect(manager.workers[1]).to receive(:act)
+               expect(manager.workers[2]).to receive(:act)
 
-               env.act(:test2, :test3)
+               manager.act(:test2, :test3)
             end
 
             it 'should not complain when using Procrastinator.act in Test Mode' do
-               expect {env.act}.to_not raise_error
+               expect {manager.act}.to_not raise_error
             end
 
             it 'should complain if you try to use Procrastinator.act outside Test Mode' do
@@ -774,14 +774,14 @@ module Procrastinator
                   persister
                end
 
-               non_test_env = Environment.new(config)
+               normal_manager = QueueManager.new(config)
 
                err = <<~ERR
                   Procrastinator.act called outside Test Mode. 
                   Either use Procrastinator.spawn_workers or call #enable_test_mode in Procrastinator.setup.
                ERR
 
-               expect {non_test_env.act}.to raise_error(RuntimeError,)
+               expect {normal_manager.act}.to raise_error(RuntimeError,)
             end
          end
       end

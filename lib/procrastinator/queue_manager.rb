@@ -1,12 +1,10 @@
 module Procrastinator
-   class Environment
-      attr_reader :queue_workers, :processes
-
-      DEFAULT_LOG_DIRECTORY = 'log/'
+   class QueueManager
+      attr_reader :workers
 
       def initialize(config)
-         @queue_workers = []
-         @processes     = []
+         # Workers is either QueueWorkers directly or process IDs for their wrapping process
+         @workers = []
 
          @config = config
 
@@ -16,16 +14,16 @@ module Procrastinator
       def spawn_workers
          @config.queues.each do |name, props|
             if @config.test_mode?
-               @queue_workers << QueueWorker.new(props.merge(name:         name,
-                                                             task_context: @config.context,
-                                                             persister:    @task_loader))
+               @workers << QueueWorker.new(props.merge(name:         name,
+                                                       task_context: @config.context,
+                                                       persister:    @task_loader))
             else
                pid = fork
 
                if pid
                   # === PARENT PROCESS ===
                   Process.detach(pid)
-                  @processes << pid
+                  @workers << pid
                else
                   # === CHILD PROCESS ===
                   # Create a new task loader because the one from the parent is now async and unreliable
@@ -64,12 +62,12 @@ module Procrastinator
          end
 
          if queue_names.empty?
-            @queue_workers.each do |worker|
+            @workers.each do |worker|
                worker.act
             end
          else
             queue_names.each do |name|
-               @queue_workers.find {|worker| worker.name == name}.act
+               @workers.find {|worker| worker.name == name}.act
             end
          end
       end

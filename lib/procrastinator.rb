@@ -2,7 +2,7 @@ require 'procrastinator/version'
 require 'procrastinator/queue_worker'
 require 'procrastinator/task_worker'
 require 'procrastinator/config'
-require 'procrastinator/environment'
+require 'procrastinator/queue_manager'
 require 'logger'
 
 
@@ -20,7 +20,7 @@ module Procrastinator
 
       config.verify
 
-      env = Environment.new(config)
+      env = QueueManager.new(config)
 
       env.spawn_workers
 
