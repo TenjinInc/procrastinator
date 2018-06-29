@@ -124,35 +124,5 @@ module Procrastinator
             expect(queue.max_tasks).to eq Queue::DEFAULT_MAX_TASKS
          end
       end
-
-      describe '#too_many_fails?' do
-         it 'should be true if under the limit' do
-            queue = Procrastinator::Queue.new(name:         :queue,
-                                              task_class:   Test::Task::Fail,
-                                              max_attempts: 3)
-
-            expect(queue.too_many_fails?(1)).to be false
-            expect(queue.too_many_fails?(2)).to be false
-         end
-
-         it 'should be false if at or above the limit' do
-            queue = Procrastinator::Queue.new(name:         :queue,
-                                              task_class:   Test::Task::Fail,
-                                              max_attempts: 3)
-
-            expect(queue.too_many_fails?(3)).to be true
-            expect(queue.too_many_fails?(4)).to be true
-         end
-
-         it 'should always be false if nil max_attempts is given' do
-            queue = Procrastinator::Queue.new(name:         :queue,
-                                              task_class:   Test::Task::Fail,
-                                              max_attempts: nil)
-
-            (1..100).each do |i|
-               expect(queue.too_many_fails?(i)).to be false
-            end
-         end
-      end
    end
 end

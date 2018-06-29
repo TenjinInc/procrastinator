@@ -28,9 +28,5 @@ module Procrastinator
          @update_period = update_period
          @max_tasks     = max_tasks
       end
-
-      def too_many_fails?(attempts)
-         !@max_attempts.nil? && attempts >= @max_attempts
-      end
    end
 end

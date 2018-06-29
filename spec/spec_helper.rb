@@ -9,7 +9,16 @@ require 'fakefs/safe'
 
 require 'procrastinator'
 
+def fake_persister(data)
+   persister = double('persister')
+   allow(persister).to receive(:update_task)
+   allow(persister).to receive(:delete_task)
+   allow(persister).to receive(:read_tasks).and_return(data)
+   persister
+end
+
 module Procrastinator
+
    module Test
       module Task
          module MissingParam

@@ -165,11 +165,11 @@ module Procrastinator
                job2 = {id: 5, run_at: 2, initial_run_at: 0}
                job3 = {id: 6, run_at: 3, initial_run_at: 0}
 
-               task1 = Test::Task::AllHooks.new
-               task2 = Test::Task::AllHooks.new
-               task3 = Test::Task::AllHooks.new
+               handler1 = Test::Task::AllHooks.new
+               handler2 = Test::Task::AllHooks.new
+               handler3 = Test::Task::AllHooks.new
 
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task1, task2, task3)
+               allow(Test::Task::AllHooks).to receive(:new).and_return(handler1, handler2, handler3)
 
                persister = double('disorganized persister',
                                   read_tasks:  [job2, job3, job1],
@@ -179,9 +179,9 @@ module Procrastinator
                worker = QueueWorker.new(queue:     instant_queue,
                                         persister: persister)
 
-               expect(task1).to receive(:run).ordered
-               expect(task2).to receive(:run).ordered
-               expect(task3).to receive(:run).ordered
+               expect(handler1).to receive(:run).ordered
+               expect(handler2).to receive(:run).ordered
+               expect(handler3).to receive(:run).ordered
 
                worker.act
             end
@@ -243,23 +243,27 @@ module Procrastinator
                end
             end
 
-            it 'should run a TaskWorker with all the data' do
-               task_double = double('task', run: nil)
-               task_data   = {run_at: 1}
+            it 'should populate the data into a Task' do
+               task_data = {run_at: 1}
 
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task_double)
-
-               expect(TaskWorker).to receive(:new).with(satisfy do |param_hash|
-                  task_data.all? do |k, v|
-                     param_hash[k] == v
-                  end
-               end).and_call_original
-
-               persister = double('persister', update_task: nil, delete_task: nil)
-               allow(persister).to receive(:read_tasks).and_return([task_data])
+               expect(Task).to receive(:new).with(task_data).and_call_original
 
                worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: persister)
+                                        persister: fake_persister([task_data]))
+
+               worker.act
+            end
+
+            it 'should run a TaskWorker with all the data' do
+               task_data = {run_at: 1}
+
+               task = Task.new(task_data)
+               allow(Task).to receive(:new).and_return(task)
+
+               expect(TaskWorker).to receive(:new).with(hash_including(task: task)).and_call_original
+
+               worker = QueueWorker.new(queue:     instant_queue,
+                                        persister: fake_persister([task_data]))
 
                worker.act
             end
@@ -274,11 +278,10 @@ module Procrastinator
                allow(TaskWorker).to receive(:new).and_return(task_worker)
 
                allow(task_worker).to receive(:successful?)
-               allow(task_worker).to receive(:task_hash).and_return({})
+               allow(task_worker).to receive(:to_h).and_return({})
                expect(task_worker).to receive(:work).with(hash_including(context: context))
 
-               persister = double('persister', update_task: nil, delete_task: nil)
-               allow(persister).to receive(:read_tasks).and_return([task_data])
+               persister = fake_persister([task_data])
 
                worker = QueueWorker.new(queue:        instant_queue,
                                         task_context: context,
@@ -289,7 +292,6 @@ module Procrastinator
 
             it 'should pass the TaskWorker the task context' do
                task_double = double('task', run: nil)
-               task_data   = {run_at: 1}
                task_worker = double('task worker')
                context     = double('context object')
 
@@ -297,22 +299,18 @@ module Procrastinator
                allow(TaskWorker).to receive(:new).and_return(task_worker)
 
                allow(task_worker).to receive(:successful?)
-               allow(task_worker).to receive(:task_hash).and_return({})
+               allow(task_worker).to receive(:to_h).and_return({})
                expect(task_worker).to receive(:work).with(hash_including(context: context))
-
-               persister = double('persister', update_task: nil, delete_task: nil)
-               allow(persister).to receive(:read_tasks).and_return([task_data])
 
                worker = QueueWorker.new(queue:        instant_queue,
                                         task_context: context,
-                                        persister:    persister)
+                                        persister:    fake_persister([{run_at: 1}]))
 
                worker.act
             end
 
             it 'should pass the TaskWorker the timeout' do
                task_double = double('task', run: nil)
-               task_data   = {run_at: 1}
                task_worker = double('task worker')
                context     = double('context object')
 
@@ -320,15 +318,12 @@ module Procrastinator
                allow(TaskWorker).to receive(:new).and_return(task_worker)
 
                allow(task_worker).to receive(:successful?)
-               allow(task_worker).to receive(:task_hash).and_return({})
+               allow(task_worker).to receive(:to_h).and_return({})
                expect(task_worker).to receive(:work).with(hash_including(context: context))
-
-               persister = double('persister', update_task: nil, delete_task: nil)
-               allow(persister).to receive(:read_tasks).and_return([task_data])
 
                worker = QueueWorker.new(queue:        instant_queue,
                                         task_context: context,
-                                        persister:    persister)
+                                        persister:    fake_persister([{run_at: 1}]))
 
                worker.act
             end
@@ -340,8 +335,7 @@ module Procrastinator
 
                expect(TaskWorker).to receive(:new).exactly(3).times.and_call_original
 
-               persister = double('persister', update_task: nil, delete_task: nil)
-               allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2, task_data3])
+               persister = fake_persister([task_data1, task_data2, task_data3])
 
                worker = QueueWorker.new(queue:     instant_queue,
                                         persister: persister)
@@ -358,8 +352,7 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).ordered.and_call_original
                expect(TaskWorker).to_not receive(:new).ordered.and_call_original
 
-               persister = double('persister', update_task: nil, delete_task: nil)
-               allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
+               persister = fake_persister([task_data1, task_data2])
 
                worker = QueueWorker.new(queue:     instant_queue,
                                         persister: persister)
@@ -375,8 +368,7 @@ module Procrastinator
 
                expect(TaskWorker).to receive(:new).once.and_call_original
 
-               persister = double('persister', update_task: nil, delete_task: nil)
-               allow(persister).to receive(:read_tasks).and_return([task_data1, task_data2])
+               persister = fake_persister([task_data1, task_data2])
 
                queue = Procrastinator::Queue.new(name:          :short_queue,
                                                  task_class:    test_task,
@@ -389,24 +381,15 @@ module Procrastinator
                worker.act
             end
 
-            it 'should pass in a logger to the logfile for this queue' do
+            it 'should pass in a logger for the logfile of this queue' do
                FakeFS do
                   task_worker = double('task_worker')
                   allow(task_worker).to receive(:successful?)
-                  allow(task_worker).to receive(:to_hash).and_return({})
+                  allow(task_worker).to receive(:to_h).and_return({})
 
-                  queue_name = :test_queue
-
-                  task_double = double('task', run: nil)
-                  task_data   = {run_at: 1, task: YAML.dump(task_double)}
-
-                  allow(YAML).to receive(:load).and_return(task_double)
-
-                  persister = double('persister', update_task: nil, delete_task: nil)
-                  allow(persister).to receive(:read_tasks).and_return([task_data])
+                  persister = fake_persister([{run_at: 1}])
 
                   allow(TaskWorker).to receive(:new).and_return(task_worker)
-                  allow(task_worker).to receive(:task_hash).and_return({})
 
                   expect(task_worker).to receive(:work).with(hash_including(:logger))
 
@@ -441,15 +424,15 @@ module Procrastinator
             # to do: it should promote captain Piett to admiral
 
             it 'should update the task' do
-               [0, 1].each do |max_attempts|
+               {queueA: 0, queueB: 1}.each do |name, max_attempts|
                   task_data = {run_at: 0}
                   task_hash = {stub: :hash}
 
-                  allow(persister).to receive(:read_tasks).and_return([task_data])
+                  persister = fake_persister([task_data])
 
-                  allow_any_instance_of(TaskWorker).to receive(:task_hash).and_return(task_hash)
+                  allow_any_instance_of(TaskWorker).to receive(:to_h).and_return(task_hash)
 
-                  queue = Procrastinator::Queue.new(name:          :test,
+                  queue = Procrastinator::Queue.new(name:          name,
                                                     task_class:    Test::Task::Fail,
                                                     update_period: 0,
                                                     max_attempts:  max_attempts)
@@ -457,7 +440,7 @@ module Procrastinator
                   worker = QueueWorker.new(queue:     queue,
                                            persister: persister)
 
-                  expect(persister).to receive(:update_task).with(task_hash.merge(queues: worker.name))
+                  expect(persister).to receive(:update_task).with(task_hash.merge(queue: name))
 
                   worker.act
                end

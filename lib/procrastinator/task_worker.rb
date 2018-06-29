@@ -6,113 +6,69 @@ module Procrastinator
    class TaskWorker
       extend Forwardable
 
-      def_delegators :@task_data, :id, :run_at, :initial_run_at, :expire_at, :attempts, :last_fail_at, :last_error, :data
+      def_delegators :@task,
+                     :id, :run_at, :initial_run_at, :expire_at,
+                     :attempts, :last_fail_at, :last_error,
+                     :data,
+                     :to_h, :successful?
 
-      def initialize(id: nil,
-                     run_at: nil,
-                     initial_run_at: nil,
-                     expire_at: nil,
-                     attempts: 0,
-                     queue:,
-                     last_fail_at: nil,
-                     last_error: nil,
-                     data: nil)
+      def initialize(task:, queue:)
          @queue = queue
 
-         @task_data      = OpenStruct.new(id:             id,
-                                          run_at:         run_at.nil? ? nil : run_at.to_i,
-                                          initial_run_at: initial_run_at.to_i,
-                                          expire_at:      expire_at.nil? ? nil : expire_at.to_i,
-                                          attempts:       attempts || 0,
-                                          last_fail_at:   last_fail_at,
-                                          last_error:     last_error,
-                                          data:           nil)
+         @task         = task
+         handler_class = queue.task_class
+         @task_handler = @task.init_handler(handler_class)
 
-         @task_data.data = YAML.load(data) if data
-
-         @task = @task_data.data ? queue.task_class.new(@task_data.data) : queue.task_class.new
-
-         raise(MalformedTaskError.new("task #{@task.class} does not support #run method")) unless @task.respond_to? :run
+         unless @task_handler.respond_to? :run
+            raise(MalformedTaskError.new("task #{@task_handler.class} does not support #run method"))
+         end
       end
 
       def work(logger: Logger.new(StringIO.new), context: nil)
-         @task_data.attempts += 1
+         @task.add_attempt
 
          begin
-            raise(TaskExpiredError.new("task is over its expiry time of #{@task_data.expire_at}")) if expired?
+            @task.verify_expiry
 
             result = Timeout::timeout(@queue.timeout) do
-               @task.run(context, logger)
+               @task_handler.run(context, logger)
             end
+
+            logger.debug("Task completed: #{@task_handler.class} [#{@task.serialized_data}]")
+
+            @task.clear_fails
 
             try_hook(:success, context, logger, result)
-
-            logger.debug("Task completed: #{@task.class} [#{@task_data.data}]")
-
-            @task_data.last_error   = nil
-            @task_data.last_fail_at = nil
          rescue StandardError => e
-            @task_data.last_fail_at = Time.now.to_i
+            if @task.final_fail?(@queue)
+               trace = e.backtrace.join("\n")
+               msg   = "#{@task.expired? ? 'Task expired' : 'Task failed too many times'}: #{trace}"
 
-            if @queue.too_many_fails?(@task_data.attempts) || expired?
+               @task.fail(msg, final: true)
+
+               logger.debug("Task failed permanently: #{YAML.dump(@task_handler)}")
+
                try_hook(:final_fail, context, logger, e)
-
-               @task_data.run_at     = nil
-               @task_data.last_error = "#{expired? ? 'Task expired' : 'Task failed too many times'}: #{e.backtrace.join("\n")}"
-
-               logger.debug("Task failed permanently: #{YAML.dump(@task)}")
             else
+               @task.fail(%[Task failed: #{e.message}\n#{e.backtrace.join("\n")}])
+               logger.debug("Task failed: #{@queue.name} with #{@task.serialized_data}")
+
+               @task.reschedule
+
                try_hook(:fail, context, logger, e)
-
-               @task_data.last_error = %Q[Task failed: #{e.message}\n#{e.backtrace.join("\n")}]
-               logger.debug("Task failed: #{YAML.dump(@task)}")
-
-               reschedule
             end
          end
-      end
-
-      def successful?
-         if !expired? && @task_data.attempts <= 0
-            raise(RuntimeError, 'you cannot check for success before running #work')
-         end
-
-         @task_data.last_error.nil? && @task_data.last_fail_at.nil?
-      end
-
-      def expired?
-         !@task_data.expire_at.nil? && Time.now.to_i > @task_data.expire_at
-      end
-
-      def task_hash
-         {id:             @task_data.id,
-          run_at:         @task_data.run_at,
-          initial_run_at: @task_data.initial_run_at,
-          expire_at:      @task_data.expire_at,
-          attempts:       @task_data.attempts,
-          last_fail_at:   @task_data.last_fail_at,
-          last_error:     @task_data.last_error,
-          data:           YAML.dump(@task_data.data)}
       end
 
       private
 
       def try_hook(method, *params)
          begin
-            @task.send(method, *params) if @task.respond_to? method
+            @task_handler.send(method, *params) if @task_handler.respond_to? method
          rescue StandardError => e
             $stderr.puts "#{method.to_s.capitalize} hook error: #{e.message}"
          end
       end
-
-      def reschedule
-         # (30 + n_attempts^4) seconds is chosen to rapidly expand
-         # but with the baseline of 30s to avoid hitting the disk too frequently.
-         @task_data.run_at += 30 + (@task_data.attempts ** 4) unless @task_data.run_at.nil?
-      end
-   end
-
-   class TaskExpiredError < StandardError
    end
 
    class MalformedTaskError < StandardError
