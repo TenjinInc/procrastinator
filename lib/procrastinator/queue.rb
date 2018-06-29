@@ -19,12 +19,18 @@ module Procrastinator
 
          raise ArgumentError.new('Task class must be initializable') unless task_class.respond_to? :new
 
+         raise(ArgumentError.new('timeout cannot be negative')) if timeout && timeout < 0
+
          @name          = name.to_s.strip.gsub(/[^A-Za-z0-9]+/, '_').to_sym
          @task_class    = task_class
          @max_attempts  = max_attempts
          @timeout       = timeout
          @update_period = update_period
          @max_tasks     = max_tasks
+      end
+
+      def too_many_fails?(attempts)
+         !@max_attempts.nil? && attempts >= @max_attempts
       end
    end
 end

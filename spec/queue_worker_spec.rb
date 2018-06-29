@@ -287,6 +287,52 @@ module Procrastinator
                worker.act
             end
 
+            it 'should pass the TaskWorker the task context' do
+               task_double = double('task', run: nil)
+               task_data   = {run_at: 1}
+               task_worker = double('task worker')
+               context     = double('context object')
+
+               allow(Test::Task::AllHooks).to receive(:new).and_return(task_double)
+               allow(TaskWorker).to receive(:new).and_return(task_worker)
+
+               allow(task_worker).to receive(:successful?)
+               allow(task_worker).to receive(:task_hash).and_return({})
+               expect(task_worker).to receive(:work).with(hash_including(context: context))
+
+               persister = double('persister', update_task: nil, delete_task: nil)
+               allow(persister).to receive(:read_tasks).and_return([task_data])
+
+               worker = QueueWorker.new(queue:        instant_queue,
+                                        task_context: context,
+                                        persister:    persister)
+
+               worker.act
+            end
+
+            it 'should pass the TaskWorker the timeout' do
+               task_double = double('task', run: nil)
+               task_data   = {run_at: 1}
+               task_worker = double('task worker')
+               context     = double('context object')
+
+               allow(Test::Task::AllHooks).to receive(:new).and_return(task_double)
+               allow(TaskWorker).to receive(:new).and_return(task_worker)
+
+               allow(task_worker).to receive(:successful?)
+               allow(task_worker).to receive(:task_hash).and_return({})
+               expect(task_worker).to receive(:work).with(hash_including(context: context))
+
+               persister = double('persister', update_task: nil, delete_task: nil)
+               allow(persister).to receive(:read_tasks).and_return([task_data])
+
+               worker = QueueWorker.new(queue:        instant_queue,
+                                        task_context: context,
+                                        persister:    persister)
+
+               worker.act
+            end
+
             it 'should run a TaskWorker for each ready task' do
                task_data1 = {run_at: 1}
                task_data2 = {run_at: 1}

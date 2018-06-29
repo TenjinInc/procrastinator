@@ -6,71 +6,65 @@ module Procrastinator
    class TaskWorker
       extend Forwardable
 
-      attr_reader :id, :data
-      def_delegators :@timing_data, :run_at, :initial_run_at, :expire_at
-      def_delegators :@failure_data, :attempts, :last_fail_at, :last_error
+      def_delegators :@task_data, :id, :run_at, :initial_run_at, :expire_at, :attempts, :last_fail_at, :last_error, :data
 
       def initialize(id: nil,
                      run_at: nil,
                      initial_run_at: nil,
                      expire_at: nil,
                      attempts: 0,
-                     timeout: nil,
-                     max_attempts: nil,
+                     queue:,
                      last_fail_at: nil,
                      last_error: nil,
-                     data: nil,
-                     task_class:)
-         @id = id
+                     data: nil)
+         @queue = queue
 
-         @timing_data = OpenStruct.new(run_at:         run_at.nil? ? nil : run_at.to_i,
-                                       initial_run_at: initial_run_at.to_i,
-                                       expire_at:      expire_at.nil? ? nil : expire_at.to_i,
-                                       timeout:        timeout)
+         @task_data      = OpenStruct.new(id:             id,
+                                          run_at:         run_at.nil? ? nil : run_at.to_i,
+                                          initial_run_at: initial_run_at.to_i,
+                                          expire_at:      expire_at.nil? ? nil : expire_at.to_i,
+                                          attempts:       attempts || 0,
+                                          last_fail_at:   last_fail_at,
+                                          last_error:     last_error,
+                                          data:           nil)
 
-         @failure_data = OpenStruct.new(attempts:     attempts || 0,
-                                        max_attempts: max_attempts,
-                                        last_fail_at: last_fail_at,
-                                        last_error:   last_error)
+         @task_data.data = YAML.load(data) if data
 
-         @task_class = task_class
-         @data       = YAML.load(data) if data
-         @task       = @data ? @task_class.new(@data) : @task_class.new
+         @task = @task_data.data ? queue.task_class.new(@task_data.data) : queue.task_class.new
 
-         raise(MalformedTaskError.new('given task does not support #run method')) unless @task.respond_to? :run
-         raise(ArgumentError.new('timeout cannot be negative')) if timeout && timeout < 0
+         raise(MalformedTaskError.new("task #{@task.class} does not support #run method")) unless @task.respond_to? :run
       end
 
       def work(logger: Logger.new(StringIO.new), context: nil)
-         @failure_data.attempts += 1
+         @task_data.attempts += 1
 
          begin
-            raise(TaskExpiredError.new("task is over its expiry time of #{@timing_data.expire_at}")) if expired?
+            raise(TaskExpiredError.new("task is over its expiry time of #{@task_data.expire_at}")) if expired?
 
-            result = Timeout::timeout(@timing_data.timeout) do
+            result = Timeout::timeout(@queue.timeout) do
                @task.run(context, logger)
             end
 
             try_hook(:success, context, logger, result)
 
-            logger.debug("Task completed: #{@task_class} [#{@data}]")
+            logger.debug("Task completed: #{@task.class} [#{@task_data.data}]")
 
-            @failure_data.last_error   = nil
-            @failure_data.last_fail_at = nil
+            @task_data.last_error   = nil
+            @task_data.last_fail_at = nil
          rescue StandardError => e
-            @failure_data.last_fail_at = Time.now.to_i
+            @task_data.last_fail_at = Time.now.to_i
 
-            if too_many_fails? || expired?
+            if @queue.too_many_fails?(@task_data.attempts) || expired?
                try_hook(:final_fail, context, logger, e)
 
-               @timing_data.run_at      = nil
-               @failure_data.last_error = "#{expired? ? 'Task expired' : 'Task failed too many times'}: #{e.backtrace.join("\n")}"
+               @task_data.run_at     = nil
+               @task_data.last_error = "#{expired? ? 'Task expired' : 'Task failed too many times'}: #{e.backtrace.join("\n")}"
 
                logger.debug("Task failed permanently: #{YAML.dump(@task)}")
             else
                try_hook(:fail, context, logger, e)
 
-               @failure_data.last_error = %Q[Task failed: #{e.message}\n#{e.backtrace.join("\n")}]
+               @task_data.last_error = %Q[Task failed: #{e.message}\n#{e.backtrace.join("\n")}]
                logger.debug("Task failed: #{YAML.dump(@task)}")
 
                reschedule
@@ -79,30 +73,26 @@ module Procrastinator
       end
 
       def successful?
-         if !expired? && @failure_data.attempts <= 0
+         if !expired? && @task_data.attempts <= 0
             raise(RuntimeError, 'you cannot check for success before running #work')
          end
 
-         @failure_data.last_error.nil? && @failure_data.last_fail_at.nil?
-      end
-
-      def too_many_fails?
-         !@failure_data.max_attempts.nil? && @failure_data.attempts >= @failure_data.max_attempts
+         @task_data.last_error.nil? && @task_data.last_fail_at.nil?
       end
 
       def expired?
-         !@timing_data.expire_at.nil? && Time.now.to_i > @timing_data.expire_at
+         !@task_data.expire_at.nil? && Time.now.to_i > @task_data.expire_at
       end
 
       def task_hash
-         {id:             @id,
-          run_at:         @timing_data.run_at,
-          initial_run_at: @timing_data.initial_run_at,
-          expire_at:      @timing_data.expire_at,
-          attempts:       @failure_data.attempts,
-          last_fail_at:   @failure_data.last_fail_at,
-          last_error:     @failure_data.last_error,
-          data:           YAML.dump(@data)}
+         {id:             @task_data.id,
+          run_at:         @task_data.run_at,
+          initial_run_at: @task_data.initial_run_at,
+          expire_at:      @task_data.expire_at,
+          attempts:       @task_data.attempts,
+          last_fail_at:   @task_data.last_fail_at,
+          last_error:     @task_data.last_error,
+          data:           YAML.dump(@task_data.data)}
       end
 
       private
@@ -118,7 +108,7 @@ module Procrastinator
       def reschedule
          # (30 + n_attempts^4) seconds is chosen to rapidly expand
          # but with the baseline of 30s to avoid hitting the disk too frequently.
-         @timing_data.run_at += 30 + (@failure_data.attempts ** 4)
+         @task_data.run_at += 30 + (@task_data.attempts ** 4) unless @task_data.run_at.nil?
       end
    end
 

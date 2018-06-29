@@ -47,7 +47,7 @@ module Procrastinator
 
          tasks.first(@queue.max_tasks).each do |task_hash|
             if Time.now.to_i >= task_hash[:run_at].to_i
-               tw = TaskWorker.new(task_hash.merge(task_class: @queue.task_class))
+               tw = TaskWorker.new(task_hash.merge(queue: @queue))
 
                work_data          = {context: @task_context}
                work_data[:logger] = @logger if @logger
