@@ -441,15 +441,15 @@ scheduler = Procrastinator.setup do |env|
    # ... other setup stuff ... 
 
    # you can set custom log directory and level:
-   env.log_in '/var/log/myapp/'
+   env.log_inside '/var/log/myapp/'
    env.log_at_level Logger::DEBUG
    
    # these are the default values:
-   env.log_in 'log/' # relative to the running directory
+   env.log_inside 'log/' # relative to the running directory
    env.log_at_level Logger::INFO
    
    # use nil to disable logging entirely:
-   env.log_in nil
+   env.log_inside nil
 end
 ```
 

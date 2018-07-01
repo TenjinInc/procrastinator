@@ -157,12 +157,12 @@ module Procrastinator
          end
       end
 
-      describe '#log_in' do
+      describe '#log_inside' do
          it 'should set the log directory' do
             config = Config.new
             dir    = double('dir')
 
-            config.log_in(dir)
+            config.log_inside(dir)
 
             expect(config.log_dir).to be dir
          end

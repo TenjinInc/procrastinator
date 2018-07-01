@@ -58,7 +58,7 @@ module Procrastinator
          @test_mode = true
       end
 
-      def log_in(path)
+      def log_inside(path)
          @log_dir = path
       end
 

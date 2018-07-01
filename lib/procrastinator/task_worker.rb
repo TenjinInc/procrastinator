@@ -39,7 +39,7 @@ module Procrastinator
          @metadata.add_attempt
 
          begin
-            @metadata.verify_expiry
+            @metadata.verify_expiry!
 
             result = Timeout::timeout(@queue.timeout) do
                @task.run

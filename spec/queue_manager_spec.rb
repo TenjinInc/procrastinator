@@ -301,7 +301,7 @@ module Procrastinator
 
                   config.define_queue(:test_queue, test_task)
 
-                  config.log_in(dir)
+                  config.log_inside(dir)
                   config.log_at_level(lvl)
 
                   expect(QueueWorker).to receive(:new)
@@ -584,7 +584,7 @@ module Procrastinator
                   config.define_queue(:queue1, test_task)
                   config.define_queue(:queue2, test_task)
 
-                  config.log_in('some_dir/')
+                  config.log_inside('some_dir/')
 
                   allow_any_instance_of(QueueWorker).to receive(:work)
 

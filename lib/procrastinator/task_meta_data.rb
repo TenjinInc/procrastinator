@@ -73,7 +73,7 @@ module Procrastinator
          YAML.dump(@data)
       end
 
-      def verify_expiry
+      def verify_expiry!
          raise(TaskExpiredError.new("task is over its expiry time of #{@expire_at}")) if expired?
       end
 
