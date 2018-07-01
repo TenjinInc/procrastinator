@@ -21,18 +21,18 @@ And then run:
 Setup a procrastination environment:
 
 ```ruby
-procrastinator = Procrastinator.setup do |env|
-   env.define_queue(:greeting, SendWelcomeEmail)
-   env.define_queue(:thumbnail, GenerateThumbnail, timeout: 60)
-   env.define_queue(:birthday, SendBirthdayEmail, max_attempts: 3)
+scheduler = Procrastinator.setup do |env|
+   env.define_queue :greeting, SendWelcomeEmail
+   env.define_queue :thumbnail, GenerateThumbnail, timeout: 60
+   env.define_queue :birthday, SendBirthdayEmail, max_attempts: 3
    
-   env.load_with(MyTaskLoader.new('my-tasks.csv'))
+   env.load_with MyTaskLoader.new('my-tasks.csv')
    
    # this block runs on each worker sub process
    env.each_process do
       # ... create a new database connection or whatever you need ...
    
-      env.load_with(MyTaskLoader.new('my-tasks.csv'))
+      env.load_with MyTaskLoader.new('my-tasks.csv')
    end
 end
 ```
@@ -40,11 +40,11 @@ end
 And then get your lazy on:
 
 ```ruby
-procrastinator.delay(:greeting, data: 'bob@example.com')
+scheduler.delay(:greeting, data: 'bob@example.com')
 
-procrastinator.delay(:thumbnail, data: {file: 'full_image.png', width: 100, height: 100})
+scheduler.delay(:thumbnail, data: {file: 'full_image.png', width: 100, height: 100})
 
-procrastinator.delay(:send_birthday_email, run_at: Time.now + 3600, data: {user_id: 5})
+scheduler.delay(:send_birthday_email, run_at: Time.now + 3600, data: {user_id: 5})
 ```
 
 Read on for more details:
@@ -77,25 +77,28 @@ that knows how to read and write tasks in your data storage (eg. file, database,
 In setup, the environment's `#load_with` method expects an instance of this class. 
 
 ```ruby
-procrastinator = Procrastinator.setup do |env|
-   env.load_with(MyTaskLoader.new('tasks.csv'))
+loader = MyTaskLoader.new('tasks.csv')
+
+scheduler = Procrastinator.setup do |env|
+   env.load_with loader
    
    # .. other setup stuff ...
 end
 ```
 
-If you need per-process resource management (eg. independent database connections), put another call to #load_with
-inside the #each_process block.
+If you need per-process resource management (eg. independent database connections), put the relevant code inside 
+the `#each_process` block.
 
 ```ruby
-procrastinator = Procrastinator.setup do |env|
-   connection = SomeDatabaseLibrary.connect('my_app_development')
-   env.load_with(MyTaskLoader.new(connection))
+connection = SomeDatabaseLibrary.connect('my_app_development')
+
+scheduler = Procrastinator.setup do |env|
+   env.load_with MyTaskLoader.new(connection)
    
    env.each_process do
-      # a fresh connection
-      connection = SomeDatabaseLibrary.connect('my_app_development')
-      env.load_with(MyTaskLoader.new(connection))
+      # make a fresh connection
+      connection.reconnect
+      env.load_with MyTaskLoader.new(connection)
    end
    
    # .. other setup stuff ...
@@ -149,7 +152,7 @@ Notice that the times are all given as unix epoch timestamps. This is to avoid a
 and it is recommended that you store times in this manner for the same reason. 
 
 ### Task Context: `#provide_context`
-Whatever you give to `#provide_context` will be made available to your Task through the import data `:context`. 
+Whatever you give to `#provide_context` will be made available to your Task through the task attribute `:context`. 
 
 This can be useful for things like app containers, but you can use it for whatever you like.  
 
@@ -157,9 +160,22 @@ This can be useful for things like app containers, but you can use it for whatev
 Procrastinator.setup do |env|
    # .. other setup stuff ...
  
-   env.provide_context(message: "This hash will be passed into your task's methods")
+   env.provide_context {message: "This hash will be passed into your task's methods"}
+end
+
+# ... and in your task ...
+class MyTask
+   include Procrastinator::Task
+   
+   task_attr :context
+   
+   def run
+      puts "My context is: #{context}"
+   end
 end
 ```
+
+
 
 ### Defining Queues: `#define_queue`
 In the setup block, you can call `#define_queue` on the environment: 
@@ -168,7 +184,7 @@ In the setup block, you can call `#define_queue` on the environment:
 Procrastinator.setup do |env|
    # ... other setup stuff ...
 
-   env.define_queue(:greeting, SendWelcomeEmail)
+   env.define_queue :greeting, SendWelcomeEmail
 end
 ```
 
@@ -195,7 +211,7 @@ provide these keyword arguments:
 
 ```ruby 
 # all defaults set explicitly:
-env.define_queue(:queue_name, YourTaskClass, timeout: 3600, max_attempts: 20, update_period: 10, max_tasks: 10)
+env.define_queue :queue_name, YourTaskClass, timeout: 3600, max_attempts: 20, update_period: 10, max_tasks: 10
 ```
 
 ### Subprocess Hook: `#each_process`
@@ -212,8 +228,8 @@ Procrastinator.setup do |env|
       connection = SomeDatabase.connect('bob@mainframe/my_database')
       
       # these two are the configuration methods you're most likely to use in #each_process
-      config.provide_context(MyApp.build_task_package)
-      config.load_with(MyDatabase.new(connection))
+      config.provide_context MyApp.build_task_package
+      config.load_with MyDatabase.new(connection)
    end
 end
 ```
@@ -227,10 +243,10 @@ Each queue is worked in a separate process and you can call `#prefix_process` an
     This should help prevent a single task from clogging up the whole queue -->
 
 ```ruby
-procrastinator = Procrastinator.setup do |env|
+scheduler = Procrastinator.setup do |env|
    # ... other setup stuff ...
    
-   env.prefix_processes('myapp')
+   env.prefix_processes 'myapp'
 end
 ```
 
@@ -241,11 +257,11 @@ If there is no process with the parent's PID, the sub-process will self-exit.
 To schedule tasks, just call `#delay` on the environment returned from `Procrastinator.setup`: 
 
 ```ruby
-procrastinator = Procrastinator.setup do |env|
+scheduler = Procrastinator.setup do |env|
    # ... other setup stuff ...
 
-   env.define_queue(:reminder, EmailReminder)
-   env.define_queue(:thumbnail, CreateThumbnail)
+   env.define_queue :reminder, EmailReminder
+   env.define_queue :thumbnail, CreateThumbnail
 end
 
 # Provide the queue name and any data you want passed in
@@ -255,10 +271,10 @@ procrastinator.delay(:reminder, data: 'bob@example.com')
 If you have only one queue, you can omit the queue name: 
 
 ```ruby
-procrastinator = Procrastinator.setup do |env|
+scheduler = Procrastinator.setup do |env|
    # ... other setup stuff ...
 
-   env.define_queue(:reminder, EmailReminder)
+   env.define_queue :reminder, EmailReminder
 end
 
 procrastinator.delay(data: 'bob@example.com')
@@ -295,13 +311,13 @@ Your task class is what actually gets run on the task queue. They will look some
 
 ```ruby
 class MyTask
-   # Receives the data stored in the call to #delay
-   def initialize(data)
-      # ... assign to instance variables ...
-   end
+   include Procrastinator::Task
+   
+   # Give any of these symbols to task_attr and they will become available as methods
+   # task_attr :data, :logger, :context, :scheduler
    
    # Performs the core work of the task. 
-   def run(context, logger)
+   def run
       # ... perform your task ...
    end
    
@@ -315,12 +331,13 @@ class MyTask
    
    # Called after the task has completed successfully. 
    # Receives the result of #run.
-   def success(context, logger, run_result)
+   def success(run_result)
       # ...
    end
    
-   # Called after #run raises a StandardError or subclass.
-   def fail(context, logger, error)
+   # Called after #run raises any StandardError (or subclass).
+   # Receives the raised error.
+   def fail(error)
       # ...
    end
    
@@ -330,18 +347,52 @@ class MyTask
    #      In this case, #fail will not be executed, only #final_fail. 
    #
    # When called, the task will be marked to never be run again.
-   def final_fail(context, logger, error)
+   # Receives the raised error.
+   def final_fail(error)
       # ...
    end
 end
 ```
 
-
 It **must provide** a `#run` method, but `#success`, `#fail`, and `#final_fail` are optional. 
-The initializer is required if you provide the `:data` argument when you schedule it with `#delay`. 
 
-See the [Task Context](#task-context-provide_context) and [Logging](#logging) sections for explanations of 
-the `context` and `logger` parameters.
+### Accessing Task Attributes
+Include `Procrastinator::Task` in your task class and then use `task_attr` to register which task attributes your 
+task wants access to. 
+
+```ruby
+class MyTask
+   include Procrastinator::Task
+   
+   # declare the task attributes you care about by calling task_attr. 
+   # You can use any of these symbols: 
+   #             :data, :logger, :context, :scheduler
+   task_attr :data, :logger
+   
+   def run
+      # in methods, you can access the attributes you requested in task_attr
+      logger.info("The data for this task is #{data}")
+   end
+end   
+```
+
+ * `:data`
+   This is the data that you provided in the call to `#delay`. Any task that registers `:data` as a task 
+   attribute will require data be passed to `#delay`.
+   See [Task Data](#task-data) for more.
+   
+ * `:context`
+  
+   The context you've provided in your setup. See [Task Context](#task-context-provide_context) for more.
+ 
+ * `:logger`
+    
+   The queue's Logger object. See [Logging](#logging) for more.
+    
+ * `:scheduler`
+ 
+   A scheduler object that you can use to schedule new tasks (eg. with `#delay`).
+
 
 ### Retries
 Failed tasks have their `run_at` rescheduled on an increasing delay (in seconds) according to this formula: 
@@ -363,7 +414,7 @@ the procrastination environment:
 Procrastinator.test_mode = true
  
 # or you can also enable it in the setup
-env = Procrastinator.setup do |env|
+scheduler = Procrastinator.setup do |env|
    env.enable_test_mode
     
    # ... other settings...
@@ -377,7 +428,7 @@ Then in your tests, tell the procrastinator environment to work off one item:
 env.act
 
 # or provide queue names to execute one task on those specific queues
-env.act(:cleanup, :email)
+scheduler.act(:cleanup, :email)
 ```
 
 ## Logging
@@ -386,27 +437,34 @@ the defined log directory using the Ruby
 [Logger class](https://ruby-doc.org/stdlib-2.5.1/libdoc/logger/rdoc/Logger.html).
 
 ```ruby
-procrastinator = Procrastinator.setup do |env|
+scheduler = Procrastinator.setup do |env|
    # ... other setup stuff ... 
 
    # you can set custom log directory and level:
-   env.log_in('/var/log/myapp/')
-   env.log_at_level(Logger::DEBUG)
+   env.log_in '/var/log/myapp/'
+   env.log_at_level Logger::DEBUG
    
    # these are the default values:
-   env.log_in('log/') # relative to the running directory
-   env.log_at_level(Logger::INFO)
+   env.log_in 'log/' # relative to the running directory
+   env.log_at_level Logger::INFO
    
-   # disable logging entirely:
-   env.log_in(nil)
+   # use nil to disable logging entirely:
+   env.log_in nil
 end
 ```
 
-The logger is passed into each of the hooks (`#run`, `#success`, etc) in your task class as the second parameter:
+The logger can be accessed by including Procrastinator::Task in your task class and then calling
+`task_attr :logger`. 
+
+
 ```ruby
 class MyTask
-   def run(context, logger)
-      logger.info('This task was run.')
+   include Procrastinator::Task
+   
+   task_attr :logger
+
+   def run
+      logger.info('This task got run. Hooray!')
    end
 end
 ```
