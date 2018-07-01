@@ -10,9 +10,7 @@ module Procrastinator
          let(:persister) {Test::Persister.new}
          let(:config) do
             config = Config.new
-            config.load_with do
-               persister
-            end
+            config.load_with(persister)
             config.define_queue(:test_queue, test_task)
             config
          end
@@ -114,7 +112,7 @@ module Procrastinator
 
          it 'should NOT require queue be provided if only one queue is defined' do
             config = Config.new
-            config.load_with {persister}
+            config.load_with(persister)
             config.define_queue(:queue_name, test_task)
 
             scheduler = Scheduler.new(config)
@@ -124,7 +122,7 @@ module Procrastinator
 
          it 'should assume the queue name if only one queue is defined' do
             config = Config.new
-            config.load_with {persister}
+            config.load_with(persister)
             config.define_queue(:some_queue, test_task)
 
             scheduler = Scheduler.new(config)

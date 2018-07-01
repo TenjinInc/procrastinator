@@ -22,15 +22,18 @@ Setup a procrastination environment:
 
 ```ruby
 procrastinator = Procrastinator.setup do |env|
-   env.load_with do
-      # eg. connect to a database, etc 
-      # then provide a class that does task I/O
-      MyTaskLoader.new('my-tasks.csv')
-   end
-   
    env.define_queue(:greeting, SendWelcomeEmail)
    env.define_queue(:thumbnail, GenerateThumbnail, timeout: 60)
    env.define_queue(:birthday, SendBirthdayEmail, max_attempts: 3)
+   
+   env.load_with(MyTaskLoader.new('my-tasks.csv'))
+   
+   # this block runs on each worker sub process
+   env.each_process do
+      # ... create a new database connection or whatever you need ...
+   
+      env.load_with(MyTaskLoader.new('my-tasks.csv'))
+   end
 end
 ```
 
@@ -50,6 +53,7 @@ Read on for more details:
    1. [Task Loader](#task-loader-load_with)
    1. [Task Context](#task-context-provide_context)
    1. [Defining Queues](#defining-queues-define_queue)
+   1. [Subprocess Hook](#subprocess-hook-each_process)
 1. [Scheduling Tasks](#scheduling-tasks)
 1. [Tasks](#tasks)
 1. [Logging](#logging)
@@ -70,16 +74,28 @@ and you use that environment to `#delay` tasks.
 Your task loader is a [strategy](https://en.wikipedia.org/wiki/Strategy_pattern) pattern object
 that knows how to read and write tasks in your data storage (eg. file, database, etc).
 
-In setup, the environment's `#load_with` method expects a block that constructs and returns an instance of
-your persistence strategy class. **That block will be run in each sub-process**, which allows for 
-per-process resource management (eg. providing separate database connections).
+In setup, the environment's `#load_with` method expects an instance of this class. 
 
-Example:
 ```ruby
 procrastinator = Procrastinator.setup do |env|
-   env.load_with do
+   env.load_with(MyTaskLoader.new('tasks.csv'))
+   
+   # .. other setup stuff ...
+end
+```
+
+If you need per-process resource management (eg. independent database connections), put another call to #load_with
+inside the #each_process block.
+
+```ruby
+procrastinator = Procrastinator.setup do |env|
+   connection = SomeDatabaseLibrary.connect('my_app_development')
+   env.load_with(MyTaskLoader.new(connection))
+   
+   env.each_process do
+      # a fresh connection
       connection = SomeDatabaseLibrary.connect('my_app_development')
-      MyTaskLoader.new(connection)
+      env.load_with(MyTaskLoader.new(connection))
    end
    
    # .. other setup stuff ...
@@ -117,7 +133,7 @@ These are the data fields for each individual scheduled task. If you have a data
 |-------------------|--------| ----------------------------------------------------------------------------------------|
 | `:id`             | int    | Unique identifier for this exact task                                                   |
 | `:queue`          | symbol | Name of the queue the task is inside                                                    | 
-| `:run_at`         | int    | Unix timestamp of when to next attempt running the task                                 |
+| `:run_at`         | int    | Unix timestamp of when to next attempt running the task.                                |
 | `:initial_run_at` | int    | Unix timestamp of the originally requested run                                          |
 | `:expire_at`      | int    | Unix timestamp of when to permanently fail the task because it is too late to be useful |
 | `:attempts`       | int    | Number of times the task has tried to run; this should only be > 0 if the task fails    |
@@ -127,22 +143,21 @@ These are the data fields for each individual scheduled task. If you have a data
 
 The `:data` is serialized with YAML.dump.
 
+If `:run_at` is `nil`, that indicates that it is permanently failed and will never run, either due to expiry or too many failures. 
+
 Notice that the times are all given as unix epoch timestamps. This is to avoid any confusion with timezones, 
 and it is recommended that you store times in this manner for the same reason. 
 
 ### Task Context: `#provide_context`
-Similar to `#load_with`, `#provide_context` takes a block that is executed on the sub process and the result is passed 
-into each of your task's hooks as the first parameter. 
+Whatever you give to `#provide_context` will be made available to your Task through the import data `:context`. 
 
-This is useful for things like creating other database connections or passing in shared state. 
+This can be useful for things like app containers, but you can use it for whatever you like.  
 
 ```ruby
 Procrastinator.setup do |env|
    # .. other setup stuff ...
  
-   env.provide_context do 
-      {message: "This hash will be passed into your task's methods"}
-   end
+   env.provide_context(message: "This hash will be passed into your task's methods")
 end
 ```
 
@@ -182,6 +197,28 @@ provide these keyword arguments:
 # all defaults set explicitly:
 env.define_queue(:queue_name, YourTaskClass, timeout: 3600, max_attempts: 20, update_period: 10, max_tasks: 10)
 ```
+
+### Subprocess Hook: `#each_process`
+In the setup block, you specify which actions to take specifically on the subprocesses with `#each_process`. Whatever
+is in the block will be run after the process is forked and before the queue worker starts. 
+
+```ruby
+Procrastinator.setup do |env|
+   # ... other setup stuff ...
+
+   env.each_process do 
+      # create process-specific resources here, like database connections 
+      # (the parent process's connection could disappear, because they're asychnronous)
+      connection = SomeDatabase.connect('bob@mainframe/my_database')
+      
+      # these two are the configuration methods you're most likely to use in #each_process
+      config.provide_context(MyApp.build_task_package)
+      config.load_with(MyDatabase.new(connection))
+   end
+end
+```
+
+That block is **not run in Test Mode**. 
 
 ### Other Setup Methods
 Each queue is worked in a separate process and you can call `#prefix_process` and provide a subprocess prefix.

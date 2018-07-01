@@ -28,13 +28,12 @@ module Procrastinator
                   @workers << pid
                else
                   # === CHILD PROCESS ===
-                  # Create a new task loader because the one from the parent is now async and unreliable
-                  loader = @config.loader(rebuild: true)
+                  @config.run_process_block
 
                   worker = QueueWorker.new(queue:        queue,
                                            task_context: @config.context,
                                            scheduler:    scheduler,
-                                           persister:    loader,
+                                           persister:    @config.loader,
                                            log_dir:      @config.log_dir,
                                            log_level:    @config.log_level)
 

@@ -8,9 +8,7 @@ module Procrastinator
          let(:persister) {Test::Persister.new}
          let(:config) do
             config = Config.new
-            config.load_with do
-               persister
-            end
+            config.load_with(persister)
             config
          end
 
@@ -134,9 +132,7 @@ module Procrastinator
             it 'should evaluate load_with and pass it to the worker' do
                persister = double('specific persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
 
-               config.load_with do
-                  persister
-               end
+               config.load_with(persister)
 
                config.define_queue(:test, test_task)
 
@@ -148,9 +144,7 @@ module Procrastinator
             it 'should evaluate task_context and pass it to the worker' do
                context = double('task context')
 
-               config.provide_context do
-                  context
-               end
+               config.provide_context(context)
                config.define_queue(:queue_name, test_task)
 
                expect(QueueWorker).to receive(:new)
@@ -248,6 +242,21 @@ module Procrastinator
 
                   expect(manager.spawn_workers).to be_a Scheduler
                end
+
+               it 'should NOT run the each_process hook' do
+                  run = false
+
+                  config.each_process do
+                     run = true
+                  end
+
+                  config.define_queue(:test, test_task)
+
+                  expect(config).to_not receive(:subprocess_block)
+                  expect(run).to be false
+
+                  manager.spawn_workers
+               end
             end
 
             context 'subprocess' do
@@ -344,16 +353,14 @@ module Procrastinator
                   expect(manager.spawn_workers).to be scheduler
                end
 
-               it 'should pass the worker a new loader instance' do
+               it 'should run the each_process hook in each queue' do
                   subprocess_persister = double('child persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
 
-                  config.load_with do
-                     subprocess_persister
+                  config.each_process do
+                     config.load_with(subprocess_persister)
                   end
 
                   config.define_queue(:test, test_task)
-
-                  allow(Process).to receive(:setproctitle)
 
                   expect(QueueWorker).to receive(:new)
                                                .with(hash_including(persister: subprocess_persister))
@@ -363,11 +370,69 @@ module Procrastinator
                   manager.spawn_workers
                end
 
-               it 'should provide the worker with a new task context' do
+               it 'should run the each_process hook after running fork' do
+                  manager = QueueManager.new(config)
+
+                  subprocess_persister = double('child persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+
+                  config.each_process do
+                     config.load_with(subprocess_persister)
+                  end
+
+                  config.define_queue(:test, test_task)
+
+                  expect(QueueWorker).to receive(:new)
+                                               .with(hash_including(persister: subprocess_persister))
+                                               .and_call_original
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  expect(manager).to receive(:fork).and_return(nil).ordered
+                  expect(config).to receive(:run_process_block).and_call_original.ordered
+
+                  manager.spawn_workers
+               end
+
+               it 'should run the each_process hook before running work' do
+                  subprocess_persister = Test::Persister.new
+
+                  config.each_process do
+                     config.load_with(subprocess_persister)
+                  end
+
+                  config.define_queue(:test, test_task)
+
+                  expect(config).to receive(:run_process_block).and_call_original.ordered
+                  expect(QueueWorker).to receive(:new)
+                                               .with(hash_including(persister: subprocess_persister))
+                                               .and_call_original
+                                               .ordered
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  manager.spawn_workers
+               end
+
+               it 'should pass the worker the loader instance' do
+                  subprocess_persister = double('child persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+
+                  config.each_process do
+                     config.load_with(subprocess_persister)
+                  end
+
+                  config.define_queue(:test, test_task)
+
+                  expect(QueueWorker).to receive(:new)
+                                               .with(hash_including(persister: subprocess_persister))
+                                               .and_call_original
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  manager.spawn_workers
+               end
+
+               it 'should provide the worker the task context' do
                   context = double('task context')
 
-                  config.provide_context do
-                     context
+                  config.each_process do
+                     config.provide_context(context)
                   end
                   config.define_queue(:queue_name, test_task)
 
@@ -576,9 +641,7 @@ module Procrastinator
 
          let(:config) do
             config = Config.new
-            config.load_with do
-               persister
-            end
+            config.load_with(persister)
             config.define_queue(:test1, test_task)
             config.define_queue(:test2, test_task)
             config.define_queue(:test3, test_task)
@@ -615,9 +678,7 @@ module Procrastinator
 
          it 'should complain if you try to use Procrastinator.act outside Test Mode' do
             config = Config.new
-            config.load_with do
-               persister
-            end
+            config.load_with(persister)
 
             normal_manager = QueueManager.new(config)
 

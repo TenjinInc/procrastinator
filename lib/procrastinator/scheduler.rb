@@ -31,7 +31,7 @@ module Procrastinator
       # Scheduler must always get the loader indirectly. If it saves the loader to an instance variable,
       # then that could hold a reference to a bad (ie. gone) connection on the previous process
       def loader
-         @config.task_loader
+         @config.loader
       end
    end
 end

@@ -6,22 +6,52 @@ module Procrastinator
       let(:test_task) {Test::Task::AllHooks}
 
       describe '#load_with' do
-         it 'should require a factory block' do
-            err = '#load_with must be given a block that produces a persistence handler for tasks'
-
+         it 'should complain if the loader is nil' do
             expect do
-               Config.new.load_with
-            end.to raise_error(RuntimeError, err)
+               config.load_with(nil)
+            end.to raise_error(MalformedTaskLoaderError, 'task loader cannot be nil')
+         end
+
+         it 'should complain if the loader does not respond to #read_tasks' do
+            bad_loader = double('block', create_task: nil, update_task: nil, delete_task: nil)
+
+            err = "task loader #{bad_loader.class} must respond to #read_tasks"
+
+            expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
+         end
+
+         it 'should complain if the loader does not respond to #create_task' do
+            bad_loader = double('block', read_tasks: nil, update_task: nil, delete_task: nil)
+
+            err = "task loader #{bad_loader.class} must respond to #create_task"
+
+            expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
+         end
+
+         it 'should complain if the loader does not respond to #update_task' do
+            bad_loader = double('block', read_tasks: nil, create_task: nil, delete_task: nil)
+
+            err = "task loader #{bad_loader.class} must respond to #update_task"
+
+            expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
+         end
+
+         it 'should complain if the loader does not respond to #delete_task' do
+            bad_loader = double('block', read_tasks: nil, create_task: nil, update_task: nil,)
+
+            err = "task loader #{bad_loader.class} must respond to #delete_task"
+
+            expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
          end
       end
 
       describe '#provide_context' do
-         it 'should require a factory block' do
-            err = '#provide_context must be given a block that returns a value to be passed to your task event hooks'
+         it 'should store the context' do
+            context = double('block')
 
-            expect do
-               Config.new.provide_context
-            end.to raise_error(RuntimeError, err)
+            config.provide_context(context)
+
+            expect(config.context).to be context
          end
       end
 
@@ -168,143 +198,29 @@ module Procrastinator
          end
 
          it 'should complain if it does not have any queues defined' do
-            config.load_with {Test::Persister.new}
+            config.load_with(Test::Persister.new)
 
             expect {config.validate!}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
          end
       end
 
-      describe '#context' do
-         it 'should run the context factory and return the result' do
-            context = double('block')
+      describe '#each_process' do
+         it 'should complain if no block is provided' do
+            err = '#provide_context must be given a block. That block will be run on each sub-process.'
 
-            config.provide_context do
-               context
-            end
-
-            expect(config.context).to be context
+            expect do
+               config.each_process
+            end.to raise_error(ArgumentError, err)
          end
       end
 
-      describe '#loader' do
-         context('loader is not yet built') do
-            it 'should run the loader factory and return the result' do
-               loader = Test::Persister.new
+      describe '#run_process_block' do
+         it 'should run the stored block' do
+            block = Proc.new {true}
 
-               config.load_with do
-                  loader
-               end
+            config.each_process &block
 
-               expect(config.loader).to be loader
-            end
-
-            it 'should retain the loader between calls' do
-               loader = Test::Persister.new
-
-               config.load_with do
-                  loader
-               end
-
-               expect(config.loader).to be loader
-               expect(config.loader).to be loader
-            end
-
-            it 'should complain if the loader is nil' do
-               config.load_with do
-                  nil
-               end
-
-               expect do
-                  config.loader
-               end.to raise_error(MalformedTaskLoaderError, 'task loader cannot be nil')
-            end
-
-            it 'should complain if the loader does not respond to #read_tasks' do
-               loader = double('block', create_task: nil, update_task: nil, delete_task: nil)
-
-               config.load_with do
-                  loader
-               end
-
-               err = "task loader #{loader.class} must respond to #read_tasks"
-
-               expect {config.loader}.to raise_error(MalformedTaskLoaderError, err)
-            end
-
-            it 'should complain if the loader does not respond to #create_task' do
-               loader = double('block', read_tasks: nil, update_task: nil, delete_task: nil)
-
-               config.load_with do
-                  loader
-               end
-
-               err = "task loader #{loader.class} must respond to #create_task"
-
-               expect {config.loader}.to raise_error(MalformedTaskLoaderError, err)
-            end
-
-            it 'should complain if the loader does not respond to #update_task' do
-               loader = double('block', read_tasks: nil, create_task: nil, delete_task: nil)
-
-               config.load_with do
-                  loader
-               end
-
-               err = "task loader #{loader.class} must respond to #update_task"
-
-               expect {config.loader}.to raise_error(MalformedTaskLoaderError, err)
-            end
-
-            it 'should complain if the loader does not respond to #delete_task' do
-               loader = double('block', read_tasks: nil, create_task: nil, update_task: nil,)
-
-               config.load_with do
-                  loader
-               end
-
-               err = "task loader #{loader.class} must respond to #delete_task"
-
-               expect {config.loader}.to raise_error(MalformedTaskLoaderError, err)
-            end
-         end
-
-         context('loader called with rebuild') do
-            it 'should run the loader factory again and return a new result' do
-               loaded        = false
-               first_loader  = double('block', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
-               second_loader = double('block', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
-
-               config.load_with do
-                  if loaded
-                     second_loader
-                  else
-                     loaded = true
-                     first_loader
-                  end
-               end
-
-               expect(config.loader(rebuild: false)).to be first_loader
-               expect(config.loader(rebuild: true)).to be second_loader
-            end
-
-            it 'should retain the new loader' do
-               loaded        = false
-               first_loader  = double('block', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
-               second_loader = double('block', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
-
-               config.load_with do
-                  if loaded
-                     second_loader
-                  else
-                     loaded = true
-                     first_loader
-                  end
-               end
-
-               expect(config.loader).to be first_loader
-               expect(config.loader(rebuild: true)).to be second_loader
-               expect(config.loader(rebuild: false)).to be second_loader
-            end
+            expect(config.run_process_block).to be true
          end
       end
 

@@ -1,41 +1,48 @@
 module Procrastinator
    class Config
-      attr_reader :queues, :log_level, :log_dir, :prefix, :test_mode
+      attr_reader :queues, :log_level, :log_dir, :prefix, :test_mode, :context, :loader
       alias_method :test_mode?, :test_mode
 
       DEFAULT_LOG_DIRECTORY = 'log/'
 
       def initialize
-         @test_mode       = false
-         @log_dir         = DEFAULT_LOG_DIRECTORY
-         @log_level       = Logger::INFO
-         @loader_factory  = nil
-         @context_factory = nil
-         @queues          = []
-         @loader          = nil
+         @test_mode        = false
+         @queues           = []
+         @loader           = nil
+         @context          = nil
+         @subprocess_block = nil
+         @log_dir          = DEFAULT_LOG_DIRECTORY
+         @log_level        = Logger::INFO
       end
 
-      # Accepts a block that will be executed on the queue sub process. This is done to separate resource allocations
-      # like database connections.
-      # The result will be used to load tasks
-      def load_with(&block)
-         unless block
-            raise RuntimeError.new('#load_with must be given a block that produces a persistence handler for tasks')
-         end
+      # Assigns a task loader
+      # It should be called in an each_process block as well so that they get
+      # distinct resources (eg. DB connections) from the parent process.
+      def load_with(loader)
+         @loader = loader
 
-         @loader_factory = block
+         raise MalformedTaskLoaderError.new('task loader cannot be nil') if @loader.nil?
+
+         [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
+            unless @loader.respond_to? method
+               raise MalformedTaskLoaderError.new("task loader #{@loader.class} must respond to ##{method}")
+            end
+         end
       end
 
-      # Accepts a block that will be executed on the queue sub process.
-      # The result will be passed into the task methods.
-      def provide_context(&block)
-         unless block
-            err = '#provide_context must be given a block that returns a value to be passed to your task event hooks'
+      def provide_context(context)
+         @context = context
+      end
 
-            raise RuntimeError.new(err)
+      # Accepts a block that will be executed on the queue sub-processes. Use it to control resource allocations.
+      def each_process(&block)
+         unless block
+            err = '#provide_context must be given a block. That block will be run on each sub-process.'
+
+            raise ArgumentError.new(err)
          end
 
-         @context_factory = block
+         @subprocess_block = block
       end
 
       def define_queue(name, task_class, properties = {})
@@ -63,12 +70,12 @@ module Procrastinator
          @prefix = prefix
       end
 
-      # === everything below thiss isn't part of the setup DSL ===
+      # === everything below this isn't part of the setup DSL ===
       def validate!
-         raise RuntimeError.new('setup block must call #load_with on the environment') if @loader_factory.nil?
+         raise RuntimeError.new('setup block must call #load_with on the environment') if @loader.nil?
          raise RuntimeError.new('setup block must call #define_queue on the environment') if @queues.empty?
 
-         if @context_factory && !@queues.any? {|queue| queue.task_class.method_defined?(:context=)}
+         if @context && !@queues.any? {|queue| queue.task_class.method_defined?(:context=)}
             err = <<~ERROR
                setup block called #provide_context, but no queue task classes import :context.
 
@@ -81,19 +88,6 @@ module Procrastinator
 
             raise RuntimeError.new(err)
          end
-      end
-
-      def context
-         @context_factory ? @context_factory.call : nil
-      end
-
-      # This is called to construct a new task loader for this env.
-      # It should be called for each fork as well, with rebuild: true
-      # so that they get distinct resources (eg. DB connections) from the parent process.
-      def loader(rebuild: false)
-         @loader = nil if rebuild
-
-         @loader ||= create_loader
       end
 
       def queues_string
@@ -109,6 +103,10 @@ module Procrastinator
          @queues.size > 1
       end
 
+      def run_process_block
+         @subprocess_block.call if @subprocess_block
+      end
+
       def queue(name: nil)
          if name
             @queues.find do |q|
@@ -120,20 +118,6 @@ module Procrastinator
       end
 
       private
-
-      def create_loader
-         loader = @loader_factory.call
-
-         raise MalformedTaskLoaderError.new('task loader cannot be nil') if loader.nil?
-
-         [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
-            unless loader.respond_to? method
-               raise MalformedTaskLoaderError.new("task loader #{loader.class} must respond to ##{method}")
-            end
-         end
-
-         loader
-      end
 
       def verify_task_class(task_class)
          unless task_class.method_defined? :run

@@ -32,7 +32,7 @@ module Procrastinator
             scheduler = double('scheduler')
             config    = Config.new
 
-            config.load_with {persister}
+            config.load_with(persister)
 
             allow(config).to receive(:validate!)
 
@@ -50,7 +50,7 @@ module Procrastinator
             scheduler = double('scheduler')
             config    = Config.new
 
-            config.load_with {persister}
+            config.load_with(persister)
 
             allow(config).to receive(:validate!)
 
@@ -67,7 +67,7 @@ module Procrastinator
 
             Procrastinator.setup do |config|
                config.define_queue(:test, test_task)
-               config.load_with {persister}
+               config.load_with(persister)
             end
          end
 
@@ -81,17 +81,9 @@ module Procrastinator
             end.to raise_error(RuntimeError, 'setup block must call #load_with on the environment')
          end
 
-         it 'should require that #load_with is provided a task loader factory block' do
-            err = '#load_with must be given a block that produces a persistence handler for tasks'
-
-            expect do
-               Procrastinator.setup {|config| config.load_with}
-            end.to raise_error(RuntimeError, err)
-         end
-
          it 'should require at least one queue is defined' do
             expect {Procrastinator.setup do |config|
-               config.load_with {persister}
+               config.load_with(persister)
             end}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
          end
 
@@ -113,8 +105,8 @@ module Procrastinator
 
             expect {Procrastinator.setup do |config|
                config.define_queue(:test, task_class)
-               config.load_with {persister}
-               config.provide_context {double('some context')}
+               config.load_with(persister)
+               config.provide_context(double('some context'))
             end}.to raise_error(RuntimeError, err)
          end
 
@@ -126,7 +118,7 @@ module Procrastinator
 
             expect {Procrastinator.setup do |config|
                config.define_queue(:test, task_class)
-               config.load_with {persister}
+               config.load_with(persister)
             end}.to_not raise_error
          end
 
@@ -141,7 +133,7 @@ module Procrastinator
                Procrastinator.setup do |config|
                   built_config = config
 
-                  config.load_with {persister}
+                  config.load_with(persister)
                   config.define_queue(:test, test_task)
                end
 
@@ -155,13 +147,13 @@ module Procrastinator
                Procrastinator.setup do |config|
                   config_1 = config
 
-                  config.load_with {persister}
+                  config.load_with(persister)
                   config.define_queue(:test, test_task)
                end
                Procrastinator.setup do |config|
                   config_2 = config
 
-                  config.load_with {persister}
+                  config.load_with(persister)
                   config.define_queue(:test, test_task)
                end
 
@@ -181,7 +173,7 @@ module Procrastinator
                Procrastinator.setup do |config|
                   built_config = config
 
-                  config.load_with {persister}
+                  config.load_with(persister)
                   config.define_queue(:test, test_task)
                end
 
@@ -195,13 +187,13 @@ module Procrastinator
                Procrastinator.setup do |config|
                   config_1 = config
 
-                  config.load_with {persister}
+                  config.load_with(persister)
                   config.define_queue(:test, test_task)
                end
                Procrastinator.setup do |config|
                   config_2 = config
 
-                  config.load_with {persister}
+                  config.load_with(persister)
                   config.define_queue(:test, test_task)
                end
 
@@ -217,13 +209,13 @@ module Procrastinator
                   config_1 = config
 
                   config.enable_test_mode
-                  config.load_with {persister}
+                  config.load_with(persister)
                   config.define_queue(:test, test_task)
                end
                Procrastinator.setup do |config|
                   config_2 = config
 
-                  config.load_with {persister}
+                  config.load_with(persister)
                   config.define_queue(:test, test_task)
                end
 
