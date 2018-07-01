@@ -1,10 +1,11 @@
 require 'procrastinator/version'
-require 'procrastinator/task'
+require 'procrastinator/task_meta_data'
 require 'procrastinator/task_worker'
 require 'procrastinator/queue'
 require 'procrastinator/queue_worker'
 require 'procrastinator/config'
 require 'procrastinator/queue_manager'
+require 'procrastinator/task'
 require 'logger'
 
 

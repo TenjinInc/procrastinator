@@ -22,88 +22,92 @@ module Procrastinator
    module Test
       module Task
          module MissingParam
-            class BadRun
-               def run
-
+            class ArgRun
+               def run(params)
                end
             end
 
-            class BadSuccess
-               def run(context, logger)
-
+            class NoArgSuccess
+               def run
                end
 
                def success
-
                end
             end
 
-            class BadFail
-               def run(context, logger)
+            class MultiArgSuccess
+               def run
+               end
 
+               def success(a, b)
+               end
+            end
+
+            class NoArgFail
+               def run
                end
 
                def fail
-
                end
             end
 
-            class BadFinalFail
-               def run(context, logger)
+            class MultiArgFail
+               def run
+               end
 
+               def fail(a, b)
+               end
+            end
+
+            class NoArgFinalFail
+               def run
                end
 
                def final_fail
+               end
+            end
 
+            class MultiArgFinalFail
+               def run
+               end
+
+               def final_fail(a, b)
                end
             end
          end
 
          class AllHooks
-            def initialize(data = nil)
-
+            def run
             end
 
-            def run(context, logger)
-
+            def success(result)
             end
 
-            def success(context, logger, result)
-
+            def fail(error)
             end
 
-            def fail(context, logger, error)
-
-            end
-
-            def final_fail(context, logger, error)
-
+            def final_fail(error)
             end
          end
 
-         class KeywordInit
-            def initialize(test_data_one:, test_data_two:)
+         class ExpectingTask
+            extend Procrastinator::Task
 
-            end
-
-            def run(context, logger)
-
+            def run
             end
          end
 
          class RunOnly
-            def run(context, logger)
-
+            def run
             end
          end
 
          class Fail
-            def run(context, logger)
+            def run
                raise('derp')
             end
 
-            def fail(context, logger, error)
-
+            def fail(error)
             end
          end
       end

@@ -74,36 +74,48 @@ module Procrastinator
             end.to raise_error(MalformedTaskError, "task #{klass} does not support #run method")
          end
 
-         it 'should complain if task does NOT accept 2 parameters to #run' do
-            err = 'task Procrastinator::Test::Task::MissingParam::BadRun must accept 2 parameters to its #run method'
+         it 'should complain if task #run expects parameters' do
+            klass = Procrastinator::Test::Task::MissingParam::ArgRun
+
+            err = "task #{klass} cannot require parameters to its #run method"
 
             expect do
-               config.define_queue(:test_queue, Test::Task::MissingParam::BadRun)
+               config.define_queue(:test_queue, klass)
             end.to raise_error(MalformedTaskError, err)
          end
 
-         it 'should complain if task does NOT accept 2 parameters to #success' do
-            err = 'task Procrastinator::Test::Task::MissingParam::BadSuccess must accept 3 parameters to its #success method'
+         it 'should complain if task does NOT accept 1 parameter to #success' do
+            [Procrastinator::Test::Task::MissingParam::NoArgSuccess,
+             Procrastinator::Test::Task::MissingParam::MultiArgSuccess].each do |klass|
+               err = "task #{klass} must accept 1 parameter to its #success method"
 
-            expect do
-               config.define_queue(:test_queue, Test::Task::MissingParam::BadSuccess)
-            end.to raise_error(MalformedTaskError, err)
+               expect do
+                  config.define_queue(:test_queue, klass)
+               end.to raise_error(MalformedTaskError, err)
+            end
          end
 
-         it 'should complain if task does NOT accept 3 parameters in #fail' do
-            err = 'task Procrastinator::Test::Task::MissingParam::BadFail must accept 3 parameters to its #fail method'
+         it 'should complain if task does NOT accept 1 parameter in #fail' do
+            [Procrastinator::Test::Task::MissingParam::NoArgFail,
+             Procrastinator::Test::Task::MissingParam::MultiArgFail].each do |klass|
+               err = "task #{klass} must accept 1 parameter to its #fail method"
 
-            expect do
-               config.define_queue(:test_queue, Test::Task::MissingParam::BadFail)
-            end.to raise_error(MalformedTaskError, err)
+               expect do
+                  config.define_queue(:test_queue, klass)
+               end.to raise_error(MalformedTaskError, err)
+            end
          end
 
-         it 'should complain if task does NOT accept 3 parameters in #final_fail' do
-            err = 'task Procrastinator::Test::Task::MissingParam::BadFinalFail must accept 3 parameters to its #final_fail method'
+         it 'should complain if task does NOT accept 1 parameter in #final_fail' do
+            [Procrastinator::Test::Task::MissingParam::NoArgFinalFail,
+             Procrastinator::Test::Task::MissingParam::MultiArgFinalFail].each do |klass|
 
-            expect do
-               config.define_queue(:test_queue, Test::Task::MissingParam::BadFinalFail)
-            end.to raise_error(MalformedTaskError, err)
+               err = "task #{klass} must accept 1 parameter to its #final_fail method"
+
+               expect do
+                  config.define_queue(:test_queue, klass)
+               end.to raise_error(MalformedTaskError, err)
+            end
          end
       end
 

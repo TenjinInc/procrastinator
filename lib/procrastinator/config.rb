@@ -11,7 +11,7 @@ module Procrastinator
          @log_dir         = DEFAULT_LOG_DIRECTORY
          @log_level       = Logger::INFO
          @loader_factory  = nil
-         @context_factory = Proc.new {}
+         @context_factory = nil
          @queues          = []
       end
 
@@ -63,13 +63,28 @@ module Procrastinator
          @prefix = prefix
       end
 
+      # === everything below this isn't part of the setup DSL ===
       def verify
          raise RuntimeError.new('setup block must call #load_with on the environment') if @loader_factory.nil?
          raise RuntimeError.new('setup block must call #define_queue on the environment') if @queues.empty?
+
+         if @context_factory && !@queues.any? {|queue| queue.task_class.method_defined?(:context=)}
+            err = <<~ERROR
+               setup block called #provide_context, but no queue task classes import :context.
+
+               Add this to Task classes that expect to receive the context:
+
+                  include Procrastinator::Task
+
+                  import_task_data(:context)
+            ERROR
+
+            raise RuntimeError.new(err)
+         end
       end
 
       def context
-         @context_factory.call
+         @context_factory ? @context_factory.call : nil
       end
 
       # This is called to construct a new task loader for this env.
@@ -113,12 +128,21 @@ module Procrastinator
             raise MalformedTaskError.new("task #{task_class} does not support #run method")
          end
 
-         # We're checking these on init because it's one of those extremely rare cases where you'd want to know early
-         # because of the sub-processes. It's a bit belt-and suspenders, but UX is important for         # devs, too.
-         expected_arity = {run: 2, success: 3, fail: 3, final_fail: 3}
-         expected_arity.each do |method_name, arity|
-            if task_class.method_defined?(method_name) && task_class.instance_method(method_name).arity < arity
-               err = "task #{task_class} must accept #{arity} parameters to its ##{method_name} method"
+         # We're checking the interface compliance on init because it's one of those extremely rare cases where
+         # you'd want to know early because the sub-processes would crash async, which is harder to debug.
+         # It's a bit belt-and suspenders, but UX is important for devs, too. - robinetmiller
+         if task_class.method_defined?(:run) && task_class.instance_method(:run).arity > 0
+            err = "task #{task_class} cannot require parameters to its #run method"
+
+            raise MalformedTaskError.new(err)
+         end
+
+         expected_arity = 1
+
+         [:success, :fail, :final_fail].each do |method_name|
+            if task_class.method_defined?(method_name) &&
+                  task_class.instance_method(method_name).arity != expected_arity
+               err = "task #{task_class} must accept #{expected_arity} parameter to its ##{method_name} method"
 
                raise MalformedTaskError.new(err)
             end

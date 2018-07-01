@@ -1,182 +1,160 @@
 require 'spec_helper'
 
 module Procrastinator
-   describe Procrastinator do
-      around(:each) do |example|
-         # need to store and replace this every test as this is a module level variable
-         original_mode = Procrastinator.test_mode
+   describe Task do
+      let(:all_attrs) {Procrastinator::Task::KNOWN_ATTRIBUTES}
 
-         example.run
+      describe '#import_task_data' do
+         let(:task_class) do
+            Class.new do
+               include Procrastinator::Task
 
-         Procrastinator.test_mode = original_mode
-      end
-
-      it 'should have a version number' do
-         expect(Procrastinator::VERSION).not_to be nil
-      end
-
-      describe '.setup' do
-         let(:test_task) {Test::Task::AllHooks}
-         let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
-
-         it 'should return a procrastinator environment configured via the block' do
-            env_double    = double('env')
-            config_double = double('config')
-
-            allow(env_double).to receive(:spawn_workers)
-            allow(config_double).to receive(:verify)
-
-            expect(Config).to receive(:new).and_return(config_double)
-            expect(QueueManager).to receive(:new).with(config_double).and_return(env_double)
-
-            returned_env = Procrastinator.setup do |config|
-               expect(config).to be config_double
-            end
-
-            expect(returned_env).to be env_double
-         end
-
-         it 'should require that a block is provided' do
-            expect {Procrastinator.setup}.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
-         end
-
-         it 'should require that #load_with is called' do
-            expect do
-               Procrastinator.setup {}
-            end.to raise_error(RuntimeError, 'setup block must call #load_with on the environment')
-         end
-
-         it 'should require that #load_with is provided a task loader factory block' do
-            err = '#load_with must be given a block that produces a persistence handler for tasks'
-
-            expect do
-               Procrastinator.setup {|config| config.load_with}
-            end.to raise_error(RuntimeError, err)
-         end
-
-         it 'should require at least one queue is defined' do
-            expect {Procrastinator.setup do |config|
-               config.load_with {}
-            end}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
-         end
-
-         it 'should call spawn_workers on the environment' do
-            expect_any_instance_of(QueueManager).to receive(:spawn_workers)
-
-            Procrastinator.setup do |config|
-               config.define_queue(:test, test_task)
-               config.load_with {persister}
+               def run
+               end
             end
          end
 
-         context 'test mode is enabled globally' do
-            before(:each) do
-               Procrastinator.test_mode = true
-            end
 
-            it 'should create an environment in test mode' do
-               built_config = nil
+         it 'should create accessors for a provided attribute' do
+            task_class.import_task_data(:logger)
 
-               Procrastinator.setup do |config|
-                  built_config = config
+            task = task_class.new
 
-                  config.load_with {persister}
-                  config.define_queue(:test, test_task)
-               end
+            expect(task).to respond_to(:logger)
+            expect(task).to respond_to(:logger=)
+         end
 
-               expect(built_config.test_mode?).to be true
-            end
+         it 'should create accessors for all provided attributes' do
+            task_class.import_task_data *all_attrs
 
-            it 'should create every subsequent environment in test mode' do
-               config_1 = nil
-               config_2 = nil
+            task = task_class.new
 
-               Procrastinator.setup do |config|
-                  config_1 = config
-
-                  config.load_with {persister}
-                  config.define_queue(:test, test_task)
-               end
-               Procrastinator.setup do |config|
-                  config_2 = config
-
-                  config.load_with {persister}
-                  config.define_queue(:test, test_task)
-               end
-
-               expect(config_1.test_mode?).to be true
-               expect(config_2.test_mode?).to be true
+            all_attrs.each do |attr|
+               expect(task).to respond_to(attr)
+               expect(task).to respond_to("#{attr}=".to_sym)
             end
          end
 
-         context 'test mode is disabled globally' do
-            before(:each) do
-               Procrastinator.test_mode = false
+         it 'should make the provided attributes available in all hook methods' do
+            task_class = Class.new do
+               include Procrastinator::Task
+
+               def run
+                  {
+                        logger:         logger,
+                        data:           data,
+                        procrastinator: procrastinator,
+                        context:        context
+                  }
+               end
+
+               def success(result)
+                  {
+                        logger:         logger,
+                        data:           data,
+                        procrastinator: procrastinator,
+                        context:        context
+                  }
+               end
+
+               def fail(err)
+                  {
+                        logger:         logger,
+                        data:           data,
+                        procrastinator: procrastinator,
+                        context:        context
+                  }
+               end
+
+               def final_fail(err)
+                  {
+                        logger:         logger,
+                        data:           data,
+                        procrastinator: procrastinator,
+                        context:        context
+                  }
+               end
             end
 
-            it 'should create a normal environment' do
-               built_config = nil
+            task_class.import_task_data *all_attrs
+            task = task_class.new
 
-               Procrastinator.setup do |config|
-                  built_config = config
+            logger         = double('log')
+            data           = double('log')
+            procrastinator = double('log')
+            context        = double('log')
 
-                  config.load_with {persister}
-                  config.define_queue(:test, test_task)
-               end
+            task.logger         = logger
+            task.data           = data
+            task.procrastinator = procrastinator
+            task.context        = context
 
-               expect(built_config.test_mode?).to be false
-            end
+            expected = {logger:         logger,
+                        data:           data,
+                        procrastinator: procrastinator,
+                        context:        context}
 
-            it 'should create every environment without test mode' do
-               config_1 = nil
-               config_2 = nil
+            expect(task.run).to eq(expected)
+            expect(task.success(nil)).to eq(expected)
+            expect(task.fail(nil)).to eq(expected)
+            expect(task.final_fail(nil)).to eq(expected)
+         end
 
-               Procrastinator.setup do |config|
-                  config_1 = config
+         it 'should complain if provided an unknown attribute' do
+            known_attrs = all_attrs.collect {|a| ":#{a}"}.join(', ')
 
-                  config.load_with {persister}
-                  config.define_queue(:test, test_task)
-               end
-               Procrastinator.setup do |config|
-                  config_2 = config
+            [:bogus, :typo].each do |attr|
+               err = "Unknown Procrastinator::Task attribute :#{attr}. Importable attributes are: #{known_attrs}"
 
-                  config.load_with {persister}
-                  config.define_queue(:test, test_task)
-               end
-
-               expect(config_1.test_mode?).to be false
-               expect(config_2.test_mode?).to be false
-            end
-
-            it 'should override the global if enabled in the environment' do
-               config_1 = nil
-               config_2 = nil
-
-               Procrastinator.setup do |config|
-                  config_1 = config
-
-                  config.enable_test_mode
-                  config.load_with {persister}
-                  config.define_queue(:test, test_task)
-               end
-               Procrastinator.setup do |config|
-                  config_2 = config
-
-                  config.load_with {persister}
-                  config.define_queue(:test, test_task)
-               end
-
-               expect(config_1.test_mode?).to be true
-               expect(config_2.test_mode?).to be false
+               expect {task_class.import_task_data(attr)}.to raise_error(ArgumentError, err)
             end
          end
       end
 
-      describe '#test_mode=' do
-         it 'should assign global test mode' do
-            Procrastinator.test_mode = true
+      describe '#method_missing' do
+         Procrastinator::Task::KNOWN_ATTRIBUTES.each do |attr|
+            it "should suggest using import_task_data if #{attr} is not expected" do
+               task_class = Class.new do
+                  include Procrastinator::Task
+               end
 
-            expect(Procrastinator.test_mode).to be true
+               task = task_class.new
+
+               err = "To access Procrastinator::Task attribute :#{attr}, " +
+                     "call import_task_data(:#{attr}) in your class definition."
+
+               expect {task.send(attr)}.to raise_error(NameError, err)
+            end
+         end
+
+         it "should should NOT raise errors if they are expected" do
+            task_class = Class.new do
+               include Procrastinator::Task
+            end
+
+            task_class.import_task_data(*all_attrs)
+
+            task = task_class.new
+
+            all_attrs.each do |attr|
+               expect {task.send(attr)}.to_not raise_error
+            end
+         end
+
+         it 'should do the super if it is not a known attribute' do
+            task_class = Class.new do
+               include Procrastinator::Task
+
+               def run
+                  send(:some_other_method)
+               end
+            end
+
+            task = task_class.new
+
+            err = "undefined method `some_other_method' for #{task}"
+
+            expect {task.run}.to raise_error(NameError, err)
          end
       end
    end

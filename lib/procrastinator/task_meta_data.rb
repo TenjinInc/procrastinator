@@ -1,5 +1,5 @@
 module Procrastinator
-   class TaskMeta
+   class TaskMetaData
       attr_reader(:id, :run_at, :initial_run_at, :expire_at, :attempts, :last_error, :last_fail_at, :data)
 
       def initialize(id: nil,
@@ -20,8 +20,8 @@ module Procrastinator
          @data           = data ? YAML.load(data) : nil
       end
 
-      def init_handler(handler_class)
-         @data ? handler_class.new(@data) : handler_class.new
+      def init_task(queue)
+         @data ? queue.task_class.new(@data) : queue.task_class.new
       end
 
       def add_attempt

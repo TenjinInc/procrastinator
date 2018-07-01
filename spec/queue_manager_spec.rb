@@ -134,7 +134,7 @@ module Procrastinator
             manager.delay(run_at: time)
          end
 
-         it 'should record convert run_at, initial_run_at, expire_at to ints' do
+         it 'should convert run_at, initial_run_at, expire_at to ints' do
             expect(persister).to receive(:create_task).with(include(run_at: 0, initial_run_at: 0, expire_at: 1))
 
             manager.delay(run_at:    double('time', to_i: 0),
@@ -151,7 +151,7 @@ module Procrastinator
             [:success, :fail, :final_fail].each do |method|
                task = test_task.new
 
-               allow(task).to receive(method).with('')
+               allow(task).to receive(method)
 
                expect do
                   manager.delay
@@ -174,7 +174,7 @@ module Procrastinator
             expect {manager.delay(:queue1, run_at: 0)}.to_not raise_error
          end
 
-         it 'should NOT require queue be provided if there only one queue defined' do
+         it 'should NOT require queue be provided if only one queue is defined' do
             config = Config.new
             config.load_with do
                persister
@@ -185,7 +185,7 @@ module Procrastinator
             expect {manager.delay}.to_not raise_error
          end
 
-         it 'should assume the queue name if there only one queue defined' do
+         it 'should assume the queue name if only one queue is defined' do
             config = Config.new
             config.load_with do
                persister

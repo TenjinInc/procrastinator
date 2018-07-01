@@ -246,7 +246,7 @@ module Procrastinator
             it 'should populate the data into a Task' do
                task_data = {run_at: 1}
 
-               expect(Task).to receive(:new).with(task_data).and_call_original
+               expect(TaskMetaData).to receive(:new).with(task_data).and_call_original
 
                worker = QueueWorker.new(queue:     instant_queue,
                                         persister: fake_persister([task_data]))
@@ -254,13 +254,13 @@ module Procrastinator
                worker.act
             end
 
-            it 'should run a TaskWorker with all the data' do
+            it 'should run a TaskWorker with the task metadata' do
                task_data = {run_at: 1}
 
-               task = Task.new(task_data)
-               allow(Task).to receive(:new).and_return(task)
+               meta = TaskMetaData.new(task_data)
+               allow(TaskMetaData).to receive(:new).and_return(meta)
 
-               expect(TaskWorker).to receive(:new).with(hash_including(task: task)).and_call_original
+               expect(TaskWorker).to receive(:new).with(hash_including(metadata: meta)).and_call_original
 
                worker = QueueWorker.new(queue:     instant_queue,
                                         persister: fake_persister([task_data]))
@@ -269,61 +269,48 @@ module Procrastinator
             end
 
             it 'should pass the TaskWorker the task context' do
-               task_double = double('task', run: nil)
-               task_data   = {run_at: 1}
-               task_worker = double('task worker')
-               context     = double('context object')
+               task_data = {run_at: 1}
+               context   = double('context object')
 
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task_double)
-               allow(TaskWorker).to receive(:new).and_return(task_worker)
-
-               allow(task_worker).to receive(:successful?)
-               allow(task_worker).to receive(:to_h).and_return({})
-               expect(task_worker).to receive(:work).with(hash_including(context: context))
-
-               persister = fake_persister([task_data])
+               expect(TaskWorker).to receive(:new).with(hash_including(context: context)).and_call_original
 
                worker = QueueWorker.new(queue:        instant_queue,
                                         task_context: context,
-                                        persister:    persister)
+                                        persister:    fake_persister([task_data]))
 
                worker.act
             end
 
-            it 'should pass the TaskWorker the task context' do
-               task_double = double('task', run: nil)
-               task_worker = double('task worker')
-               context     = double('context object')
+            it 'should pass the TaskWorker the queue settings' do
+               expect(TaskWorker).to receive(:new).with(hash_including(queue: instant_queue)).and_call_original
 
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task_double)
-               allow(TaskWorker).to receive(:new).and_return(task_worker)
-
-               allow(task_worker).to receive(:successful?)
-               allow(task_worker).to receive(:to_h).and_return({})
-               expect(task_worker).to receive(:work).with(hash_including(context: context))
-
-               worker = QueueWorker.new(queue:        instant_queue,
-                                        task_context: context,
-                                        persister:    fake_persister([{run_at: 1}]))
+               worker = QueueWorker.new(queue:     instant_queue,
+                                        persister: fake_persister([{run_at: 1}]))
 
                worker.act
             end
 
-            it 'should pass the TaskWorker the timeout' do
-               task_double = double('task', run: nil)
-               task_worker = double('task worker')
-               context     = double('context object')
+            it 'should pass the TaskWorker the logger if logging enabled' do
+               logger = Logger.new(StringIO.new)
 
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task_double)
-               allow(TaskWorker).to receive(:new).and_return(task_worker)
+               allow(Logger).to receive(:new).and_return(logger)
+               expect(TaskWorker).to receive(:new).with(hash_including(logger: logger)).and_call_original
 
-               allow(task_worker).to receive(:successful?)
-               allow(task_worker).to receive(:to_h).and_return({})
-               expect(task_worker).to receive(:work).with(hash_including(context: context))
+               FakeFS do
+                  worker = QueueWorker.new(queue:     instant_queue,
+                                           log_dir:   '/log',
+                                           persister: fake_persister([{run_at: 1}]))
 
-               worker = QueueWorker.new(queue:        instant_queue,
-                                        task_context: context,
-                                        persister:    fake_persister([{run_at: 1}]))
+
+                  worker.act
+               end
+            end
+
+            it 'should pass the TaskWorker a nil logger if logging disabled' do
+               expect(TaskWorker).to receive(:new).with(hash_including(logger: nil)).and_call_original
+
+               worker = QueueWorker.new(queue:     instant_queue,
+                                        persister: fake_persister([{run_at: 1}]))
 
                worker.act
             end
@@ -379,26 +366,6 @@ module Procrastinator
                                         persister: persister)
 
                worker.act
-            end
-
-            it 'should pass in a logger for the logfile of this queue' do
-               FakeFS do
-                  task_worker = double('task_worker')
-                  allow(task_worker).to receive(:successful?)
-                  allow(task_worker).to receive(:to_h).and_return({})
-
-                  persister = fake_persister([{run_at: 1}])
-
-                  allow(TaskWorker).to receive(:new).and_return(task_worker)
-
-                  expect(task_worker).to receive(:work).with(hash_including(:logger))
-
-                  worker = QueueWorker.new(queue:     instant_queue,
-                                           persister: persister,
-                                           log_dir:   'log/')
-
-                  worker.act
-               end
             end
          end
 

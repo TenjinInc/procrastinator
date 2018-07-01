@@ -6,56 +6,63 @@ module Procrastinator
    class TaskWorker
       extend Forwardable
 
-      def_delegators :@task,
+      def_delegators :@metadata,
                      :id, :run_at, :initial_run_at, :expire_at,
                      :attempts, :last_fail_at, :last_error,
                      :data,
                      :to_h, :successful?
 
-      def initialize(task:, queue:)
+      def initialize(metadata:, queue:, logger: Logger.new(StringIO.new), context: nil, procrastinator: nil)
          @queue = queue
 
-         @task         = task
-         handler_class = queue.task_class
-         @task_handler = @task.init_handler(handler_class)
+         @metadata            = metadata
+         @task                = queue.task_class.new
 
-         unless @task_handler.respond_to? :run
-            raise(MalformedTaskError.new("task #{@task_handler.class} does not support #run method"))
+         @task.data           = @metadata.data if @task.respond_to?(:data=)
+         @task.context        = context if @task.respond_to?(:context=)
+         @task.logger         = logger if @task.respond_to?(:logger=)
+         @task.procrastinator = procrastinator if @task.respond_to?(:procrastinator=)
+
+         @logger  = logger
+         @context = context
+
+         unless @task.respond_to? :run
+            raise(MalformedTaskError.new("task #{@task.class} does not support #run method"))
          end
       end
 
-      def work(logger: Logger.new(StringIO.new), context: nil)
-         @task.add_attempt
+      def work
+         @metadata.add_attempt
 
          begin
-            @task.verify_expiry
+            @metadata.verify_expiry
 
             result = Timeout::timeout(@queue.timeout) do
-               @task_handler.run(context, logger)
+               @task.run
             end
 
-            logger.debug("Task completed: #{@task_handler.class} [#{@task.serialized_data}]")
+            @logger.debug("Task completed: #{@task.class} [#{@metadata.serialized_data}]") if @logger
 
-            @task.clear_fails
+            @metadata.clear_fails
 
-            try_hook(:success, context, logger, result)
+            try_hook(:success, result)
          rescue StandardError => e
-            if @task.final_fail?(@queue)
+            if @metadata.final_fail?(@queue)
                trace = e.backtrace.join("\n")
-               msg   = "#{@task.expired? ? 'Task expired' : 'Task failed too many times'}: #{trace}"
+               msg   = "#{@metadata.expired? ? 'Task expired' : 'Task failed too many times'}: #{trace}"
 
-               @task.fail(msg, final: true)
+               @metadata.fail(msg, final: true)
 
-               logger.debug("Task failed permanently: #{YAML.dump(@task_handler)}")
+               @logger.debug("Task failed permanently: #{YAML.dump(@task)}") if @logger
 
-               try_hook(:final_fail, context, logger, e)
+               try_hook(:final_fail, e)
             else
-               @task.fail(%[Task failed: #{e.message}\n#{e.backtrace.join("\n")}])
-               logger.debug("Task failed: #{@queue.name} with #{@task.serialized_data}")
+               @metadata.fail(%[Task failed: #{e.message}\n#{e.backtrace.join("\n")}])
+               @logger.debug("Task failed: #{@queue.name} with #{@metadata.serialized_data}") if @logger
 
-               @task.reschedule
+               @metadata.reschedule
 
-               try_hook(:fail, context, logger, e)
+               try_hook(:fail, e)
             end
          end
       end
@@ -64,7 +71,7 @@ module Procrastinator
 
       def try_hook(method, *params)
          begin
-            @task_handler.send(method, *params) if @task_handler.respond_to? method
+            @task.send(method, *params) if @task.respond_to? method
          rescue StandardError => e
             $stderr.puts "#{method.to_s.capitalize} hook error: #{e.message}"
          end

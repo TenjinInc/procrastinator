@@ -60,6 +60,41 @@ module Procrastinator
             end}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
          end
 
+         it 'should complain if provide_context was called but no queues import context' do
+            task_class = Class.new do
+               def run
+               end
+            end
+
+            err = <<~ERROR
+               setup block called #provide_context, but no queue task classes import :context.
+
+               Add this to Task classes that expect to receive the context:
+
+                  include Procrastinator::Task
+
+                  import_task_data(:context)
+            ERROR
+
+            expect {Procrastinator.setup do |config|
+               config.define_queue(:test, task_class)
+               config.load_with {persister}
+               config.provide_context {double('some context')}
+            end}.to raise_error(RuntimeError, err)
+         end
+
+         it 'should NOT complain if provide_context was NOT called and no queues import context' do
+            task_class = Class.new do
+               def run
+               end
+            end
+
+            expect {Procrastinator.setup do |config|
+               config.define_queue(:test, task_class)
+               config.load_with {persister}
+            end}.to_not raise_error
+         end
+
          it 'should call spawn_workers on the environment' do
             expect_any_instance_of(QueueManager).to receive(:spawn_workers)
 

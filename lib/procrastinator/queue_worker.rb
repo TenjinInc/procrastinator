@@ -46,18 +46,18 @@ module Procrastinator
          tasks = @persister.read_tasks(@queue.name).reject {|t| t[:run_at].nil?}.shuffle.sort_by {|t| t[:run_at]}
 
          tasks.first(@queue.max_tasks).each do |task_hash|
-            task = Task.new(task_hash)
+            metadata = TaskMetaData.new(task_hash)
 
-            if task.runnable?
-               tw = TaskWorker.new(task: task, queue: @queue)
+            if metadata.runnable?
+               tw = TaskWorker.new(metadata: metadata,
+                                   queue:    @queue,
+                                   context:  @task_context,
+                                   logger:   @logger)
 
-               work_data          = {context: @task_context}
-               work_data[:logger] = @logger if @logger
-
-               tw.work(work_data)
+               tw.work
 
                if tw.successful?
-                  @persister.delete_task(task.id)
+                  @persister.delete_task(metadata.id)
                else
                   @persister.update_task(tw.to_h.merge(queue: @queue.name))
                end
