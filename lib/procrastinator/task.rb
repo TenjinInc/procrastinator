@@ -1,6 +1,6 @@
 module Procrastinator
    module Task
-      KNOWN_ATTRIBUTES = [:logger, :context, :data, :procrastinator]
+      KNOWN_ATTRIBUTES = [:logger, :context, :data, :scheduler]
 
       def self.included(base)
          base.extend(TaskClassMethods)

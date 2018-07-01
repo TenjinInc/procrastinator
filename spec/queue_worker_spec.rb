@@ -144,7 +144,7 @@ module Procrastinator
       end
 
       describe '#act' do
-         context 'loading tasks' do
+         context 'loading and running tasks' do
             it 'should pass the given queue to its persister' do
                [:email, :cleanup].each do |name|
                   queue = Procrastinator::Queue.new(name:          name,
@@ -285,6 +285,18 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).with(hash_including(queue: instant_queue)).and_call_original
 
                worker = QueueWorker.new(queue:     instant_queue,
+                                        persister: fake_persister([{run_at: 1}]))
+
+               worker.act
+            end
+
+            it 'should pass the TaskWorker the scheduler' do
+               scheduler = double('scheduler')
+
+               expect(TaskWorker).to receive(:new).with(hash_including(scheduler: scheduler)).and_call_original
+
+               worker = QueueWorker.new(queue:     instant_queue,
+                                        scheduler: scheduler,
                                         persister: fake_persister([{run_at: 1}]))
 
                worker.act

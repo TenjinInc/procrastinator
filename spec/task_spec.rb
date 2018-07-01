@@ -41,37 +41,37 @@ module Procrastinator
 
                def run
                   {
-                        logger:         logger,
-                        data:           data,
-                        procrastinator: procrastinator,
-                        context:        context
+                        logger:    logger,
+                        data:      data,
+                        scheduler: scheduler,
+                        context:   context
                   }
                end
 
                def success(result)
                   {
-                        logger:         logger,
-                        data:           data,
-                        procrastinator: procrastinator,
-                        context:        context
+                        logger:    logger,
+                        data:      data,
+                        scheduler: scheduler,
+                        context:   context
                   }
                end
 
                def fail(err)
                   {
-                        logger:         logger,
-                        data:           data,
-                        procrastinator: procrastinator,
-                        context:        context
+                        logger:    logger,
+                        data:      data,
+                        scheduler: scheduler,
+                        context:   context
                   }
                end
 
                def final_fail(err)
                   {
-                        logger:         logger,
-                        data:           data,
-                        procrastinator: procrastinator,
-                        context:        context
+                        logger:    logger,
+                        data:      data,
+                        scheduler: scheduler,
+                        context:   context
                   }
                end
             end
@@ -79,20 +79,20 @@ module Procrastinator
             task_class.import_task_data *all_attrs
             task = task_class.new
 
-            logger         = double('log')
-            data           = double('log')
-            procrastinator = double('log')
-            context        = double('log')
+            logger    = double('log')
+            data      = double('log')
+            scheduler = double('log')
+            context   = double('log')
 
-            task.logger         = logger
-            task.data           = data
-            task.procrastinator = procrastinator
-            task.context        = context
+            task.logger    = logger
+            task.data      = data
+            task.scheduler = scheduler
+            task.context   = context
 
-            expected = {logger:         logger,
-                        data:           data,
-                        procrastinator: procrastinator,
-                        context:        context}
+            expected = {logger:    logger,
+                        data:      data,
+                        scheduler: scheduler,
+                        context:   context}
 
             expect(task.run).to eq(expected)
             expect(task.success(nil)).to eq(expected)

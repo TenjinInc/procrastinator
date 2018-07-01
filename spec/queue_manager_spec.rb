@@ -4,214 +4,8 @@ module Procrastinator
    describe QueueManager do
       let(:test_task) {Test::Task::AllHooks}
 
-      describe '#initialize' do
-         let(:config) {Config.new}
-
-         it 'should complain if the task loader is nil' do
-            config.load_with do
-               nil
-            end
-
-            expect do
-               QueueManager.new(config)
-            end.to raise_error(MalformedTaskLoaderError, 'task loader cannot be nil')
-         end
-
-         it 'should require the persister respond to #read_tasks' do
-            loader = double('persister', create_task: nil, update_task: nil, delete_task: nil)
-
-            config.load_with do
-               loader
-            end
-
-            expect do
-               QueueManager.new(config)
-            end.to raise_error(MalformedTaskLoaderError, "task loader #{loader.class} must respond to #read_tasks")
-         end
-
-         it 'should require the persister respond to #create_task' do
-            loader = double('persister', read_tasks: nil, update_task: nil, delete_task: nil)
-
-            config.load_with do
-               loader
-            end
-
-            expect do
-               QueueManager.new(config)
-            end.to raise_error(MalformedTaskLoaderError, "task loader #{loader.class} must respond to #create_task")
-         end
-
-         it 'should require the persister respond to #update_task' do
-            loader = double('persister', read_tasks: nil, create_task: nil, delete_task: nil)
-
-            config.load_with do
-               loader
-            end
-
-            expect do
-               QueueManager.new(config)
-            end.to raise_error(MalformedTaskLoaderError, "task loader #{loader.class} must respond to #update_task")
-         end
-
-         it 'should require the persister respond to #delete_task' do
-            loader = double('persister', read_tasks: nil, create_task: nil, update_task: nil)
-
-            config.load_with do
-               loader
-            end
-
-            expect do
-               QueueManager.new(config)
-            end.to raise_error(MalformedTaskLoaderError, "task loader #{loader.class} must respond to #delete_task")
-         end
-      end
-
-      describe '#delay' do
-         # api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
-
-         let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
-         let(:config) do
-            config = Config.new
-            config.load_with do
-               persister
-            end
-            config.define_queue(:test_queue, test_task)
-            config
-         end
-
-         let(:manager) {QueueManager.new(config)}
-
-         it 'should record a task on the given queue' do
-            [:queue1, :queue2].each do |queue_name|
-               config.define_queue(queue_name, test_task)
-
-               expect(persister).to receive(:create_task).with(include(queue: queue_name))
-
-               manager.delay(queue_name)
-            end
-         end
-
-         it 'should record a task with given run_at' do
-            run_stamp = double('runstamp')
-
-            expect(persister).to receive(:create_task).with(include(run_at: run_stamp))
-
-            manager.delay(:test_queue, run_at: double('time_object', to_i: run_stamp))
-         end
-
-         it 'should record a task with given expire_at' do
-            expire_stamp = double('expirestamp')
-
-            expect(persister).to receive(:create_task).with(include(expire_at: expire_stamp))
-
-            manager.delay(:test_queue, expire_at: double('time_object', to_i: expire_stamp))
-         end
-
-         it 'should record a task with serialized task data' do
-            data = double('some_data')
-
-            # these are, at the moment, all of the arguments the dev can pass in
-            expect(persister).to receive(:create_task).with(include(data: YAML.dump(data)))
-
-            manager.delay(data: data)
-         end
-
-         it 'should default run_at to now' do
-            now = Time.now
-
-            Timecop.freeze(now) do
-               expect(persister).to receive(:create_task).with(include(run_at: now.to_i))
-
-               manager.delay()
-            end
-         end
-
-         it 'should record initial_run_at and run_at to be equal' do
-            time = Time.now
-
-            expect(persister).to receive(:create_task).with(include(run_at: time.to_i, initial_run_at: time.to_i))
-
-            manager.delay(run_at: time)
-         end
-
-         it 'should convert run_at, initial_run_at, expire_at to ints' do
-            expect(persister).to receive(:create_task).with(include(run_at: 0, initial_run_at: 0, expire_at: 1))
-
-            manager.delay(run_at:    double('time', to_i: 0),
-                          expire_at: double('time', to_i: 1))
-         end
-
-         it 'should default expire_at to nil' do
-            expect(persister).to receive(:create_task).with(include(expire_at: nil))
-
-            manager.delay
-         end
-
-         it 'should NOT complain about well-formed hooks' do
-            [:success, :fail, :final_fail].each do |method|
-               task = test_task.new
-
-               allow(task).to receive(method)
-
-               expect do
-                  manager.delay
-               end.to_not raise_error
-            end
-         end
-
-         it 'should require queue be provided if there is more than one queue defined' do
-            config.define_queue(:queue1, test_task)
-            config.define_queue(:queue2, test_task)
-
-            msg = "queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2"
-
-            "queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2"
-            "queue must be specified when more than one is registered. Defined queues are: test_queue, queue1, queue2"
-
-            expect {manager.delay(run_at: 0)}.to raise_error(ArgumentError, msg)
-
-            # also test the negative
-            expect {manager.delay(:queue1, run_at: 0)}.to_not raise_error
-         end
-
-         it 'should NOT require queue be provided if only one queue is defined' do
-            config = Config.new
-            config.load_with do
-               persister
-            end
-            config.define_queue(:queue_name, test_task)
-            manager = QueueManager.new config
-
-            expect {manager.delay}.to_not raise_error
-         end
-
-         it 'should assume the queue name if only one queue is defined' do
-            config = Config.new
-            config.load_with do
-               persister
-            end
-            config.define_queue(:some_queue, test_task)
-            manager = QueueManager.new config
-
-            expect(persister).to receive(:create_task).with(hash_including(queue: :some_queue))
-
-            manager.delay
-         end
-         #there is no :bogus queue registered. Defined queues are: :test_queue, :another_queue
-         #there is no :bogus queue registered. Defined queues are: :test_queue, :another_queue
-         it 'should complain when the given queue is not registered' do
-            config.define_queue(:another_queue, test_task)
-
-            [:bogus, :other_bogus].each do |name|
-               err = %[there is no :#{name} queue registered. Defined queues are: :test_queue, :another_queue]
-
-               expect {manager.delay(name, run_at: 0)}.to raise_error(ArgumentError, err)
-            end
-         end
-      end
-
       describe '#spawn_workers' do
-         let(:persister) {double('persister', read_tasks: [], create_task: [], update_task: [], delete_task: [])}
+         let(:persister) {Test::Persister.new}
          let(:config) do
             config = Config.new
             config.load_with do
@@ -269,6 +63,23 @@ module Procrastinator
                manager.spawn_workers
             end
 
+            it 'should pass each worker the scheduler' do
+               scheduler = double('scheduler')
+
+               allow(Scheduler).to receive(:new).and_return(scheduler)
+
+               config.define_queue(:test2a, test_task, max_attempts: 1, timeout: 1, update_period: 1, max_tasks: 1)
+               config.define_queue(:test2b, test_task, max_attempts: 2, timeout: 2, update_period: 2, max_tasks: 2)
+
+               config.queues.each do
+                  expect(QueueWorker).to receive(:new)
+                                               .with(hash_including(scheduler: scheduler))
+                                               .and_return(double('worker', work: nil))
+               end
+
+               expect(manager.spawn_workers).to be scheduler
+            end
+
             it 'should pass each queue the evaluated persister instance' do
                queue_defs = [:test2a, :test2b, :test2c]
                queue_defs.each do |name|
@@ -321,7 +132,7 @@ module Procrastinator
             end
 
             it 'should evaluate load_with and pass it to the worker' do
-               persister = double('persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+               persister = double('specific persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
 
                config.load_with do
                   persister
@@ -350,6 +161,12 @@ module Procrastinator
                                                                long_name: ''))
 
                manager.spawn_workers
+            end
+
+            it 'should return a scheduler with the same config' do
+               expect(Scheduler).to receive(:new).with(config).and_call_original
+
+               expect(manager.spawn_workers).to be_a Scheduler
             end
          end
 
@@ -425,9 +242,20 @@ module Procrastinator
 
                   expect(manager.workers).to eq [1, 2, 3]
                end
+
+               it 'should return a scheduler with the same config' do
+                  expect(Scheduler).to receive(:new).with(config).and_call_original
+
+                  expect(manager.spawn_workers).to be_a Scheduler
+               end
             end
 
             context 'subprocess' do
+               let(:worker) {double('worker',
+                                    work:      nil,
+                                    start_log: nil,
+                                    long_name: '')}
+
                before(:each) do
                   allow(Process).to receive(:setproctitle)
                   allow(manager).to receive(:fork).and_return(nil)
@@ -493,13 +321,27 @@ module Procrastinator
                   config.queues.each do |queue|
                      expect(QueueWorker).to receive(:new)
                                                   .with(hash_including(queue: queue))
-                                                  .and_return(double('worker',
-                                                                     work:      nil,
-                                                                     start_log: nil,
-                                                                     long_name: ''))
+                                                  .and_return(worker)
                   end
 
                   manager.spawn_workers
+               end
+
+               it 'should pass each worker the scheduler' do
+                  scheduler = double('scheduler')
+
+                  expect(Scheduler).to receive(:new).with(config).and_return(scheduler)
+
+                  config.define_queue(:test2a, test_task)
+                  config.define_queue(:test2b, test_task)
+
+                  config.queues.each do
+                     expect(QueueWorker).to receive(:new)
+                                                  .with(hash_including(scheduler: scheduler))
+                                                  .and_return(worker)
+                  end
+
+                  expect(manager.spawn_workers).to be scheduler
                end
 
                it 'should pass the worker a new loader instance' do
@@ -728,64 +570,63 @@ module Procrastinator
                end
             end
          end
+      end
+      describe '#act' do
+         let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
 
-         describe '#act' do
-            let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
+         let(:config) do
+            config = Config.new
+            config.load_with do
+               persister
+            end
+            config.define_queue(:test1, test_task)
+            config.define_queue(:test2, test_task)
+            config.define_queue(:test3, test_task)
+            config
+         end
 
-            let(:config) do
-               config = Config.new
-               config.load_with do
-                  persister
-               end
-               config.define_queue(:test1, test_task)
-               config.define_queue(:test2, test_task)
-               config.define_queue(:test3, test_task)
-               config
+         let(:manager) {QueueManager.new(config)}
+
+         before(:each) do
+            config.enable_test_mode
+            manager.spawn_workers
+         end
+
+         it 'should call QueueWorker#act on every queue worker' do
+            expect(manager.workers.size).to eq 3
+            manager.workers.each do |worker|
+               expect(worker).to receive(:act)
             end
 
-            let(:manager) {QueueManager.new(config)}
+            manager.act
+         end
 
-            before(:each) do
-               config.enable_test_mode
-               manager.spawn_workers
+         it 'should call QueueWorker#act on queue worker for given queues only' do
+            expect(manager.workers[0]).to_not receive(:act)
+            expect(manager.workers[1]).to receive(:act)
+            expect(manager.workers[2]).to receive(:act)
+
+            manager.act(:test2, :test3)
+         end
+
+         it 'should not complain when using Procrastinator.act in Test Mode' do
+            expect {manager.act}.to_not raise_error
+         end
+
+         it 'should complain if you try to use Procrastinator.act outside Test Mode' do
+            config = Config.new
+            config.load_with do
+               persister
             end
 
-            it 'should call QueueWorker#act on every queue worker' do
-               expect(manager.workers.size).to eq 3
-               manager.workers.each do |worker|
-                  expect(worker).to receive(:act)
-               end
+            normal_manager = QueueManager.new(config)
 
-               manager.act
-            end
+            err = <<~ERR
+               Procrastinator.act called outside Test Mode. 
+               Either use Procrastinator.spawn_workers or call #enable_test_mode in Procrastinator.setup.
+            ERR
 
-            it 'should call QueueWorker#act on queue worker for given queues only' do
-               expect(manager.workers[0]).to_not receive(:act)
-               expect(manager.workers[1]).to receive(:act)
-               expect(manager.workers[2]).to receive(:act)
-
-               manager.act(:test2, :test3)
-            end
-
-            it 'should not complain when using Procrastinator.act in Test Mode' do
-               expect {manager.act}.to_not raise_error
-            end
-
-            it 'should complain if you try to use Procrastinator.act outside Test Mode' do
-               config = Config.new
-               config.load_with do
-                  persister
-               end
-
-               normal_manager = QueueManager.new(config)
-
-               err = <<~ERR
-                  Procrastinator.act called outside Test Mode. 
-                  Either use Procrastinator.spawn_workers or call #enable_test_mode in Procrastinator.setup.
-               ERR
-
-               expect {normal_manager.act}.to raise_error(RuntimeError,)
-            end
+            expect {normal_manager.act}.to raise_error(RuntimeError,)
          end
       end
    end

@@ -7,12 +7,12 @@ module Procrastinator
 
       def initialize
          @test_mode       = false
-         @queues          = {}
          @log_dir         = DEFAULT_LOG_DIRECTORY
          @log_level       = Logger::INFO
          @loader_factory  = nil
          @context_factory = nil
          @queues          = []
+         @loader          = nil
       end
 
       # Accepts a block that will be executed on the queue sub process. This is done to separate resource allocations
@@ -63,8 +63,8 @@ module Procrastinator
          @prefix = prefix
       end
 
-      # === everything below this isn't part of the setup DSL ===
-      def verify
+      # === everything below thiss isn't part of the setup DSL ===
+      def validate!
          raise RuntimeError.new('setup block must call #load_with on the environment') if @loader_factory.nil?
          raise RuntimeError.new('setup block must call #define_queue on the environment') if @queues.empty?
 
@@ -88,20 +88,12 @@ module Procrastinator
       end
 
       # This is called to construct a new task loader for this env.
-      # It should be called for each fork as well,
+      # It should be called for each fork as well, with rebuild: true
       # so that they get distinct resources (eg. DB connections) from the parent process.
-      def loader
-         loader = @loader_factory.call
+      def loader(rebuild: false)
+         @loader = nil if rebuild
 
-         raise MalformedTaskLoaderError.new('task loader cannot be nil') if loader.nil?
-
-         [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
-            unless loader.respond_to? method
-               raise MalformedTaskLoaderError.new("task loader #{loader.class} must respond to ##{method}")
-            end
-         end
-
-         loader
+         @loader ||= create_loader
       end
 
       def queues_string
@@ -117,11 +109,31 @@ module Procrastinator
          @queues.size > 1
       end
 
-      def queue
-         @queues.first
+      def queue(name: nil)
+         if name
+            @queues.find do |q|
+               q.name == name
+            end
+         else
+            @queues.first
+         end
       end
 
       private
+
+      def create_loader
+         loader = @loader_factory.call
+
+         raise MalformedTaskLoaderError.new('task loader cannot be nil') if loader.nil?
+
+         [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
+            unless loader.respond_to? method
+               raise MalformedTaskLoaderError.new("task loader #{loader.class} must respond to ##{method}")
+            end
+         end
+
+         loader
+      end
 
       def verify_task_class(task_class)
          unless task_class.method_defined? :run

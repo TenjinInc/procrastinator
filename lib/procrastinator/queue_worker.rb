@@ -6,6 +6,7 @@ module Procrastinator
 
       def initialize(queue:,
                      persister:,
+                     scheduler: nil,
                      task_context: nil,
                      log_dir: nil,
                      log_level: Logger::INFO)
@@ -18,6 +19,7 @@ module Procrastinator
          @queue        = queue
          @persister    = persister
          @task_context = task_context
+         @scheduler    = scheduler
 
          start_log(log_dir, level: log_level)
       end
@@ -49,10 +51,11 @@ module Procrastinator
             metadata = TaskMetaData.new(task_hash)
 
             if metadata.runnable?
-               tw = TaskWorker.new(metadata: metadata,
-                                   queue:    @queue,
-                                   context:  @task_context,
-                                   logger:   @logger)
+               tw = TaskWorker.new(metadata:  metadata,
+                                   queue:     @queue,
+                                   scheduler: @scheduler,
+                                   context:   @task_context,
+                                   logger:    @logger)
 
                tw.work
 

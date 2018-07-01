@@ -95,16 +95,16 @@ module Procrastinator
                TaskWorker.new(metadata: meta, queue: queue)
             end
 
-            it 'should provide the procrastinator to the new task instance if requested' do
-               task_class.import_task_data :procrastinator
+            it 'should provide the scheduler to the new task instance if requested' do
+               task_class.import_task_data :scheduler
 
-               procrastinator = double('procrastinator')
+               scheduler = double('scheduler')
 
-               expect(task).to receive(:procrastinator=).with(procrastinator)
+               expect(task).to receive(:scheduler=).with(scheduler)
 
-               TaskWorker.new(metadata:       meta,
-                              queue:          queue,
-                              procrastinator: procrastinator)
+               TaskWorker.new(metadata:  meta,
+                              queue:     queue,
+                              scheduler: scheduler)
             end
          end
       end

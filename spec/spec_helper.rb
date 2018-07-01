@@ -20,6 +20,21 @@ end
 module Procrastinator
 
    module Test
+      class Persister
+         def read_tasks(queue_name)
+         end
+
+         def create_task(data)
+         end
+
+         def update_task
+         end
+
+         def delete_task
+         end
+      end
+
+
       module Task
          module MissingParam
             class ArgRun

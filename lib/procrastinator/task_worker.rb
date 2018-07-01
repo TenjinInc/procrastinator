@@ -12,16 +12,20 @@ module Procrastinator
                      :data,
                      :to_h, :successful?
 
-      def initialize(metadata:, queue:, logger: Logger.new(StringIO.new), context: nil, procrastinator: nil)
+      def initialize(metadata:,
+                     queue:,
+                     logger: Logger.new(StringIO.new),
+                     context: nil,
+                     scheduler: nil)
          @queue = queue
 
-         @metadata            = metadata
-         @task                = queue.task_class.new
+         @metadata       = metadata
+         @task           = queue.task_class.new
 
-         @task.data           = @metadata.data if @task.respond_to?(:data=)
-         @task.context        = context if @task.respond_to?(:context=)
-         @task.logger         = logger if @task.respond_to?(:logger=)
-         @task.procrastinator = procrastinator if @task.respond_to?(:procrastinator=)
+         @task.data      = @metadata.data if @task.respond_to?(:data=)
+         @task.context   = context if @task.respond_to?(:context=)
+         @task.logger    = logger if @task.respond_to?(:logger=)
+         @task.scheduler = scheduler if @task.respond_to?(:scheduler=)
 
          @logger  = logger
          @context = context
