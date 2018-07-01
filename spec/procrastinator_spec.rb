@@ -96,11 +96,11 @@ module Procrastinator
             err = <<~ERROR
                setup block called #provide_context, but no queue task classes import :context.
 
-               Add this to Task classes that expect to receive the context:
+               Add this to your Task classes that expect to receive the context:
 
                   include Procrastinator::Task
 
-                  import_task_data(:context)
+                  task_attr :context
             ERROR
 
             expect {Procrastinator.setup do |config|

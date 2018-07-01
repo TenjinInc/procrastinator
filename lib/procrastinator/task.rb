@@ -8,7 +8,7 @@ module Procrastinator
 
       def method_missing(m, *args, &block)
          if KNOWN_ATTRIBUTES.include?(m)
-            err = "To access Procrastinator::Task attribute :#{m}, call import_task_data(:#{m}) in your class definition."
+            err = "To access Procrastinator::Task attribute :#{m}, call task_attr(:#{m}) in your class definition."
 
             raise NameError.new(err)
          else
@@ -18,7 +18,7 @@ module Procrastinator
 
       module TaskClassMethods
 
-         def import_task_data(*fields)
+         def task_attr(*fields)
             attr_list = KNOWN_ATTRIBUTES.collect {|a| ':' + a.to_s}.join(', ')
 
             fields.each do |field|

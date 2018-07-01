@@ -4,7 +4,7 @@ module Procrastinator
    describe Task do
       let(:all_attrs) {Procrastinator::Task::KNOWN_ATTRIBUTES}
 
-      describe '#import_task_data' do
+      describe '#task_attr' do
          let(:task_class) do
             Class.new do
                include Procrastinator::Task
@@ -16,7 +16,7 @@ module Procrastinator
 
 
          it 'should create accessors for a provided attribute' do
-            task_class.import_task_data(:logger)
+            task_class.task_attr(:logger)
 
             task = task_class.new
 
@@ -25,7 +25,7 @@ module Procrastinator
          end
 
          it 'should create accessors for all provided attributes' do
-            task_class.import_task_data *all_attrs
+            task_class.task_attr *all_attrs
 
             task = task_class.new
 
@@ -76,7 +76,7 @@ module Procrastinator
                end
             end
 
-            task_class.import_task_data *all_attrs
+            task_class.task_attr *all_attrs
             task = task_class.new
 
             logger    = double('log')
@@ -106,14 +106,14 @@ module Procrastinator
             [:bogus, :typo].each do |attr|
                err = "Unknown Procrastinator::Task attribute :#{attr}. Importable attributes are: #{known_attrs}"
 
-               expect {task_class.import_task_data(attr)}.to raise_error(ArgumentError, err)
+               expect {task_class.task_attr(attr)}.to raise_error(ArgumentError, err)
             end
          end
       end
 
       describe '#method_missing' do
          Procrastinator::Task::KNOWN_ATTRIBUTES.each do |attr|
-            it "should suggest using import_task_data if #{attr} is not expected" do
+            it "should suggest using task_attr if #{attr} is not expected" do
                task_class = Class.new do
                   include Procrastinator::Task
                end
@@ -121,7 +121,7 @@ module Procrastinator
                task = task_class.new
 
                err = "To access Procrastinator::Task attribute :#{attr}, " +
-                     "call import_task_data(:#{attr}) in your class definition."
+                     "call task_attr(:#{attr}) in your class definition."
 
                expect {task.send(attr)}.to raise_error(NameError, err)
             end
@@ -132,7 +132,7 @@ module Procrastinator
                include Procrastinator::Task
             end
 
-            task_class.import_task_data(*all_attrs)
+            task_class.task_attr(*all_attrs)
 
             task = task_class.new
 

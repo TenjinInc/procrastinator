@@ -44,12 +44,23 @@ module Procrastinator
          end
 
          it 'should record a task with serialized task data' do
+            task_with_data = Class.new do
+               include Task
+
+               task_attr :data
+
+               def run
+               end
+            end
+
+            config.define_queue(:data_queue, task_with_data)
+
             data = double('some_data')
 
             # these are, at the moment, all of the arguments the dev can pass in
             expect(persister).to receive(:create_task).with(include(data: YAML.dump(data)))
 
-            scheduler.delay(data: data)
+            scheduler.delay(:data_queue, data: data)
          end
 
          it 'should default run_at to now' do
@@ -138,8 +149,43 @@ module Procrastinator
             [:bogus, :other_bogus].each do |name|
                err = %[there is no :#{name} queue registered. Defined queues are: :test_queue, :another_queue]
 
-               expect {scheduler.delay(name, run_at: 0)}.to raise_error(ArgumentError, err)
+               expect {scheduler.delay(name)}.to raise_error(ArgumentError, err)
             end
+         end
+
+         it 'should complain if they provide NO :data in #delay, but the task imports it' do
+            test_task = Class.new do
+               include Procrastinator::Task
+
+               task_attr :data
+
+               def run
+               end
+            end
+
+            config.define_queue(:data_queue, test_task)
+
+            err = %[task #{test_task} expects to receive :data. Provide :data to #delay.]
+
+            expect {scheduler.delay(:data_queue)}.to raise_error(ArgumentError, err)
+         end
+
+         it 'should complain if they provide :data in #delay, but the task does NOT import it' do
+            test_task = Class.new do
+               include Procrastinator::Task
+
+               def run
+               end
+            end
+
+            config.define_queue(:data_queue, test_task)
+
+            err = <<~ERROR
+               task #{test_task} does not import :data. Add this in your class definition: 
+                     import_test_data :data
+            ERROR
+
+            expect {scheduler.delay(:data_queue, data: 'some data')}.to raise_error(ArgumentError, err)
          end
       end
    end

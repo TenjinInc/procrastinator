@@ -55,7 +55,7 @@ module Procrastinator
             end
 
             it 'should provide the data to the new task instance if requested' do
-               task_class.import_task_data :data
+               task_class.task_attr :data
 
                meta = TaskMetaData.new(data: YAML.dump(double('data')))
 
@@ -68,7 +68,7 @@ module Procrastinator
             end
 
             it 'should provide the context to the new task instance if requested' do
-               task_class.import_task_data :context
+               task_class.task_attr :context
 
                context = double('context')
 
@@ -81,7 +81,7 @@ module Procrastinator
             end
 
             it 'should provide the logger to the new task instance if requested' do
-               task_class.import_task_data :logger
+               task_class.task_attr :logger
 
                logger = Logger.new(StringIO.new)
 
@@ -96,7 +96,7 @@ module Procrastinator
             end
 
             it 'should provide the scheduler to the new task instance if requested' do
-               task_class.import_task_data :scheduler
+               task_class.task_attr :scheduler
 
                scheduler = double('scheduler')
 
