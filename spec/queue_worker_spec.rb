@@ -244,9 +244,33 @@ module Procrastinator
             end
 
             it 'should populate the data into a Task' do
-               task_data = {run_at: 1}
+               task_data = {id:             double('id'),
+                            run_at:         double('run_at', to_i: 1),
+                            initial_run_at: double('initial', to_i: 1),
+                            expire_at:      double('expiry', to_i: 1),
+                            attempts:       0,
+                            last_error:     double('last error'),
+                            last_fail_at:   double('last fail at'),
+                            data:           YAML.dump(double('data'))}
 
                expect(TaskMetaData).to receive(:new).with(task_data).and_call_original
+
+               worker = QueueWorker.new(queue:     instant_queue,
+                                        persister: fake_persister([task_data]))
+
+               worker.act
+            end
+
+            it 'should ignore any unused or unknown data' do
+               task_data = {id:     1,
+                            queue:  double('queue'),
+                            run_at: double('run_at', to_i: 2),
+                            bogus:  double('bogus')}
+
+               expect(TaskMetaData).to receive(:new)
+                                             .with(id:     task_data[:id],
+                                                   run_at: task_data[:run_at])
+                                             .and_call_original
 
                worker = QueueWorker.new(queue:     instant_queue,
                                         persister: fake_persister([task_data]))

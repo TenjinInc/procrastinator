@@ -1,6 +1,9 @@
 module Procrastinator
    class TaskMetaData
-      attr_reader(:id, :run_at, :initial_run_at, :expire_at, :attempts, :last_error, :last_fail_at, :data)
+      # These are the attributes expected to be in the persistence mechanism
+      EXPECTED_DATA = [:id, :run_at, :initial_run_at, :expire_at, :attempts, :last_error, :last_fail_at, :data]
+
+      attr_reader(*EXPECTED_DATA)
 
       def initialize(id: nil,
                      run_at: nil,

@@ -4,6 +4,8 @@ module Procrastinator
 
       def_delegators :@queue, :name
 
+      PERSISTER_METHODS = [:read_tasks, :update_task, :delete_task]
+
       def initialize(queue:,
                      persister:,
                      scheduler: nil,
@@ -12,9 +14,11 @@ module Procrastinator
                      log_level: Logger::INFO)
          raise ArgumentError.new(':persister may not be nil') unless persister
 
-         raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #read_tasks')) unless persister.respond_to? :read_tasks
-         raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #update_task')) unless persister.respond_to? :update_task
-         raise(MalformedTaskPersisterError.new('The supplied IO object must respond to #delete_task')) unless persister.respond_to? :delete_task
+         PERSISTER_METHODS.each do |method|
+            err = "The supplied IO object must respond to ##{method}"
+
+            raise(MalformedTaskPersisterError.new(err)) unless persister.respond_to? method
+         end
 
          @queue        = queue
          @persister    = persister
@@ -45,7 +49,13 @@ module Procrastinator
          # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
          # results
          # Ideally, we'd use a better algo than qsort for this, but this will do for now
-         tasks = @persister.read_tasks(@queue.name).reject {|t| t[:run_at].nil?}.shuffle.sort_by {|t| t[:run_at]}
+         tasks = @persister.read_tasks(@queue.name)
+
+         tasks = tasks.reject {|t| t[:run_at].nil?}.shuffle.sort_by {|t| t[:run_at]}
+
+         tasks = tasks.collect do |t|
+            t.delete_if {|key| !TaskMetaData::EXPECTED_DATA.include?(key)}
+         end
 
          tasks.first(@queue.max_tasks).each do |task_hash|
             metadata = TaskMetaData.new(task_hash)
