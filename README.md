@@ -17,9 +17,18 @@ And then run:
 
     bundle install
 
-## Quick Start
-Setup a procrastination environment:
+## Big Picture
+If you have tasks like this:
 
+```ruby
+class SendWelcomeEmail
+   def run
+      # ... email stuff ...
+   end
+end
+```
+
+Setup a procrastination environment:
 ```ruby
 scheduler = Procrastinator.setup do |env|
    env.define_queue :greeting, SendWelcomeEmail
@@ -27,13 +36,6 @@ scheduler = Procrastinator.setup do |env|
    env.define_queue :birthday, SendBirthdayEmail, max_attempts: 3
    
    env.load_with MyTaskLoader.new('my-tasks.csv')
-   
-   # this block runs on each worker sub process
-   env.each_process do
-      # ... create a new database connection or whatever you need ...
-   
-      env.load_with MyTaskLoader.new('my-tasks.csv')
-   end
 end
 ```
 
@@ -47,18 +49,24 @@ scheduler.delay(:thumbnail, data: {file: 'full_image.png', width: 100, height: 1
 scheduler.delay(:send_birthday_email, run_at: Time.now + 3600, data: {user_id: 5})
 ```
 
-Read on for more details:
+##Contents
+  * [Setup](#setup)
+    + [Defining Queues: `#define_queue`](#defining-queues----define-queue-)
+    + [The Task Loader: `#load_with`](#the-task-loader----load-with-)
+      - [Task Data](#task-data)
+    + [The Task Context: `#provide_context`](#the-task-context----provide-context-)
+    + [The Subprocess Hook: `#each_process`](#the-subprocess-hook----each-process-)
+    + [Naming Processes: `#process_prefix`](#naming-processes----process-prefix-)
+  * [Tasks](#tasks)
+    + [Accessing Task Attributes](#accessing-task-attributes)
+    + [Retries](#retries)
+  * [Scheduling Tasks](#scheduling-tasks)
+    + [Providing Data](#providing-data)
+    + [Controlling Timing](#controlling-timing)
+  * [Test Mode](#test-mode)
+  * [Errors & Logging](#errors---logging)
 
-1. [Configuration](#configuration)
-   1. [Task Loader](#task-loader-load_with)
-   1. [Task Context](#task-context-provide_context)
-   1. [Defining Queues](#defining-queues-define_queue)
-   1. [Subprocess Hook](#subprocess-hook-each_process)
-1. [Scheduling Tasks](#scheduling-tasks)
-1. [Tasks](#tasks)
-1. [Logging](#logging)
-
-## Configuration
+## Setup
 Procrastinator.setup allows you to define a task loader, a task context, and available queues.
 
 ```ruby
@@ -70,7 +78,47 @@ end
 It then spins off a sub process to work on each queue and returns the configured environment,
 and you use that environment to `#delay` tasks.   
 
-### Task Loader: `#load_with`
+The sub-processes checks that the parent process is still alive every 5 seconds. 
+If there is no process with the parent's PID, the sub-process will self-exit. 
+
+### Defining Queues: `#define_queue`
+In the setup block, you can call `#define_queue` on the environment: 
+
+```ruby
+Procrastinator.setup do |env|
+   # ... other setup stuff ...
+
+   env.define_queue :greeting, SendWelcomeEmail
+end
+```
+
+The first two parameters are the queue name symbol and the task class to run on that queue. You can also 
+provide these keyword arguments:
+
+ * `:timeout`
+ 
+   Duration (seconds) after which tasks in this queue should fail for taking too long.
+    
+ * `:max_attempts` 
+ 
+   Maximum number of attempts for tasks in this queue. Once attempts is meets or exceeds `max_attempts`, the task will 
+   be permanently failed.
+    
+ * `:update_period`
+  
+   Delay, in seconds, between reloads of all tasks from the task loader.
+   
+ * `:max_tasks`
+ 
+   The maximum number of tasks to run concurrently within a queue worker process.
+
+
+```ruby 
+# all defaults set explicitly:
+env.define_queue :queue_name, YourTaskClass, timeout: 3600, max_attempts: 20, update_period: 10, max_tasks: 10
+```
+
+### The Task Loader: `#load_with`
 Your task loader is a [strategy](https://en.wikipedia.org/wiki/Strategy_pattern) pattern object
 that knows how to read and write tasks in your data storage (eg. file, database, etc).
 
@@ -151,7 +199,7 @@ If `:run_at` is `nil`, that indicates that it is permanently failed and will nev
 Notice that the times are all given as unix epoch timestamps. This is to avoid any confusion with timezones, 
 and it is recommended that you store times in this manner for the same reason. 
 
-### Task Context: `#provide_context`
+### The Task Context: `#provide_context`
 Whatever you give to `#provide_context` will be made available to your Task through the task attribute `:context`. 
 
 This can be useful for things like app containers, but you can use it for whatever you like.  
@@ -175,46 +223,7 @@ class MyTask
 end
 ```
 
-
-
-### Defining Queues: `#define_queue`
-In the setup block, you can call `#define_queue` on the environment: 
-
-```ruby
-Procrastinator.setup do |env|
-   # ... other setup stuff ...
-
-   env.define_queue :greeting, SendWelcomeEmail
-end
-```
-
-The first two parameters are the queue name symbol and the task class to run on that queue. You can also 
-provide these keyword arguments:
-
- * `:timeout`
- 
-   Duration (seconds) after which tasks in this queue should fail for taking too long.
-    
- * `:max_attempts` 
- 
-   Maximum number of attempts for tasks in this queue. Once attempts is meets or exceeds `max_attempts`, the task will 
-   be permanently failed.
-    
- * `:update_period`
-  
-   Delay, in seconds, between reloads of all tasks from the task loader.
-   
- * `:max_tasks`
- 
-   The maximum number of tasks to run concurrently within a queue worker process.
-
-
-```ruby 
-# all defaults set explicitly:
-env.define_queue :queue_name, YourTaskClass, timeout: 3600, max_attempts: 20, update_period: 10, max_tasks: 10
-```
-
-### Subprocess Hook: `#each_process`
+### The Subprocess Hook: `#each_process`
 In the setup block, you specify which actions to take specifically on the subprocesses with `#each_process`. Whatever
 is in the block will be run after the process is forked and before the queue worker starts. 
 
@@ -234,13 +243,15 @@ Procrastinator.setup do |env|
 end
 ```
 
-That block is **not run in Test Mode**. 
+NB: That block is **not run in Test Mode**. 
 
-### Other Setup Methods
-Each queue is worked in a separate process and you can call `#prefix_process` and provide a subprocess prefix.
+### Naming Processes: `#process_prefix`
+Each queue subprocess is named after the queue it's working on, 
+eg. `greeting-queue-worker` or `thumbnails-queue-worker`.
 
-<!-- , and each process multi-threaded to handle more than one task at a time. 
-    This should help prevent a single task from clogging up the whole queue -->
+If you're running multiple apps on the same machine, then you may want to distinguish which app the queue worker 
+was spawned for. You can call `#prefix_process` and provide a string that will be added to the front of the prcoess 
+names.
 
 ```ruby
 scheduler = Procrastinator.setup do |env|
@@ -248,61 +259,6 @@ scheduler = Procrastinator.setup do |env|
    
    env.prefix_processes 'myapp'
 end
-```
-
-The sub-processes checks that the parent process is still alive every 5 seconds. 
-If there is no process with the parent's PID, the sub-process will self-exit. 
-
-## Scheduling Tasks
-To schedule tasks, just call `#delay` on the environment returned from `Procrastinator.setup`: 
-
-```ruby
-scheduler = Procrastinator.setup do |env|
-   # ... other setup stuff ...
-
-   env.define_queue :reminder, EmailReminder
-   env.define_queue :thumbnail, CreateThumbnail
-end
-
-# Provide the queue name and any data you want passed in
-procrastinator.delay(:reminder, data: 'bob@example.com')
-```
-
-If you have only one queue, you can omit the queue name: 
-
-```ruby
-scheduler = Procrastinator.setup do |env|
-   # ... other setup stuff ...
-
-   env.define_queue :reminder, EmailReminder
-end
-
-procrastinator.delay(data: 'bob@example.com')
-```
-
-### Controlling the Timing
-You can set when the particular task is to be run and/or when it should expire. Be aware that the task is not guaranteed 
-to run at a precise time; the only promise is that the task will be attempted *after* `run_at` and before `expire_at`.
-
-```ruby
-# runs on or after 1 January 3000
-procrastinator.delay(:greeting, run_at: Time.new(3000, 1, 1), data: 'philip_j_fry@example.com')
-
-# run_at defaults to right now:
-procrastinator.delay(:thumbnail, run_at: Time.now, data: 'shut_up_and_take_my_money.gif')
-```
-
-You can also set an `expire_at` deadline. If the task has not been run before `expire_at` is passed, then it will be 
-final-failed the next time it would be attempted.
-Setting `expire_at` to `nil` means it will never expire (but may still fail permanently if, 
-say, `max_attempts` is reached).
-
-```ruby
-# will not run at or after 
-procrastinator.delay(:happy_birthday, expire_at: Time.new(2018, 03, 17, 12, 00, '-06:00'),  data: 'contact@tenjin.ca'))
-
-# expire_at defaults to nil:
-procrastinator.delay(:greeting, expire_at: nil, data: 'bob@example.com')
 ```
 
 ## Tasks
@@ -370,7 +326,7 @@ class MyTask
    task_attr :data, :logger
    
    def run
-      # in methods, you can access the attributes you requested in task_attr
+      # the attributes listed in task_attr become methods like attr_accessor
       logger.info("The data for this task is #{data}")
    end
 end   
@@ -396,13 +352,73 @@ end
 
 ### Retries
 Failed tasks have their `run_at` rescheduled on an increasing delay (in seconds) according to this formula: 
-    
+
 > 30 + (number_of_attempts)<sup>4</sup>
 
 Situations that call `#fail` or `#final_fail` will cause the error timestamp and reason to be stored in `:last_fail_at` 
 and `:last_error`.
 
-### TDD With Procrastinator
+
+## Scheduling Tasks
+To schedule tasks, just call `#delay` on the environment returned from `Procrastinator.setup`: 
+
+```ruby
+scheduler = Procrastinator.setup do |env|
+   # ... other setup stuff ...
+
+   env.define_queue :reminder, EmailReminder
+   env.define_queue :thumbnail, CreateThumbnail
+end
+
+# Provide the queue name and any data you want passed in
+procrastinator.delay(:reminder, data: 'bob@example.com')
+``` 
+
+If you have only one queue, you can omit the queue name: 
+
+```ruby
+scheduler = Procrastinator.setup do |env|
+   # ... other setup stuff ...
+
+   env.define_queue :reminder, EmailReminder
+end
+
+procrastinator.delay(data: 'bob@example.com')
+```
+
+### Providing Data
+Most tasks need some additional information to complete their work, like id numbers, 
+
+The `:data` parameter is serialized to string as YAML, so it's better to keep it as simple as possible. For example, if 
+you have a database instead of passing in a complex Ruby object, pass in just the primary key and reload it in the 
+task's `#run`. This will require less space in your database and avoids obsolete or duplicated information.    
+
+### Controlling Timing
+You can set when the particular task is to be run and/or when it should expire. Be aware that the task is not guaranteed 
+to run at a precise time; the only promise is that the task will be attempted *after* `run_at` and before `expire_at`.
+
+```ruby
+# runs on or after 1 January 3000
+procrastinator.delay(:greeting, run_at: Time.new(3000, 1, 1), data: 'philip_j_fry@example.com')
+
+# run_at defaults to right now:
+procrastinator.delay(:thumbnail, run_at: Time.now, data: 'shut_up_and_take_my_money.gif')
+```
+
+You can also set an `expire_at` deadline. If the task has not been run before `expire_at` is passed, then it will be 
+final-failed the next time it would be attempted.
+Setting `expire_at` to `nil` means it will never expire (but may still fail permanently if, 
+say, `max_attempts` is reached).
+
+```ruby
+# will not run at or after 
+procrastinator.delay(:happy_birthday, expire_at: Time.new(2018, 03, 17, 12, 00, '-06:00'),  data: 'contact@tenjin.ca'))
+
+# expire_at defaults to nil:
+procrastinator.delay(:greeting, expire_at: nil, data: 'bob@example.com')
+```
+
+## Test Mode
 Procrastinator uses multi-threading and multi-processing internally, which is a nightmare for automated testing. 
 Test Mode will disable all of that and rely on your tests to tell it when to act. 
 
@@ -431,10 +447,14 @@ env.act
 scheduler.act(:cleanup, :email)
 ```
 
-## Logging
-Each queue worker writes its own log, named after its queue (eg. `log/welcome-queue-worker.log`), in
-the defined log directory using the Ruby 
+## Errors & Logging
+Errors that trigger #fail or #final_fail are saved in the task persistence (database, file, etc) under `last_error` and 
+`last_error_at`.
+
+Each queue worker also writes its own log using the Ruby 
 [Logger class](https://ruby-doc.org/stdlib-2.5.1/libdoc/logger/rdoc/Logger.html).
+The log files are named after its queue process name (eg. `log/welcome-queue-worker.log`) and
+they are saved in the log directory defined in setup. 
 
 ```ruby
 scheduler = Procrastinator.setup do |env|
@@ -444,7 +464,7 @@ scheduler = Procrastinator.setup do |env|
    env.log_inside '/var/log/myapp/'
    env.log_at_level Logger::DEBUG
    
-   # these are the default values:
+   # these are the defaults:
    env.log_inside 'log/' # relative to the running directory
    env.log_at_level Logger::INFO
    
@@ -453,9 +473,8 @@ scheduler = Procrastinator.setup do |env|
 end
 ```
 
-The logger can be accessed by including Procrastinator::Task in your task class and then calling
+The logger can be accessed in your tasks by including Procrastinator::Task in your task class and then calling
 `task_attr :logger`. 
-
 
 ```ruby
 class MyTask
