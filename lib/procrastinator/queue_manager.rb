@@ -97,7 +97,4 @@ module Procrastinator
          heartbeat_thread.abort_on_exception = true
       end
    end
-
-   class MalformedTaskLoaderError < StandardError
-   end
 end

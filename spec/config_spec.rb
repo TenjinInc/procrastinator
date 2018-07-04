@@ -190,17 +190,44 @@ module Procrastinator
          end
       end
 
-      describe '#validate!' do
-         it 'should complain if it does not have a task loader factory defined' do
-            config.define_queue(:test, test_task)
+      describe '#setup' do
+         it 'should yield itself' do
+            allow(config).to receive(:validate!)
 
-            expect {config.validate!}.to raise_error(RuntimeError, 'setup block must call #load_with on the environment')
+            expect {|b| config.setup &b}.to yield_with_args(config)
+         end
+
+         it 'should use the given test mode' do
+            [true, false].each do |value|
+               config = Config.new
+
+               config.setup(value) do |c|
+                  c.define_queue(:test, test_task)
+                  c.load_with(Test::Persister.new)
+               end
+
+               expect(config.test_mode?).to be value
+            end
+         end
+
+         it 'should complain if it does not have a task loader factory defined' do
+            config = Config.new
+
+            expect do
+               config.setup do |c|
+                  c.define_queue(:test, test_task)
+               end
+            end.to raise_error(RuntimeError, 'setup block must call #load_with on the environment')
          end
 
          it 'should complain if it does not have any queues defined' do
-            config.load_with(Test::Persister.new)
+            config = Config.new
 
-            expect {config.validate!}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
+            expect do
+               config.setup do |c|
+                  c.load_with(Test::Persister.new)
+               end
+            end.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
          end
       end
 

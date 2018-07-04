@@ -21,16 +21,15 @@ module Procrastinator
       @@test_mode
    end
 
+   # Creates a configuration object and passes it into the given block.
+   #
+   # @yield the created configuration object
    def self.setup(&block)
-      raise ArgumentError.new('Procrastinator.setup must be given a block') if block.nil?
+      raise ArgumentError.new('Procrastinator.setup must be given a block') unless block_given?
 
       config = Config.new
 
-      yield(config)
-
-      config.enable_test_mode if @@test_mode
-
-      config.validate!
+      config.setup(@@test_mode, &block)
 
       QueueManager.new(config).spawn_workers
    end

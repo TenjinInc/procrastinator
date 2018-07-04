@@ -15,79 +15,73 @@ module Procrastinator
          @log_level        = Logger::INFO
       end
 
-      # Assigns a task loader
-      # It should be called in an each_process block as well so that they get
-      # distinct resources (eg. DB connections) from the parent process.
-      def load_with(loader)
-         @loader = loader
+      module DSL
+         # Assigns a task loader
+         # It should be called in an each_process block as well so that they get
+         # distinct resources (eg. DB connections) from the parent process.
+         def load_with(loader)
+            @loader = loader
 
-         raise MalformedTaskLoaderError.new('task loader cannot be nil') if @loader.nil?
+            raise MalformedTaskLoaderError.new('task loader cannot be nil') if @loader.nil?
 
-         [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
-            unless @loader.respond_to? method
-               raise MalformedTaskLoaderError.new("task loader #{@loader.class} must respond to ##{method}")
+            [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
+               unless @loader.respond_to? method
+                  raise MalformedTaskLoaderError.new("task loader #{@loader.class} must respond to ##{method}")
+               end
             end
          end
-      end
 
-      def provide_context(context)
-         @context = context
-      end
-
-      # Accepts a block that will be executed on the queue sub-processes. Use it to control resource allocations.
-      def each_process(&block)
-         unless block
-            err = '#provide_context must be given a block. That block will be run on each sub-process.'
-
-            raise ArgumentError.new(err)
+         def provide_context(context)
+            @context = context
          end
 
-         @subprocess_block = block
-      end
+         # Accepts a block that will be executed on the queue sub-processes. Use it to control resource allocations.
+         def each_process(&block)
+            unless block
+               err = '#provide_context must be given a block. That block will be run on each sub-process.'
 
-      def define_queue(name, task_class, properties = {})
-         raise ArgumentError.new('queue name cannot be nil') if name.nil?
-         raise ArgumentError.new('queue task class cannot be nil') if task_class.nil?
+               raise ArgumentError.new(err)
+            end
 
-         verify_task_class(task_class)
-
-         @queues << Queue.new(properties.merge(name: name, task_class: task_class))
-      end
-
-      def enable_test_mode
-         @test_mode = true
-      end
-
-      def log_inside(path)
-         @log_dir = path
-      end
-
-      def log_at_level(lvl)
-         @log_level = lvl
-      end
-
-      def prefix_processes(prefix)
-         @prefix = prefix
-      end
-
-      # === everything below this isn't part of the setup DSL ===
-      def validate!
-         raise RuntimeError.new('setup block must call #load_with on the environment') if @loader.nil?
-         raise RuntimeError.new('setup block must call #define_queue on the environment') if @queues.empty?
-
-         if @context && !@queues.any? {|queue| queue.task_class.method_defined?(:context=)}
-            err = <<~ERROR
-               setup block called #provide_context, but no queue task classes import :context.
-
-               Add this to your Task classes that expect to receive the context:
-
-                  include Procrastinator::Task
-
-                  task_attr :context
-            ERROR
-
-            raise RuntimeError.new(err)
+            @subprocess_block = block
          end
+
+         def define_queue(name, task_class, properties = {})
+            raise ArgumentError.new('queue name cannot be nil') if name.nil?
+            raise ArgumentError.new('queue task class cannot be nil') if task_class.nil?
+
+            verify_task_class(task_class)
+
+            @queues << Queue.new(properties.merge(name: name, task_class: task_class))
+         end
+
+         def enable_test_mode
+            @test_mode = true
+         end
+
+         def log_inside(path)
+            @log_dir = path
+         end
+
+         def log_at_level(lvl)
+            @log_level = lvl
+         end
+
+         def prefix_processes(prefix)
+            @prefix = prefix
+         end
+      end
+
+      include DSL
+
+      def setup(test_mode = false)
+         yield(self)
+
+         enable_test_mode if test_mode
+
+         validate!
+
+         self
       end
 
       def queues_string
@@ -119,6 +113,25 @@ module Procrastinator
 
       private
 
+      def validate!
+         raise RuntimeError.new('setup block must call #load_with on the environment') if @loader.nil?
+         raise RuntimeError.new('setup block must call #define_queue on the environment') if @queues.empty?
+
+         if @context && !@queues.any? {|queue| queue.task_class.method_defined?(:context=)}
+            err = <<~ERROR
+               setup block called #provide_context, but no queue task classes import :context.
+
+               Add this to your Task classes that expect to receive the context:
+
+                  include Procrastinator::Task
+
+                  task_attr :context
+            ERROR
+
+            raise RuntimeError.new(err)
+         end
+      end
+
       def verify_task_class(task_class)
          unless task_class.method_defined? :run
             raise MalformedTaskError.new("task #{task_class} does not support #run method")
@@ -144,5 +157,8 @@ module Procrastinator
             end
          end
       end
+   end
+
+   class MalformedTaskLoaderError < StandardError
    end
 end
