@@ -47,8 +47,7 @@ module Procrastinator
          end
 
          it 'should create a queue manager configured with config' do
-            scheduler = double('scheduler')
-            config    = Config.new
+            config = Config.new
 
             config.load_with(persister)
 
@@ -57,9 +56,7 @@ module Procrastinator
             expect(Config).to receive(:new).and_return(config)
             expect(QueueManager).to receive(:new).with(config).and_call_original
 
-            Procrastinator.setup do |config|
-               expect(config).to be config
-            end
+            expect {|b| Procrastinator.setup &b}.to yield_with_args(config)
          end
 
          it 'should call #spawn_workers on the manager' do
@@ -116,10 +113,12 @@ module Procrastinator
                end
             end
 
-            expect {Procrastinator.setup do |config|
-               config.define_queue(:test, task_class)
-               config.load_with(persister)
-            end}.to_not raise_error
+            expect do
+               Procrastinator.setup do |config|
+                  config.define_queue(:test, task_class)
+                  config.load_with(persister)
+               end
+            end.to_not raise_error
          end
 
          context 'test mode is enabled globally' do

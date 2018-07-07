@@ -12,34 +12,34 @@ module Procrastinator
             end.to raise_error(MalformedTaskLoaderError, 'task loader cannot be nil')
          end
 
-         it 'should complain if the loader does not respond to #read_tasks' do
-            bad_loader = double('block', create_task: nil, update_task: nil, delete_task: nil)
+         it 'should complain if the loader does not respond to #read' do
+            bad_loader = double('block', create: nil, update: nil, delete: nil)
 
-            err = "task loader #{bad_loader.class} must respond to #read_tasks"
-
-            expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
-         end
-
-         it 'should complain if the loader does not respond to #create_task' do
-            bad_loader = double('block', read_tasks: nil, update_task: nil, delete_task: nil)
-
-            err = "task loader #{bad_loader.class} must respond to #create_task"
+            err = "task loader #{bad_loader.class} must respond to #read"
 
             expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
          end
 
-         it 'should complain if the loader does not respond to #update_task' do
-            bad_loader = double('block', read_tasks: nil, create_task: nil, delete_task: nil)
+         it 'should complain if the loader does not respond to #create' do
+            bad_loader = double('block', read: nil, update: nil, delete: nil)
 
-            err = "task loader #{bad_loader.class} must respond to #update_task"
+            err = "task loader #{bad_loader.class} must respond to #create"
 
             expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
          end
 
-         it 'should complain if the loader does not respond to #delete_task' do
-            bad_loader = double('block', read_tasks: nil, create_task: nil, update_task: nil,)
+         it 'should complain if the loader does not respond to #update' do
+            bad_loader = double('block', read: nil, create: nil, delete: nil)
 
-            err = "task loader #{bad_loader.class} must respond to #delete_task"
+            err = "task loader #{bad_loader.class} must respond to #update"
+
+            expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
+         end
+
+         it 'should complain if the loader does not respond to #delete' do
+            bad_loader = double('block', read: nil, create: nil, update: nil,)
+
+            err = "task loader #{bad_loader.class} must respond to #delete"
 
             expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
          end

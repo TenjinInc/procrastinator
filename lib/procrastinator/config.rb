@@ -20,15 +20,15 @@ module Procrastinator
          # It should be called in an each_process block as well so that they get
          # distinct resources (eg. DB connections) from the parent process.
          def load_with(loader)
-            @loader = loader
+            raise MalformedTaskLoaderError.new('task loader cannot be nil') if loader.nil?
 
-            raise MalformedTaskLoaderError.new('task loader cannot be nil') if @loader.nil?
-
-            [:read_tasks, :create_task, :update_task, :delete_task].each do |method|
-               unless @loader.respond_to? method
-                  raise MalformedTaskLoaderError.new("task loader #{@loader.class} must respond to ##{method}")
+            [:read, :create, :update, :delete].each do |method|
+               unless loader.respond_to? method
+                  raise MalformedTaskLoaderError.new("task loader #{loader.class} must respond to ##{method}")
                end
             end
+
+            @loader = loader
          end
 
          def provide_context(context)

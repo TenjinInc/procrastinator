@@ -2,7 +2,7 @@ require 'spec_helper'
 
 module Procrastinator
    describe QueueWorker do
-      let(:persister) {double('loader', read_tasks: [], update_task: nil, delete_task: nil)}
+      let(:persister) {double('loader', read: [], update: nil, delete: nil)}
       let(:test_task) {Test::Task::AllHooks}
       let(:queue) {Procrastinator::Queue.new(name: :test_queue, task_class: test_task)}
       let(:instant_queue) {Procrastinator::Queue.new(name: :test_queue, task_class: test_task, update_period: 0)}
@@ -23,25 +23,25 @@ module Procrastinator
             end.to raise_error(ArgumentError, ':persister may not be nil')
          end
 
-         it 'should require the persister respond to #read_tasks' do
+         it 'should require the persister respond to #read' do
             expect do
                QueueWorker.new(queue:     queue,
-                               persister: double('broken persister', delete_task: nil, update_task: nil))
-            end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #read_tasks')
+                               persister: double('broken persister', delete: nil, update: nil))
+            end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #read')
          end
 
-         it 'should require the persister respond to #update_task' do
+         it 'should require the persister respond to #update' do
             expect do
                QueueWorker.new(queue:     queue,
-                               persister: double('broken persister', read_tasks: []))
-            end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #update_task')
+                               persister: double('broken persister', read: []))
+            end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #update')
          end
 
-         it 'should require the persister respond to #delete_task' do
+         it 'should require the persister respond to #delete' do
             expect do
                QueueWorker.new(queue:     queue,
-                               persister: double('broken persister', read_tasks: [], update_task: nil))
-            end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #delete_task')
+                               persister: double('broken persister', read: [], update: nil))
+            end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #delete')
          end
       end
 
@@ -154,7 +154,7 @@ module Procrastinator
                   worker = QueueWorker.new(queue:     queue,
                                            persister: persister)
 
-                  expect(persister).to receive(:read_tasks).with(name)
+                  expect(persister).to receive(:read).with(queue: name)
 
                   worker.act
                end
@@ -172,9 +172,9 @@ module Procrastinator
                allow(Test::Task::AllHooks).to receive(:new).and_return(handler1, handler2, handler3)
 
                persister = double('disorganized persister',
-                                  read_tasks:  [job2, job3, job1],
-                                  update_task: nil,
-                                  delete_task: nil)
+                                  read:   [job2, job3, job1],
+                                  update: nil,
+                                  delete: nil)
 
                worker = QueueWorker.new(queue:     instant_queue,
                                         persister: persister)
@@ -196,9 +196,9 @@ module Procrastinator
                allow(Test::Task::AllHooks).to receive(:new).and_return(task2)
 
                persister = double('disorganized persister',
-                                  read_tasks:  [job2, job1],
-                                  update_task: nil,
-                                  delete_task: nil)
+                                  read:   [job2, job1],
+                                  update: nil,
+                                  delete: nil)
 
                worker = QueueWorker.new(queue:     instant_queue,
                                         persister: persister)
@@ -226,7 +226,7 @@ module Procrastinator
                job1 = {run_at: 1}
                job2 = {run_at: 1}
 
-               allow(persister).to receive(:read_tasks).and_return([job1], [job2])
+               allow(persister).to receive(:read).and_return([job1], [job2])
 
                allow(Test::Task::AllHooks).to receive(:new).and_return(task1, task2)
 
@@ -412,28 +412,33 @@ module Procrastinator
                      run_at: 0
                }
 
-               allow(persister).to receive(:read_tasks).and_return([task_data])
+               allow(persister).to receive(:read).and_return([task_data])
 
                worker = QueueWorker.new(queue:     instant_queue,
                                         persister: persister)
 
-               expect(persister).to receive(:delete_task).with(task_data[:id])
+               expect(persister).to receive(:delete).with(task_data[:id])
 
                worker.act
             end
          end
 
-         context 'TaskWorker fails or fails For The Last Time' do
-            # to do: it should promote captain Piett to admiral
+         context 'TaskWorker fails for fails For The Last Time' do
+            # to do:
+            # it 'should promote Captain Piett to Admiral Piett'
 
             it 'should update the task' do
                {queueA: 0, queueB: 1}.each do |name, max_attempts|
-                  task_data = {run_at: 0}
-                  task_hash = {stub: :hash}
+                  id        = double('id')
+                  task_data = {id:     id,
+                               run_at: 0
+                               # last_error:    'err',
+                               # last_error_at: 5
+                  }
 
                   persister = fake_persister([task_data])
 
-                  allow_any_instance_of(TaskWorker).to receive(:to_h).and_return(task_hash)
+                  # allow_any_instance_of(TaskWorker).to receive(:to_h).and_return(task_hash)
 
                   queue = Procrastinator::Queue.new(name:          name,
                                                     task_class:    Test::Task::Fail,
@@ -443,7 +448,10 @@ module Procrastinator
                   worker = QueueWorker.new(queue:     queue,
                                            persister: persister)
 
-                  expect(persister).to receive(:update_task).with(task_hash.merge(queue: name))
+                  expect(persister).to receive(:update).with(id,
+                                                             hash_including(id:     id,
+                                                                            run_at: nil,
+                                                                            queue:  name))
 
                   worker.act
                end

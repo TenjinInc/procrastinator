@@ -35,11 +35,59 @@ module Procrastinator
             raise ArgumentError.new(err)
          end
 
-         loader.create_task(queue:          queue_name,
-                            run_at:         run_at.to_i,
-                            initial_run_at: run_at.to_i,
-                            expire_at:      expire_at.nil? ? nil : expire_at.to_i,
-                            data:           YAML.dump(data))
+         loader.create(queue:          queue_name,
+                       run_at:         run_at.to_i,
+                       initial_run_at: run_at.to_i,
+                       expire_at:      expire_at.nil? ? nil : expire_at.to_i,
+                       data:           YAML.dump(data))
+      end
+
+      def reschedule(queue, identifier)
+         UpdateProxy.new(@config, queue_name: queue, identifier: identifier)
+      end
+
+      class UpdateProxy
+         def initialize(config, queue_name:, identifier:)
+            @config     = config
+            @identifier = identifier
+            @queue_name = queue_name
+         end
+
+         def to(run_at: nil, expire_at: nil)
+            tasks = @config.loader.read(@identifier)
+
+            if tasks.nil? || tasks.empty?
+               raise RuntimeError.new "no task found matching #{@identifier}"
+            elsif tasks.size > 1
+               raise RuntimeError.new "too many (#{tasks.size}) tasks match #[Double \"id\"]. " +
+                                            "Found: #{tasks}"
+            end
+
+            task = tasks.first
+
+            new_data = {
+                  attempts:      0,
+                  last_error:    nil,
+                  last_error_at: nil
+            }
+
+            if run_at.nil? && expire_at.nil?
+               raise ArgumentError.new 'you must provide at least :run_at or :expire_at'
+            elsif run_at
+               if expire_at && run_at.to_i > expire_at.to_i
+                  raise RuntimeError.new "given run_at (#{run_at}) is later than given expire_at (#{expire_at})"
+               elsif task[:expire_at] && run_at.to_i > task[:expire_at]
+                  raise RuntimeError.new "given run_at (#{run_at}) is later than saved expire_at (#{task[:expire_at]})"
+               end
+            end
+
+            new_data = new_data.merge(run_at: run_at.to_i, initial_run_at: run_at.to_i) if run_at
+            new_data = new_data.merge(expire_at: expire_at.to_i) if expire_at
+
+            @config.loader.update(task[:id], new_data)
+         end
+
+         alias_method :at, :to
       end
 
       private

@@ -21,7 +21,7 @@ module Procrastinator
             [:queue1, :queue2].each do |queue_name|
                config.define_queue(queue_name, test_task)
 
-               expect(persister).to receive(:create_task).with(include(queue: queue_name))
+               expect(persister).to receive(:create).with(include(queue: queue_name))
 
                scheduler.delay(queue_name)
             end
@@ -30,7 +30,7 @@ module Procrastinator
          it 'should record a task with given run_at' do
             run_stamp = double('runstamp')
 
-            expect(persister).to receive(:create_task).with(include(run_at: run_stamp))
+            expect(persister).to receive(:create).with(include(run_at: run_stamp))
 
             scheduler.delay(:test_queue, run_at: double('time_object', to_i: run_stamp))
          end
@@ -38,7 +38,7 @@ module Procrastinator
          it 'should record a task with given expire_at' do
             expire_stamp = double('expirestamp')
 
-            expect(persister).to receive(:create_task).with(include(expire_at: expire_stamp))
+            expect(persister).to receive(:create).with(include(expire_at: expire_stamp))
 
             scheduler.delay(:test_queue, expire_at: double('time_object', to_i: expire_stamp))
          end
@@ -58,7 +58,7 @@ module Procrastinator
             data = double('some_data')
 
             # these are, at the moment, all of the arguments the dev can pass in
-            expect(persister).to receive(:create_task).with(include(data: YAML.dump(data)))
+            expect(persister).to receive(:create).with(include(data: YAML.dump(data)))
 
             scheduler.delay(:data_queue, data: data)
          end
@@ -67,7 +67,7 @@ module Procrastinator
             now = Time.now
 
             Timecop.freeze(now) do
-               expect(persister).to receive(:create_task).with(include(run_at: now.to_i))
+               expect(persister).to receive(:create).with(include(run_at: now.to_i))
 
                scheduler.delay()
             end
@@ -76,20 +76,20 @@ module Procrastinator
          it 'should record initial_run_at and run_at to be equal' do
             time = Time.now
 
-            expect(persister).to receive(:create_task).with(include(run_at: time.to_i, initial_run_at: time.to_i))
+            expect(persister).to receive(:create).with(include(run_at: time.to_i, initial_run_at: time.to_i))
 
             scheduler.delay(run_at: time)
          end
 
          it 'should convert run_at, initial_run_at, expire_at to ints' do
-            expect(persister).to receive(:create_task).with(include(run_at: 0, initial_run_at: 0, expire_at: 1))
+            expect(persister).to receive(:create).with(include(run_at: 0, initial_run_at: 0, expire_at: 1))
 
             scheduler.delay(run_at:    double('time', to_i: 0),
                             expire_at: double('time', to_i: 1))
          end
 
          it 'should default expire_at to nil' do
-            expect(persister).to receive(:create_task).with(include(expire_at: nil))
+            expect(persister).to receive(:create).with(include(expire_at: nil))
 
             scheduler.delay
          end
@@ -138,7 +138,7 @@ module Procrastinator
 
             scheduler = Scheduler.new(config)
 
-            expect(persister).to receive(:create_task).with(hash_including(queue: :some_queue))
+            expect(persister).to receive(:create).with(hash_including(queue: :some_queue))
 
             scheduler.delay
          end
@@ -153,7 +153,7 @@ module Procrastinator
             end
          end
 
-         it 'should complain if they provide NO :data in #delay, but the task imports it' do
+         it 'should complain if they provide NO :data in #delay, but the task expects it' do
             test_task = Class.new do
                include Procrastinator::Task
 
@@ -186,6 +186,180 @@ module Procrastinator
             ERROR
 
             expect {scheduler.delay(:data_queue, data: 'some data')}.to raise_error(ArgumentError, err)
+         end
+      end
+
+      describe '#reschedule' do
+         let(:persister) {Test::Persister.new}
+         let(:config) do
+            config = Config.new
+            config.load_with(persister)
+            config.define_queue(:test_queue, test_task)
+            config
+         end
+         let(:scheduler) {Scheduler.new(config)}
+
+         it 'should create a proxy for the given search parameters' do
+            queue      = double('q')
+            identifier = double('i')
+
+            expect(Scheduler::UpdateProxy).to receive(:new)
+                                                    .with(config,
+                                                          queue_name: queue,
+                                                          identifier: identifier)
+
+            scheduler.reschedule(queue, identifier)
+         end
+
+         it 'should return the created proxy' do
+            proxy = double('proxy')
+
+            allow(Scheduler::UpdateProxy).to receive(:new).and_return(proxy)
+
+            expect(scheduler.reschedule(:test_queue, double('id'))).to be proxy
+         end
+      end
+
+      describe Scheduler::UpdateProxy do
+         let(:persister) {Test::Persister.new}
+         let(:config) do
+            config = Config.new
+            config.load_with(persister)
+            config.define_queue(:test_queue, test_task)
+            config
+         end
+         let(:identifier) {double('id')}
+         let(:update_proxy) {Scheduler::UpdateProxy.new(config,
+                                                        queue_name: :test_queue,
+                                                        identifier: identifier)}
+
+         describe '#to' do
+            before(:each) do
+               allow(persister).to receive(:read).and_return([{id: 5}])
+            end
+
+            it 'should find the task matching the given information' do
+               [{id: 5}, {data: {user_id: 5, appointment_id: 2}}].each do |identifier|
+                  update_proxy = Scheduler::UpdateProxy.new(config, identifier: identifier, queue_name: :test_queue)
+
+                  expect(persister).to receive(:read).with(identifier).and_return([double('task', '[]': 6)])
+
+                  update_proxy.to(run_at: 0)
+               end
+            end
+
+            it 'should complain if no task matches the given data' do
+               identifier = double('bogus')
+
+               update_proxy = Scheduler::UpdateProxy.new(config,
+                                                         queue_name: :test_queue,
+                                                         identifier: identifier)
+
+               [[], nil].each do |ret|
+                  allow(persister).to receive(:read).and_return(ret)
+
+                  expect do
+                     update_proxy.to(run_at: 0)
+                  end.to raise_error(RuntimeError, "no task found matching #{identifier}")
+               end
+            end
+
+            it 'should complain if multiple tasks match the given information' do
+               (3..6).each do |n|
+                  tasks = Array.new(n) {|i| double("task#{i}")}
+
+                  allow(persister).to receive(:read).and_return(tasks)
+
+                  expect do
+                     update_proxy.to(run_at: 0)
+                  end.to raise_error(RuntimeError, "too many (#{n}) tasks match #{identifier}. Found: #{tasks}")
+               end
+            end
+
+            it 'should complain if the given run_at would be after given expire_at' do
+               time      = Time.now
+               expire_at = Time.at 0
+
+               expect do
+                  update_proxy.to(run_at: time, expire_at: expire_at)
+               end.to raise_error(RuntimeError, "given run_at (#{time}) is later than given expire_at (#{expire_at})")
+            end
+
+            it 'should complain if the given run_at would be after original expire_at' do
+               time      = Time.now
+               expire_at = Time.at 0
+
+               allow(persister).to receive(:read).and_return([TaskMetaData.new(expire_at: expire_at.to_i).to_h])
+
+               expect do
+                  update_proxy.to(run_at: time)
+               end.to raise_error(RuntimeError,
+                                  "given run_at (#{time}) is later than saved expire_at (#{expire_at.to_i})")
+            end
+
+            it 'should update the found task' do
+               id = double('id')
+
+               allow(persister).to receive(:read).and_return([{id: id}])
+
+               expect(persister).to receive(:update).with(id, anything)
+
+               update_proxy.to(run_at: Time.now)
+            end
+
+            it 'should update run_at and initial_run_at to the given time' do
+               time = Time.now
+
+               expect(persister).to receive(:update).with(anything, hash_including(run_at:         time.to_i,
+                                                                                   initial_run_at: time.to_i))
+
+               update_proxy.to(run_at: time)
+            end
+
+            it 'should NOT update run_at and initial_run_at if run_at is not provided' do
+               expect(persister).to receive(:update).with(anything, hash_excluding(:run_at, :initial_run_at))
+
+               update_proxy.to(expire_at: Time.now)
+            end
+
+            it 'should complain if run_at nor expire_at are provided' do
+               expect do
+                  update_proxy.to
+               end.to raise_error(ArgumentError, 'you must provide at least :run_at or :expire_at')
+            end
+
+            it 'should update expire_at to the given time' do
+               expire_at = Time.now + 10
+
+               expect(persister).to receive(:update).with(anything, hash_including(expire_at: expire_at.to_i))
+
+               update_proxy.to(run_at: Time.now, expire_at: expire_at)
+            end
+
+            it 'should NOT update expire_at if none is provided' do
+               expect(persister).to receive(:update).with(anything, hash_excluding(:expire_at))
+
+               update_proxy.to(run_at: Time.now)
+            end
+
+            it 'should not change id, queue, or data' do
+               expect(persister).to receive(:update).with(anything, hash_excluding(:id, :data, :queue))
+
+               update_proxy.to(run_at: Time.now)
+            end
+
+            it 'should reset attempts' do
+               expect(persister).to receive(:update).with(anything, hash_including(attempts: 0))
+
+               update_proxy.to(run_at: Time.now)
+            end
+
+            it 'should reset last_error and last_error_at' do
+               expect(persister).to receive(:update).with(anything, hash_including(last_error:    nil,
+                                                                                   last_error_at: nil))
+
+               update_proxy.to(run_at: Time.now)
+            end
          end
       end
    end

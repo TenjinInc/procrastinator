@@ -9,28 +9,20 @@ require 'fakefs/safe'
 
 require 'procrastinator'
 
-def fake_persister(data)
-   persister = double('persister')
-   allow(persister).to receive(:update_task)
-   allow(persister).to receive(:delete_task)
-   allow(persister).to receive(:read_tasks).and_return(data)
-   persister
-end
-
 module Procrastinator
 
    module Test
       class Persister
-         def read_tasks(queue_name)
+         def read(attributes)
          end
 
-         def create_task(data)
+         def create(data)
          end
 
-         def update_task
+         def update(identifier, data)
          end
 
-         def delete_task
+         def delete(identifier)
          end
       end
 
@@ -127,4 +119,10 @@ module Procrastinator
          end
       end
    end
+end
+
+def fake_persister(data)
+   persister = Procrastinator::Test::Persister.new
+   allow(persister).to receive(:read).and_return(data)
+   persister
 end

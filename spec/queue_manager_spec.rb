@@ -130,7 +130,7 @@ module Procrastinator
             end
 
             it 'should evaluate load_with and pass it to the worker' do
-               persister = double('specific persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+               persister = double('specific persister', read: nil, create: nil, update: nil, delete: nil)
 
                config.load_with(persister)
 
@@ -354,7 +354,7 @@ module Procrastinator
                end
 
                it 'should run the each_process hook in each queue' do
-                  subprocess_persister = double('child persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+                  subprocess_persister = double('child persister', read: nil, create: nil, update: nil, delete: nil)
 
                   config.each_process do
                      config.load_with(subprocess_persister)
@@ -373,7 +373,7 @@ module Procrastinator
                it 'should run the each_process hook after running fork' do
                   manager = QueueManager.new(config)
 
-                  subprocess_persister = double('child persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+                  subprocess_persister = double('child persister', read: nil, create: nil, update: nil, delete: nil)
 
                   config.each_process do
                      config.load_with(subprocess_persister)
@@ -412,7 +412,7 @@ module Procrastinator
                end
 
                it 'should pass the worker the loader instance' do
-                  subprocess_persister = double('child persister', read_tasks: nil, create_task: nil, update_task: nil, delete_task: nil)
+                  subprocess_persister = double('child persister', read: nil, create: nil, update: nil, delete: nil)
 
                   config.each_process do
                      config.load_with(subprocess_persister)
@@ -637,7 +637,7 @@ module Procrastinator
          end
       end
       describe '#act' do
-         let(:persister) {double('persister', read_tasks: [], create_task: nil, update_task: nil, delete_task: nil)}
+         let(:persister) {double('persister', read: [], create: nil, update: nil, delete: nil)}
 
          let(:config) do
             config = Config.new

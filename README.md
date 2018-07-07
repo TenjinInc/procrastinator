@@ -371,7 +371,7 @@ scheduler = Procrastinator.setup do |env|
 end
 
 # Provide the queue name and any data you want passed in
-procrastinator.delay(:reminder, data: 'bob@example.com')
+scheduler.delay(:reminder, data: 'bob@example.com')
 ``` 
 
 If you have only one queue, you can omit the queue name: 
@@ -383,7 +383,7 @@ scheduler = Procrastinator.setup do |env|
    env.define_queue :reminder, EmailReminder
 end
 
-procrastinator.delay(data: 'bob@example.com')
+scheduler.delay(data: 'bob@example.com')
 ```
 
 ### Providing Data
@@ -399,10 +399,10 @@ to run at a precise time; the only promise is that the task will be attempted *a
 
 ```ruby
 # runs on or after 1 January 3000
-procrastinator.delay(:greeting, run_at: Time.new(3000, 1, 1), data: 'philip_j_fry@example.com')
+scheduler.delay(:greeting, run_at: Time.new(3000, 1, 1), data: 'philip_j_fry@example.com')
 
 # run_at defaults to right now:
-procrastinator.delay(:thumbnail, run_at: Time.now, data: 'shut_up_and_take_my_money.gif')
+scheduler.delay(:thumbnail, run_at: Time.now, data: 'shut_up_and_take_my_money.gif')
 ```
 
 You can also set an `expire_at` deadline. If the task has not been run before `expire_at` is passed, then it will be 
@@ -412,11 +412,42 @@ say, `max_attempts` is reached).
 
 ```ruby
 # will not run at or after 
-procrastinator.delay(:happy_birthday, expire_at: Time.new(2018, 03, 17, 12, 00, '-06:00'),  data: 'contact@tenjin.ca'))
+scheduler.delay(:happy_birthday, expire_at: Time.new(2018, 03, 17, 12, 00, '-06:00'),  data: 'contact@tenjin.ca'))
 
 # expire_at defaults to nil:
-procrastinator.delay(:greeting, expire_at: nil, data: 'bob@example.com')
+scheduler.delay(:greeting, expire_at: nil, data: 'bob@example.com')
 ```
+
+### Rescheduling
+Call `#reschedule` with the queue name and some identifying 
+information, and then calling #to on that to provide the new time.
+
+```ruby
+scheduler = Procrastinator.setup do |env|
+   # ... other setup stuff ...
+
+   env.define_queue :reminder, EmailReminder
+end
+
+scheduler.delay(:reminder, run_at: Time.parse('June 1'), data: 'bob@example.com')
+
+# we can reschedule the task made above 
+scheduler.reschedule(:reminder, data: 'bob@example.com').to(run_at: Time.parse('June 20 12:00'))
+
+# we can also change the expiry time
+scheduler.reschedule(:reminder, data: 'bob@example.com').to(expire_at: Time.parse('June 23 12:00'))
+
+# or both
+scheduler.reschedule(:reminder, data: 'bob@example.com').to(run_at:    Time.parse('June 20 12:00'), 
+                                                            expire_at: Time.parse('June 23 12:00'))
+```
+
+Rescheduling updates the task's `:run_at` and `:initial_run_at` to a new value, if provided and/or 
+`:expire_at` to a new value if provided. A `RuntimeError` is raised if the resulting runtime is after the expiry. 
+
+It also resets `:attempts` to `0` and clears both `:last_error` and `:last_error_at` to `nil`.
+
+Rescheduling will not change `:id`, `:queue` or `:data`.
 
 ## Test Mode
 Procrastinator uses multi-threading and multi-processing internally, which is a nightmare for automated testing. 

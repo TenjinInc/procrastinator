@@ -4,7 +4,8 @@ module Procrastinator
 
       def_delegators :@queue, :name
 
-      PERSISTER_METHODS = [:read_tasks, :update_task, :delete_task]
+      # expected methods for all persistence strategies
+      PERSISTER_METHODS = [:read, :update, :delete]
 
       def initialize(queue:,
                      persister:,
@@ -49,7 +50,7 @@ module Procrastinator
          # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
          # results
          # Ideally, we'd use a better algo than qsort for this, but this will do for now
-         tasks = @persister.read_tasks(@queue.name)
+         tasks = @persister.read(queue: @queue.name)
 
          tasks = tasks.reject {|t| t[:run_at].nil?}.shuffle.sort_by {|t| t[:run_at]}
 
@@ -70,9 +71,9 @@ module Procrastinator
                tw.work
 
                if tw.successful?
-                  @persister.delete_task(metadata.id)
+                  @persister.delete(metadata.id)
                else
-                  @persister.update_task(tw.to_h.merge(queue: @queue.name))
+                  @persister.update(metadata.id, tw.to_h.merge(queue: @queue.name))
                end
             end
          end
