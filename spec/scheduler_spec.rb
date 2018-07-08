@@ -219,147 +219,159 @@ module Procrastinator
             expect(scheduler.reschedule(:test_queue, double('id'))).to be proxy
          end
       end
+   end
+   describe Scheduler::UpdateProxy do
 
-      describe Scheduler::UpdateProxy do
-         let(:persister) {Test::Persister.new}
-         let(:config) do
-            config = Config.new
-            config.load_with(persister)
-            config.define_queue(:test_queue, test_task)
-            config
+      let(:test_task) {Test::Task::AllHooks}
+      let(:persister) {Test::Persister.new}
+      let(:config) do
+         config = Config.new
+         config.load_with(persister)
+         config.define_queue(:test_queue, test_task)
+         config
+      end
+      let(:identifier) {{id: 'id'}}
+      let(:update_proxy) {Scheduler::UpdateProxy.new(config,
+                                                     queue_name: :test_queue,
+                                                     identifier: identifier)}
+
+      describe '#to' do
+         before(:each) do
+            allow(persister).to receive(:read).and_return([{id: 5}])
          end
-         let(:identifier) {double('id')}
-         let(:update_proxy) {Scheduler::UpdateProxy.new(config,
-                                                        queue_name: :test_queue,
-                                                        identifier: identifier)}
 
-         describe '#to' do
-            before(:each) do
-               allow(persister).to receive(:read).and_return([{id: 5}])
+         it 'should find the task matching the given information' do
+            [{id: 5}, {data: {user_id: 5, appointment_id: 2}}].each do |identifier|
+               update_proxy = Scheduler::UpdateProxy.new(config, identifier: identifier, queue_name: :test_queue)
+
+               expect(persister).to receive(:read).with(identifier).and_return([double('task', '[]': 6)])
+
+               update_proxy.to(run_at: 0)
             end
+         end
 
-            it 'should find the task matching the given information' do
-               [{id: 5}, {data: {user_id: 5, appointment_id: 2}}].each do |identifier|
-                  update_proxy = Scheduler::UpdateProxy.new(config, identifier: identifier, queue_name: :test_queue)
+         it 'should find the task matching the given unserialized data' do
+            data = {user_id: 5, appointment_id: 2}
 
-                  expect(persister).to receive(:read).with(identifier).and_return([double('task', '[]': 6)])
+            update_proxy = Scheduler::UpdateProxy.new(config, identifier: {data: data}, queue_name: :test_queue)
 
+            expect(persister).to receive(:read).with(data: YAML.dump(data)).and_return([double('task', '[]': 6)])
+
+            update_proxy.to(run_at: 0)
+         end
+
+
+         it 'should complain if no task matches the given information' do
+            identifier = {bogus: 66}
+
+            update_proxy = Scheduler::UpdateProxy.new(config,
+                                                      queue_name: :test_queue,
+                                                      identifier: identifier)
+
+            [[], nil].each do |ret|
+               allow(persister).to receive(:read).and_return(ret)
+
+               expect do
                   update_proxy.to(run_at: 0)
-               end
+               end.to raise_error(RuntimeError, "no task found matching #{identifier}")
             end
+         end
 
-            it 'should complain if no task matches the given data' do
-               identifier = double('bogus')
+         it 'should complain if multiple tasks match the given information' do
+            (3..5).each do |n|
+               tasks = Array.new(n) {|i| double("task#{i}")}
 
-               update_proxy = Scheduler::UpdateProxy.new(config,
-                                                         queue_name: :test_queue,
-                                                         identifier: identifier)
-
-               [[], nil].each do |ret|
-                  allow(persister).to receive(:read).and_return(ret)
-
-                  expect do
-                     update_proxy.to(run_at: 0)
-                  end.to raise_error(RuntimeError, "no task found matching #{identifier}")
-               end
-            end
-
-            it 'should complain if multiple tasks match the given information' do
-               (3..6).each do |n|
-                  tasks = Array.new(n) {|i| double("task#{i}")}
-
-                  allow(persister).to receive(:read).and_return(tasks)
-
-                  expect do
-                     update_proxy.to(run_at: 0)
-                  end.to raise_error(RuntimeError, "too many (#{n}) tasks match #{identifier}. Found: #{tasks}")
-               end
-            end
-
-            it 'should complain if the given run_at would be after given expire_at' do
-               time      = Time.now
-               expire_at = Time.at 0
+               allow(persister).to receive(:read).and_return(tasks)
 
                expect do
-                  update_proxy.to(run_at: time, expire_at: expire_at)
-               end.to raise_error(RuntimeError, "given run_at (#{time}) is later than given expire_at (#{expire_at})")
+                  update_proxy.to(run_at: 0)
+               end.to raise_error(RuntimeError, "too many (#{n}) tasks match #{identifier}. Found: #{tasks}")
             end
+         end
 
-            it 'should complain if the given run_at would be after original expire_at' do
-               time      = Time.now
-               expire_at = Time.at 0
+         it 'should complain if the given run_at would be after given expire_at' do
+            time      = Time.now
+            expire_at = Time.at 0
 
-               allow(persister).to receive(:read).and_return([TaskMetaData.new(expire_at: expire_at.to_i).to_h])
+            expect do
+               update_proxy.to(run_at: time, expire_at: expire_at)
+            end.to raise_error(RuntimeError, "given run_at (#{time}) is later than given expire_at (#{expire_at})")
+         end
 
-               expect do
-                  update_proxy.to(run_at: time)
-               end.to raise_error(RuntimeError,
-                                  "given run_at (#{time}) is later than saved expire_at (#{expire_at.to_i})")
-            end
+         it 'should complain if the given run_at would be after original expire_at' do
+            time      = Time.now
+            expire_at = Time.at 0
 
-            it 'should update the found task' do
-               id = double('id')
+            allow(persister).to receive(:read).and_return([TaskMetaData.new(expire_at: expire_at.to_i).to_h])
 
-               allow(persister).to receive(:read).and_return([{id: id}])
-
-               expect(persister).to receive(:update).with(id, anything)
-
-               update_proxy.to(run_at: Time.now)
-            end
-
-            it 'should update run_at and initial_run_at to the given time' do
-               time = Time.now
-
-               expect(persister).to receive(:update).with(anything, hash_including(run_at:         time.to_i,
-                                                                                   initial_run_at: time.to_i))
-
+            expect do
                update_proxy.to(run_at: time)
-            end
+            end.to raise_error(RuntimeError,
+                               "given run_at (#{time}) is later than saved expire_at (#{expire_at.to_i})")
+         end
 
-            it 'should NOT update run_at and initial_run_at if run_at is not provided' do
-               expect(persister).to receive(:update).with(anything, hash_excluding(:run_at, :initial_run_at))
+         it 'should update the found task' do
+            id = double('id')
 
-               update_proxy.to(expire_at: Time.now)
-            end
+            allow(persister).to receive(:read).and_return([{id: id}])
 
-            it 'should complain if run_at nor expire_at are provided' do
-               expect do
-                  update_proxy.to
-               end.to raise_error(ArgumentError, 'you must provide at least :run_at or :expire_at')
-            end
+            expect(persister).to receive(:update).with(id, anything)
 
-            it 'should update expire_at to the given time' do
-               expire_at = Time.now + 10
+            update_proxy.to(run_at: Time.now)
+         end
 
-               expect(persister).to receive(:update).with(anything, hash_including(expire_at: expire_at.to_i))
+         it 'should update run_at and initial_run_at to the given time' do
+            time = Time.now
 
-               update_proxy.to(run_at: Time.now, expire_at: expire_at)
-            end
+            expect(persister).to receive(:update).with(anything, hash_including(run_at:         time.to_i,
+                                                                                initial_run_at: time.to_i))
 
-            it 'should NOT update expire_at if none is provided' do
-               expect(persister).to receive(:update).with(anything, hash_excluding(:expire_at))
+            update_proxy.to(run_at: time)
+         end
 
-               update_proxy.to(run_at: Time.now)
-            end
+         it 'should NOT update run_at and initial_run_at if run_at is not provided' do
+            expect(persister).to receive(:update).with(anything, hash_excluding(:run_at, :initial_run_at))
 
-            it 'should not change id, queue, or data' do
-               expect(persister).to receive(:update).with(anything, hash_excluding(:id, :data, :queue))
+            update_proxy.to(expire_at: Time.now)
+         end
 
-               update_proxy.to(run_at: Time.now)
-            end
+         it 'should complain if run_at nor expire_at are provided' do
+            expect do
+               update_proxy.to
+            end.to raise_error(ArgumentError, 'you must provide at least :run_at or :expire_at')
+         end
 
-            it 'should reset attempts' do
-               expect(persister).to receive(:update).with(anything, hash_including(attempts: 0))
+         it 'should update expire_at to the given time' do
+            expire_at = Time.now + 10
 
-               update_proxy.to(run_at: Time.now)
-            end
+            expect(persister).to receive(:update).with(anything, hash_including(expire_at: expire_at.to_i))
 
-            it 'should reset last_error and last_error_at' do
-               expect(persister).to receive(:update).with(anything, hash_including(last_error:    nil,
-                                                                                   last_error_at: nil))
+            update_proxy.to(run_at: Time.now, expire_at: expire_at)
+         end
 
-               update_proxy.to(run_at: Time.now)
-            end
+         it 'should NOT update expire_at if none is provided' do
+            expect(persister).to receive(:update).with(anything, hash_excluding(:expire_at))
+
+            update_proxy.to(run_at: Time.now)
+         end
+
+         it 'should not change id, queue, or data' do
+            expect(persister).to receive(:update).with(anything, hash_excluding(:id, :data, :queue))
+
+            update_proxy.to(run_at: Time.now)
+         end
+
+         it 'should reset attempts' do
+            expect(persister).to receive(:update).with(anything, hash_including(attempts: 0))
+
+            update_proxy.to(run_at: Time.now)
+         end
+
+         it 'should reset last_error and last_error_at' do
+            expect(persister).to receive(:update).with(anything, hash_including(last_error:    nil,
+                                                                                last_error_at: nil))
+
+            update_proxy.to(run_at: Time.now)
          end
       end
    end

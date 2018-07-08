@@ -48,6 +48,8 @@ module Procrastinator
 
       class UpdateProxy
          def initialize(config, queue_name:, identifier:)
+            identifier[:data] = YAML.dump(identifier[:data]) if identifier[:data]
+
             @config     = config
             @identifier = identifier
             @queue_name = queue_name
@@ -59,8 +61,7 @@ module Procrastinator
             if tasks.nil? || tasks.empty?
                raise RuntimeError.new "no task found matching #{@identifier}"
             elsif tasks.size > 1
-               raise RuntimeError.new "too many (#{tasks.size}) tasks match #[Double \"id\"]. " +
-                                            "Found: #{tasks}"
+               raise RuntimeError.new "too many (#{tasks.size}) tasks match #{@identifier}. Found: #{tasks}"
             end
 
             task = tasks.first

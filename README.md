@@ -86,8 +86,8 @@ In the setup block, you can call `#define_queue` on the environment:
 
 ```ruby
 Procrastinator.setup do |env|
-   # ... other setup stuff ...
 
+   # ... other setup stuff ...
    env.define_queue :greeting, SendWelcomeEmail
 end
 ```
@@ -155,21 +155,22 @@ end
 
 Your task loader class is required to implement *all* of the following four methods: 
 
-1. `#read_tasks(queue_name)`
+1. `#read(attributes)`
 
-   Returns a list of hashes from your datastore for the specified queue name. 
+   Returns a list of hashes from your datastore that match the given attributes hash. The search
+   attributes will be in their final form (eg. `:data` will already be serialized).
    Each hash must contain the properties listed in [Task Data](#task-data) below.
      
-2. `#create_task(data)`
+2. `#create(queue:, run_at:, initial_run_at:, expire_at:, data:)`
 
    Creates a task in your datastore. Receives a hash with [Task Data](#task-data) keys: 
-   `:queue`, `:run_at`, `:initial_run_at`, `:expire_at`, and `:task`.
+   `:queue`, `:run_at`, `:initial_run_at`, `:expire_at`, and `:data`.
     
-3. `#update_task(new_data)`
+3. `#update(id, new_data)`
  
    Saves the provided full [Task Data](#task-data) hash to your datastore.
    
-4. `#delete_task(id)`
+4. `#delete(id)`
  
    Deletes the task with the given identifier in your datastore.
 
