@@ -71,7 +71,7 @@ Procrastinator.setup allows you to define a task loader, a task context, and ava
 
 ```ruby
 Procrastinator.setup do |env|
-   # ... call methods on env to set configurations
+   # call methods on env to set configurations
 end
 ```
 
@@ -101,7 +101,7 @@ provide these keyword arguments:
     
  * `:max_attempts` 
  
-   Maximum number of attempts for tasks in this queue. Once attempts is meets or exceeds `max_attempts`, the task will 
+   Maximum number of attempts for tasks in this queue. Once attempts meets or exceeds `max_attempts`, the task will 
    be permanently failed.
     
  * `:update_period`
@@ -209,7 +209,7 @@ This can be useful for things like app containers, but you can use it for whatev
 Procrastinator.setup do |env|
    # .. other setup stuff ...
  
-   env.provide_context {message: "This hash will be passed into your task's methods"}
+   env.provide_context {message: 'This hash will be passed into your task's methods'}
 end
 
 # ... and in your task ...
@@ -244,7 +244,7 @@ Procrastinator.setup do |env|
 end
 ```
 
-NB: That block is **not run in Test Mode**. 
+NB: The `each_process` block is **not run in Test Mode**. 
 
 ### Naming Processes: `#process_prefix`
 Each queue subprocess is named after the queue it's working on, 
@@ -281,10 +281,11 @@ class MyTask
    
    # ========================================
    #             OPTIONAL HOOKS
+   #
+   # You can always omit any of the methods
+   # below. Only #run is mandatory.
+   #
    # ========================================
-   #
-   # You can always omit any of the methods below. Only #run is mandatory.
-   #
    
    # Called after the task has completed successfully. 
    # Receives the result of #run.
@@ -311,8 +312,6 @@ class MyTask
 end
 ```
 
-It **must provide** a `#run` method, but `#success`, `#fail`, and `#final_fail` are optional. 
-
 ### Accessing Task Attributes
 Include `Procrastinator::Task` in your task class and then use `task_attr` to register which task attributes your 
 task wants access to. 
@@ -330,7 +329,7 @@ class MyTask
       # the attributes listed in task_attr become methods like attr_accessor
       logger.info("The data for this task is #{data}")
    end
-end   
+end
 ```
 
  * `:data`
@@ -449,6 +448,28 @@ Rescheduling updates the task's `:run_at` and `:initial_run_at` to a new value, 
 It also resets `:attempts` to `0` and clears both `:last_error` and `:last_error_at` to `nil`.
 
 Rescheduling will not change `:id`, `:queue` or `:data`.
+
+### Cancelling
+Call `#cancel` with the queue name and some identifying information to narrow the search to a single task.
+
+```ruby
+scheduler = Procrastinator.setup do |env|
+   # ... other setup stuff ...
+
+   env.define_queue :reminder, EmailReminder
+end
+
+scheduler.delay(:reminder, run_at: Time.parse('June 1'), data: 'bob@example.com')
+
+# we can cancel the task made above using whatever we know about it, like the saved :data
+scheduler.reschedule(:reminder, data: 'bob@example.com')
+
+# or multiple attributes
+scheduler.reschedule(:reminder, run_at: Time.parse('June 1'), data: 'bob@example.com')
+
+# you could also use the id number directly, if you have it
+scheduler.reschedule(:reminder, id: 137)
+```
 
 ## Test Mode
 Procrastinator uses multi-threading and multi-processing internally, which is a nightmare for automated testing. 

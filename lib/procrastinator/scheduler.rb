@@ -46,6 +46,20 @@ module Procrastinator
          UpdateProxy.new(@config, queue_name: queue, identifier: identifier)
       end
 
+      def cancel(queue, identifier)
+         tasks = loader.read(identifier.merge(queue: queue))
+
+         if tasks.empty?
+            raise RuntimeError, "no task matches search: #{identifier}"
+         elsif tasks.size > 1
+            raise RuntimeError, "multiple tasks match search: #{identifier}"
+         end
+
+         id = tasks.first[:id]
+
+         loader.delete(id)
+      end
+
       class UpdateProxy
          def initialize(config, queue_name:, identifier:)
             identifier[:data] = YAML.dump(identifier[:data]) if identifier[:data]

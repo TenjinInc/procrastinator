@@ -219,7 +219,81 @@ module Procrastinator
             expect(scheduler.reschedule(:test_queue, double('id'))).to be proxy
          end
       end
+
+      describe '#cancel' do
+         let(:persister) {Test::Persister.new}
+         let(:config) do
+            config = Config.new
+            config.load_with(persister)
+            config.define_queue(:greeting, test_task)
+            config.define_queue(:reminder, test_task)
+            config
+         end
+         let(:scheduler) {Scheduler.new(config)}
+
+         it 'should delete the task matching the given search data' do
+            tasks = [{id: 1, queue: :reminder, data: 'user_id: 5'},
+                     {id: 2, queue: :reminder, data: 'user_id: 10'}]
+
+            allow(persister).to receive(:read) do |attrs|
+               attrs[:data][:user_id] == 5 ? [tasks.first] : [tasks.last]
+            end
+
+            # first search
+            expect(persister).to receive(:delete).with(2)
+            scheduler.cancel(:reminder, data: {user_id: 10})
+
+            # second search
+            expect(persister).to receive(:delete).with(1)
+            scheduler.cancel(:reminder, data: {user_id: 5})
+         end
+
+         it 'should delete the task only on the given queue' do
+            tasks = [{id: 1, queue: :reminder, data: 'user_id: 5'},
+                     {id: 2, queue: :greeting, data: 'user_id: 5'}]
+
+            allow(persister).to receive(:read) do |attrs|
+               attrs[:queue] == :reminder ? [tasks.first] : [tasks.last]
+            end
+
+            # first search
+            expect(persister).to receive(:delete).with(2)
+            scheduler.cancel(:greeting, data: {user_id: 5})
+
+            #second search
+            expect(persister).to receive(:delete).with(1)
+            scheduler.cancel(:reminder, data: {user_id: 5})
+         end
+
+         it 'should complain if no task matches the given data' do
+            allow(persister).to receive(:read).and_return([])
+
+            [{data: {bogus: 6}},
+             {data: 'missing data'}].each do |identifier|
+               expect(persister).to_not receive(:delete)
+
+               expect do
+                  scheduler.cancel(:greeting, identifier)
+               end.to raise_error(RuntimeError, "no task matches search: #{identifier}")
+            end
+         end
+
+         it 'should complain if multiple task match the given data' do
+            allow(persister).to receive(:read).and_return([{id: 1, queue: :reminder, run_at: 0},
+                                                           {id: 2, queue: :reminder, run_at: 0}])
+
+            expect(persister).to_not receive(:delete)
+
+            [{run_at: 0},
+             {queue: :reminder}].each do |identifier|
+               expect do
+                  scheduler.cancel(:greeting, identifier)
+               end.to raise_error(RuntimeError, "multiple tasks match search: #{identifier}")
+            end
+         end
+      end
    end
+
    describe Scheduler::UpdateProxy do
 
       let(:test_task) {Test::Task::AllHooks}
@@ -250,7 +324,7 @@ module Procrastinator
             end
          end
 
-         it 'should find the task matching the given unserialized data' do
+         it 'should find the task matching the given serialized :data' do
             data = {user_id: 5, appointment_id: 2}
 
             update_proxy = Scheduler::UpdateProxy.new(config, identifier: {data: data}, queue_name: :test_queue)
@@ -259,7 +333,6 @@ module Procrastinator
 
             update_proxy.to(run_at: 0)
          end
-
 
          it 'should complain if no task matches the given information' do
             identifier = {bogus: 66}
