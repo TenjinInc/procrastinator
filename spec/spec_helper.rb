@@ -4,7 +4,9 @@ SimpleCov.start
 
 $LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
 
+require 'rspec'
 require 'timecop'
+require 'pp' # needed to fix a conflict with FakeFS
 require 'fakefs/safe'
 
 require 'procrastinator'
