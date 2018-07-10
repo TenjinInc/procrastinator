@@ -20,12 +20,16 @@ module Procrastinator
          let(:persister) {Test::Persister.new}
 
          it 'should provide the block a configuration instance' do
-            allow_any_instance_of(Config).to receive(:validate!)
+            config = Config.new
+            config.load_with(persister)
+            config.define_queue(:test_queue, test_task)
+
+            allow(Config).to receive(:new).and_return(config)
             allow(QueueManager).to receive(:new).and_return(double('qm', spawn_workers: nil))
 
             expect do |block|
                Procrastinator.setup &block
-            end.to yield_with_args(instance_of(Config))
+            end.to yield_with_args(config)
          end
 
          it 'should return a scheduler configured with config' do
@@ -33,8 +37,7 @@ module Procrastinator
             config    = Config.new
 
             config.load_with(persister)
-
-            allow(config).to receive(:validate!)
+            config.define_queue(:test_queue, test_task)
 
             expect(Config).to receive(:new).and_return(config)
             expect(Scheduler).to receive(:new).with(config).and_return(scheduler)
@@ -50,8 +53,7 @@ module Procrastinator
             config = Config.new
 
             config.load_with(persister)
-
-            allow(config).to receive(:validate!)
+            config.define_queue(:test_queue, test_task)
 
             expect(Config).to receive(:new).and_return(config)
             expect(QueueManager).to receive(:new).with(config).and_call_original
@@ -70,12 +72,6 @@ module Procrastinator
 
          it 'should require that a block is provided' do
             expect {Procrastinator.setup}.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
-         end
-
-         it 'should require that #load_with is called' do
-            expect do
-               Procrastinator.setup {}
-            end.to raise_error(RuntimeError, 'setup block must call #load_with on the environment')
          end
 
          it 'should require at least one queue is defined' do

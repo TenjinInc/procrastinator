@@ -7,7 +7,7 @@ require 'procrastinator/config'
 require 'procrastinator/queue_manager'
 require 'procrastinator/task'
 require 'procrastinator/scheduler'
-require 'procrastinator/adapters/csv_loader'
+require 'procrastinator/loaders/csv_loader'
 require 'logger'
 
 

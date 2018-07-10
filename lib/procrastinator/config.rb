@@ -79,7 +79,25 @@ module Procrastinator
 
          enable_test_mode if test_mode
 
-         validate!
+         unless @loader
+            load_with(Loader::CSVLoader.new)
+         end
+
+         raise RuntimeError.new('setup block must call #define_queue on the environment') if @queues.empty?
+
+         if @context && !@queues.any? {|queue| queue.task_class.method_defined?(:context=)}
+            err = <<~ERROR
+               setup block called #provide_context, but no queue task classes import :context.
+
+               Add this to your Task classes that expect to receive the context:
+
+                  include Procrastinator::Task
+
+                  task_attr :context
+            ERROR
+
+            raise RuntimeError, err
+         end
 
          self
       end
@@ -112,25 +130,6 @@ module Procrastinator
       end
 
       private
-
-      def validate!
-         raise RuntimeError.new('setup block must call #load_with on the environment') if @loader.nil?
-         raise RuntimeError.new('setup block must call #define_queue on the environment') if @queues.empty?
-
-         if @context && !@queues.any? {|queue| queue.task_class.method_defined?(:context=)}
-            err = <<~ERROR
-               setup block called #provide_context, but no queue task classes import :context.
-
-               Add this to your Task classes that expect to receive the context:
-
-                  include Procrastinator::Task
-
-                  task_attr :context
-            ERROR
-
-            raise RuntimeError.new(err)
-         end
-      end
 
       def verify_task_class(task_class)
          unless task_class.method_defined? :run

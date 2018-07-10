@@ -7,8 +7,16 @@ module Procrastinator
          # ordered
          HEADERS = [:id, :queue, :run_at, :initial_run_at, :expire_at, :attempts, :last_fail_at, :last_error, :data]
 
-         def initialize(file_path)
+         DEFAULT_FILE = 'procrastinator-tasks.csv'
+
+         def initialize(file_path = DEFAULT_FILE)
             @path = Pathname.new(file_path)
+
+            if @path.directory? || @path.to_s.end_with?('/')
+               @path += DEFAULT_FILE
+            elsif @path.extname.empty?
+               @path = Pathname.new("#{file_path}.csv")
+            end
          end
 
          def read

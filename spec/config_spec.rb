@@ -192,7 +192,7 @@ module Procrastinator
 
       describe '#setup' do
          it 'should yield itself' do
-            allow(config).to receive(:validate!)
+            config.define_queue(:test_queue, test_task)
 
             expect {|b| config.setup &b}.to yield_with_args(config)
          end
@@ -210,14 +210,14 @@ module Procrastinator
             end
          end
 
-         it 'should complain if it does not have a task loader factory defined' do
+         it 'should default to the basic CSV task loader if none is provided' do
             config = Config.new
 
-            expect do
-               config.setup do |c|
-                  c.define_queue(:test, test_task)
-               end
-            end.to raise_error(RuntimeError, 'setup block must call #load_with on the environment')
+            config.setup do |c|
+               c.define_queue(:test_queue, test_task)
+            end
+
+            expect(config.loader).to be_a(Procrastinator::Loader::CSVLoader)
          end
 
          it 'should complain if it does not have any queues defined' do

@@ -5,6 +5,44 @@ require 'pathname'
 module Procrastinator
    module Loader
       describe CSVLoader do
+         describe 'initialize' do
+            include FakeFS::SpecHelpers
+
+            it 'should accept a path argument' do
+               CSVLoader.new('testfile.csv').write([])
+
+               expect(File).to exist('testfile.csv')
+            end
+
+            it 'should provide a default path argument' do
+               CSVLoader.new.write([])
+
+               expect(File).to exist(CSVLoader::DEFAULT_FILE)
+            end
+
+            it 'should add a .csv extension to the path if missing extension' do
+               CSVLoader.new('plainfile').write([])
+
+               expect(File).to exist('plainfile.csv')
+            end
+
+            it 'should add a default filename if the provided path is a directory name' do
+               slash_end_path = '/some/place/'
+
+               CSVLoader.new(slash_end_path).write([])
+
+               expect(File).to exist("#{slash_end_path}/#{CSVLoader::DEFAULT_FILE}")
+            end
+
+            it 'should add a default filename if the provided path is an existing directory' do
+               existing_dir = 'test_dir'
+               FileUtils.mkdir existing_dir
+               CSVLoader.new(existing_dir).write([])
+
+               expect(File).to exist("#{existing_dir}/#{CSVLoader::DEFAULT_FILE}")
+            end
+         end
+
          describe 'read' do
             include FakeFS::SpecHelpers
 
