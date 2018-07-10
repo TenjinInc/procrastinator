@@ -131,13 +131,17 @@ In setup, the environment's `#load_with` method expects an task loader instance:
 loader = MyTaskLoader.new('tasks.csv')
 
 scheduler = Procrastinator.setup do |env|
+   # ... other setup stuff ...
+
    env.load_with loader
    
-   # .. other setup stuff ...
+   # if you're using the default CSV loader and want to set where it saves the CSV,
+   # provide the keyword argument :location with your path or filename
+   env.load_with location: '/var/myapp/'
 end
 ```
 
-If you need per-process resource management (eg. independent database connections), you can build and assign a 
+For per-process resource management (eg. independent database connections), you can build and assign a 
 task loader in the `#each_process` block.
 
 ```ruby

@@ -8,6 +8,7 @@ require 'rspec'
 require 'timecop'
 require 'pp' # needed to fix a conflict with FakeFS
 require 'fakefs/safe'
+require 'fakefs/spec_helpers'
 
 require 'procrastinator'
 

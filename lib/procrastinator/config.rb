@@ -20,6 +20,14 @@ module Procrastinator
          # It should be called in an each_process block as well so that they get
          # distinct resources (eg. DB connections) from the parent process.
          def load_with(loader)
+            if loader.is_a? Hash
+               unless loader.has_key? :location
+                  raise ArgumentError, 'Must pass keyword :location if specifying a location for CSV file'
+               end
+
+               loader = Loader::CSVLoader.new(loader[:location])
+            end
+
             raise MalformedTaskLoaderError.new('task loader cannot be nil') if loader.nil?
 
             [:read, :create, :update, :delete].each do |method|

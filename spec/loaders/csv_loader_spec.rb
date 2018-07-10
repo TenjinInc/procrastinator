@@ -1,5 +1,4 @@
 require 'spec_helper'
-require 'fakefs/spec_helpers'
 require 'pathname'
 
 module Procrastinator

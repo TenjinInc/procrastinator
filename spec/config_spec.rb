@@ -6,6 +6,29 @@ module Procrastinator
       let(:test_task) {Test::Task::AllHooks}
 
       describe '#load_with' do
+         include FakeFS::SpecHelpers
+
+         it 'should accept a location hash' do
+            path   = '/some/path/file.csv'
+            loader = Loader::CSVLoader.new(path)
+            expect(Loader::CSVLoader).to receive(:new).with(path).and_return(loader)
+
+            config.load_with(location: path)
+
+            expect(config.loader).to be loader
+         end
+
+         it 'should complain about other hash values' do
+            path = '/some/path/file.csv'
+            expect(Loader::CSVLoader).to_not receive(:new)
+
+            expect do
+               config.load_with(bogus: path)
+            end.to raise_error ArgumentError, 'Must pass keyword :location if specifying a location for CSV file'
+
+            expect(config.loader).to be_nil
+         end
+
          it 'should complain if the loader is nil' do
             expect do
                config.load_with(nil)
