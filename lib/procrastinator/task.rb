@@ -10,7 +10,7 @@ module Procrastinator
          if KNOWN_ATTRIBUTES.include?(m)
             err = "To access Procrastinator::Task attribute :#{m}, call task_attr(:#{m}) in your class definition."
 
-            raise NameError.new(err)
+            raise NameError, err
          else
             super
          end
@@ -24,7 +24,7 @@ module Procrastinator
             fields.each do |field|
                err = "Unknown Procrastinator::Task attribute :#{field}. " +
                      "Importable attributes are: #{attr_list}"
-               raise ArgumentError.new(err) unless KNOWN_ATTRIBUTES.include?(field)
+               raise ArgumentError, err unless KNOWN_ATTRIBUTES.include?(field)
             end
 
             attr_accessor *fields

@@ -77,7 +77,7 @@ module Procrastinator
       end
 
       def verify_expiry!
-         raise(TaskExpiredError.new("task is over its expiry time of #{@expire_at}")) if expired?
+         raise TaskExpiredError, "task is over its expiry time of #{@expire_at}" if expired?
       end
 
       def to_h

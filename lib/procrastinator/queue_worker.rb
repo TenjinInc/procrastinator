@@ -13,12 +13,12 @@ module Procrastinator
                      task_context: nil,
                      log_dir: nil,
                      log_level: Logger::INFO)
-         raise ArgumentError.new(':persister may not be nil') unless persister
+         raise ArgumentError, ':persister may not be nil' unless persister
 
          PERSISTER_METHODS.each do |method|
             err = "The supplied IO object must respond to ##{method}"
 
-            raise(MalformedTaskPersisterError.new(err)) unless persister.respond_to? method
+            raise MalformedTaskPersisterError, err unless persister.respond_to? method
          end
 
          @queue        = queue
@@ -114,7 +114,7 @@ module Procrastinator
       # @param pid the child's process id
       #
       def log_parent_exit(ppid:, pid:)
-         raise RuntimeError.new('Cannot log when logger not defined. Call #start_log first.') unless @logger
+         raise RuntimeError, 'Cannot log when logger not defined. Call #start_log first.' unless @logger
 
          @logger.error("Terminated worker process (pid=#{pid}) due to main process (ppid=#{ppid}) disappearing.")
       end

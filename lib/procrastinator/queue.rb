@@ -14,12 +14,12 @@ module Procrastinator
                      timeout: DEFAULT_TIMEOUT,
                      update_period: DEFAULT_UPDATE_PERIOD,
                      max_tasks: DEFAULT_MAX_TASKS)
-         raise ArgumentError.new(':name may not be nil') unless name
-         raise ArgumentError.new(':task_class may not be nil') unless task_class
+         raise ArgumentError, ':name may not be nil' unless name
+         raise ArgumentError, ':task_class may not be nil' unless task_class
 
-         raise ArgumentError.new('Task class must be initializable') unless task_class.respond_to? :new
+         raise ArgumentError, 'Task class must be initializable' unless task_class.respond_to? :new
 
-         raise(ArgumentError.new('timeout cannot be negative')) if timeout && timeout < 0
+         raise ArgumentError, 'timeout cannot be negative' if timeout && timeout < 0
 
          @name          = name.to_s.strip.gsub(/[^A-Za-z0-9]+/, '_').to_sym
          @task_class    = task_class

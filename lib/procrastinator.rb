@@ -26,7 +26,7 @@ module Procrastinator
    #
    # @yield the created configuration object
    def self.setup(&block)
-      raise ArgumentError.new('Procrastinator.setup must be given a block') unless block_given?
+      raise ArgumentError, 'Procrastinator.setup must be given a block' unless block_given?
 
       config = Config.new
 

@@ -62,7 +62,7 @@ module Procrastinator
                Either use Procrastinator.spawn_workers or call #enable_test_mode in Procrastinator.setup.
             ERR
 
-            raise RuntimeError.new(err)
+            raise RuntimeError, err
          end
 
          if queue_names.empty?

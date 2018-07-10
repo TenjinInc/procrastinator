@@ -31,7 +31,7 @@ module Procrastinator
          @context = context
 
          unless @task.respond_to? :run
-            raise(MalformedTaskError.new("task #{@task.class} does not support #run method"))
+            raise MalformedTaskError, "task #{@task.class} does not support #run method"
          end
       end
 

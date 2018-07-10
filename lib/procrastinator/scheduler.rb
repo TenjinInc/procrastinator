@@ -11,7 +11,7 @@ module Procrastinator
          if queue_name.nil? && @config.multiqueue?
             err = "queue must be specified when more than one is registered. Defined queues are: #{queue_list}"
 
-            raise ArgumentError.new(err)
+            raise ArgumentError, err
          end
 
          queue_name = @config.queue.name if @config.single_queue?
@@ -19,11 +19,11 @@ module Procrastinator
          queue = @config.queue(name: queue_name)
 
          unless queue
-            raise ArgumentError.new("there is no :#{queue_name} queue registered. Defined queues are: #{queue_list}")
+            raise ArgumentError, "there is no :#{queue_name} queue registered. Defined queues are: #{queue_list}"
          end
 
          if data.nil? && queue.task_class.method_defined?(:data=)
-            raise ArgumentError.new("task #{queue.task_class} expects to receive :data. Provide :data to #delay.")
+            raise ArgumentError, "task #{queue.task_class} expects to receive :data. Provide :data to #delay."
          end
 
          if !data.nil? && !queue.task_class.method_defined?(:data=)
@@ -32,7 +32,7 @@ module Procrastinator
                      import_test_data :data
             ERROR
 
-            raise ArgumentError.new(err)
+            raise ArgumentError, err
          end
 
          loader.create(queue:          queue_name,
@@ -73,9 +73,9 @@ module Procrastinator
             tasks = @config.loader.read(@identifier)
 
             if tasks.nil? || tasks.empty?
-               raise RuntimeError.new "no task found matching #{@identifier}"
+               raise RuntimeError, "no task found matching #{@identifier}"
             elsif tasks.size > 1
-               raise RuntimeError.new "too many (#{tasks.size}) tasks match #{@identifier}. Found: #{tasks}"
+               raise RuntimeError, "too many (#{tasks.size}) tasks match #{@identifier}. Found: #{tasks}"
             end
 
             task = tasks.first
@@ -87,12 +87,12 @@ module Procrastinator
             }
 
             if run_at.nil? && expire_at.nil?
-               raise ArgumentError.new 'you must provide at least :run_at or :expire_at'
+               raise ArgumentError, 'you must provide at least :run_at or :expire_at'
             elsif run_at
                if expire_at && run_at.to_i > expire_at.to_i
-                  raise RuntimeError.new "given run_at (#{run_at}) is later than given expire_at (#{expire_at})"
+                  raise RuntimeError, "given run_at (#{run_at}) is later than given expire_at (#{expire_at})"
                elsif task[:expire_at] && run_at.to_i > task[:expire_at]
-                  raise RuntimeError.new "given run_at (#{run_at}) is later than saved expire_at (#{task[:expire_at]})"
+                  raise RuntimeError, "given run_at (#{run_at}) is later than saved expire_at (#{task[:expire_at]})"
                end
             end
 

@@ -28,11 +28,11 @@ module Procrastinator
                loader = Loader::CSVLoader.new(loader[:location])
             end
 
-            raise MalformedTaskLoaderError.new('task loader cannot be nil') if loader.nil?
+            raise MalformedTaskLoaderError, 'task loader cannot be nil' if loader.nil?
 
             [:read, :create, :update, :delete].each do |method|
                unless loader.respond_to? method
-                  raise MalformedTaskLoaderError.new("task loader #{loader.class} must respond to ##{method}")
+                  raise MalformedTaskLoaderError, "task loader #{loader.class} must respond to ##{method}"
                end
             end
 
@@ -48,15 +48,15 @@ module Procrastinator
             unless block
                err = '#provide_context must be given a block. That block will be run on each sub-process.'
 
-               raise ArgumentError.new(err)
+               raise ArgumentError, err
             end
 
             @subprocess_block = block
          end
 
          def define_queue(name, task_class, properties = {})
-            raise ArgumentError.new('queue name cannot be nil') if name.nil?
-            raise ArgumentError.new('queue task class cannot be nil') if task_class.nil?
+            raise ArgumentError, 'queue name cannot be nil' if name.nil?
+            raise ArgumentError, 'queue task class cannot be nil' if task_class.nil?
 
             verify_task_class(task_class)
 
@@ -91,7 +91,7 @@ module Procrastinator
             load_with(Loader::CSVLoader.new)
          end
 
-         raise RuntimeError.new('setup block must call #define_queue on the environment') if @queues.empty?
+         raise RuntimeError, 'setup block must call #define_queue on the environment' if @queues.empty?
 
          if @context && !@queues.any? {|queue| queue.task_class.method_defined?(:context=)}
             err = <<~ERROR
@@ -141,7 +141,7 @@ module Procrastinator
 
       def verify_task_class(task_class)
          unless task_class.method_defined? :run
-            raise MalformedTaskError.new("task #{task_class} does not support #run method")
+            raise MalformedTaskError, "task #{task_class} does not support #run method"
          end
 
          # We're checking the interface compliance on init because it's one of those extremely rare cases where
@@ -150,7 +150,7 @@ module Procrastinator
          if task_class.method_defined?(:run) && task_class.instance_method(:run).arity > 0
             err = "task #{task_class} cannot require parameters to its #run method"
 
-            raise MalformedTaskError.new(err)
+            raise MalformedTaskError, err
          end
 
          expected_arity = 1
@@ -160,7 +160,7 @@ module Procrastinator
                   task_class.instance_method(method_name).arity != expected_arity
                err = "task #{task_class} must accept #{expected_arity} parameter to its ##{method_name} method"
 
-               raise MalformedTaskError.new(err)
+               raise MalformedTaskError, err
             end
          end
       end
