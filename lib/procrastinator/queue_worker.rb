@@ -7,26 +7,14 @@ module Procrastinator
       # expected methods for all persistence strategies
       PERSISTER_METHODS = [:read, :update, :delete]
 
-      def initialize(queue:,
-                     persister:,
-                     scheduler: nil,
-                     task_context: nil,
-                     log_dir: nil,
-                     log_level: Logger::INFO)
-         raise ArgumentError, ':persister may not be nil' unless persister
-
-         PERSISTER_METHODS.each do |method|
-            err = "The supplied IO object must respond to ##{method}"
-
-            raise MalformedTaskPersisterError, err unless persister.respond_to? method
-         end
-
+      def initialize(queue:, config:, scheduler: nil)
          @queue        = queue
-         @persister    = persister
-         @task_context = task_context
+         @persister    = config.loader
+         @task_context = config.context
          @scheduler    = scheduler
+         @prefix       = config.prefix
 
-         start_log(log_dir, level: log_level)
+         start_log(config.log_dir, level: config.log_level)
       end
 
       def work
@@ -80,7 +68,7 @@ module Procrastinator
       end
 
       def long_name
-         "#{@queue.name}-queue-worker"
+         QueueWorker.generate_long_name(prefix: @prefix, queue: @queue)
       end
 
       # Starts a log file and stores the logger within this queue worker.
@@ -117,6 +105,16 @@ module Procrastinator
          raise RuntimeError, 'Cannot log when logger not defined. Call #start_log first.' unless @logger
 
          @logger.error("Terminated worker process (pid=#{pid}) due to main process (ppid=#{ppid}) disappearing.")
+      end
+
+      def self.generate_long_name(prefix:, queue:)
+         name = "#{queue.name}-queue-worker"
+
+         if prefix
+            name = "#{prefix}-#{name}"
+         end
+
+         name
       end
    end
 

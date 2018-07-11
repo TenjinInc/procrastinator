@@ -203,6 +203,17 @@ module Procrastinator
          end
       end
 
+      describe '#save_pids_in' do
+         it 'should set the pid directory' do
+            config = Config.new
+            dir    = double('dir')
+
+            config.save_pids_in(dir)
+
+            expect(config.pid_dir).to be dir
+         end
+      end
+
       describe '#prefix_processes' do
          it 'should set the process prefix' do
             prefix = double('lvl')

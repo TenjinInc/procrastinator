@@ -2,7 +2,8 @@ require 'spec_helper'
 
 module Procrastinator
    describe QueueWorker do
-      let(:persister) {double('loader', read: [], update: nil, delete: nil)}
+      let(:config) {Config.new}
+      let(:persister) {double('loader', read: [], create: nil, update: nil, delete: nil)}
       let(:test_task) {Test::Task::AllHooks}
       let(:queue) {Procrastinator::Queue.new(name: :test_queue, task_class: test_task)}
       let(:instant_queue) {Procrastinator::Queue.new(name: :test_queue, task_class: test_task, update_period: 0)}
@@ -10,50 +11,25 @@ module Procrastinator
       describe '#initialize' do
 
          it 'should require a queue' do
-            expect {QueueWorker.new(persister: nil)}.to raise_error(ArgumentError, 'missing keyword: queue')
+            expect {QueueWorker.new(config: nil)}.to raise_error(ArgumentError, 'missing keyword: queue')
          end
 
          it 'should require a persister' do
-            expect {QueueWorker.new(queue: nil)}.to raise_error(ArgumentError, 'missing keyword: persister')
-         end
-
-         it 'should require the persister not be nil' do
-            expect do
-               QueueWorker.new(queue: queue, persister: nil)
-            end.to raise_error(ArgumentError, ':persister may not be nil')
-         end
-
-         it 'should require the persister respond to #read' do
-            expect do
-               QueueWorker.new(queue:     queue,
-                               persister: double('broken persister', delete: nil, update: nil))
-            end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #read')
-         end
-
-         it 'should require the persister respond to #update' do
-            expect do
-               QueueWorker.new(queue:     queue,
-                               persister: double('broken persister', read: []))
-            end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #update')
-         end
-
-         it 'should require the persister respond to #delete' do
-            expect do
-               QueueWorker.new(queue:     queue,
-                               persister: double('broken persister', read: [], update: nil))
-            end.to raise_error(MalformedTaskPersisterError, 'The supplied IO object must respond to #delete')
+            expect {QueueWorker.new(queue: nil)}.to raise_error(ArgumentError, 'missing keyword: config')
          end
       end
 
       describe '#work' do
+         include FakeFS::SpecHelpers
+
          it 'should wait for update_period' do
             [0.01, 0.02].each do |period|
                queue = Procrastinator::Queue.new(name:          :fast_queue,
                                                  task_class:    test_task,
                                                  update_period: period)
 
-               worker = QueueWorker.new(queue:     queue,
-                                        persister: persister)
+               worker = QueueWorker.new(queue:  queue,
+                                        config: Config.new)
 
                expect(worker).to receive(:loop) do |&block|
                   block.call
@@ -70,8 +46,8 @@ module Procrastinator
                                               task_class:    test_task,
                                               update_period: 0.1)
 
-            worker = QueueWorker.new(queue:     queue,
-                                     persister: persister)
+            worker = QueueWorker.new(queue:  queue,
+                                     config: Config.new)
 
             allow(worker).to receive(:sleep) # stub sleep
 
@@ -93,9 +69,10 @@ module Procrastinator
                                                  task_class:    test_task,
                                                  update_period: 0.1)
 
-               worker = QueueWorker.new(queue:     queue,
-                                        persister: persister,
-                                        log_dir:   'log/')
+               config = Config.new
+               config.log_inside 'log/'
+
+               worker = QueueWorker.new(queue: queue, config: config)
 
                err = 'some fatal error'
 
@@ -122,9 +99,10 @@ module Procrastinator
                                               task_class:    test_task,
                                               update_period: 0.1)
 
-            worker = QueueWorker.new(queue:     queue,
-                                     persister: persister,
-                                     log_dir:   false)
+            config = Config.new
+            config.log_inside false
+
+            worker = QueueWorker.new(queue: queue, config: config)
 
             err = 'some fatal error'
 
@@ -144,6 +122,8 @@ module Procrastinator
       end
 
       describe '#act' do
+         include FakeFS::SpecHelpers
+
          context 'loading and running tasks' do
             it 'should pass the given queue to its persister' do
                [:email, :cleanup].each do |name|
@@ -151,8 +131,10 @@ module Procrastinator
                                                     task_class:    test_task,
                                                     update_period: 0.01)
 
-                  worker = QueueWorker.new(queue:     queue,
-                                           persister: persister)
+                  config = Config.new
+                  config.load_with persister
+
+                  worker = QueueWorker.new(queue: queue, config: config)
 
                   expect(persister).to receive(:read).with(queue: name)
 
@@ -173,11 +155,14 @@ module Procrastinator
 
                persister = double('disorganized persister',
                                   read:   [job2, job3, job1],
+                                  create: nil,
                                   update: nil,
                                   delete: nil)
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: persister)
+               config = Config.new
+               config.load_with persister
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                expect(handler1).to receive(:run).ordered
                expect(handler2).to receive(:run).ordered
@@ -197,11 +182,13 @@ module Procrastinator
 
                persister = double('disorganized persister',
                                   read:   [job2, job1],
+                                  create: nil,
                                   update: nil,
                                   delete: nil)
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: persister)
+               config.load_with persister
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                expect(task1).to_not receive(:run)
                expect(task2).to receive(:run)
@@ -226,6 +213,8 @@ module Procrastinator
                job1 = {run_at: 1}
                job2 = {run_at: 1}
 
+               config.load_with persister
+
                allow(persister).to receive(:read).and_return([job1], [job2])
 
                allow(Test::Task::AllHooks).to receive(:new).and_return(task1, task2)
@@ -233,8 +222,7 @@ module Procrastinator
                start_time = Time.now
 
                Timecop.freeze(start_time) do
-                  worker = QueueWorker.new(queue:     instant_queue,
-                                           persister: persister)
+                  worker = QueueWorker.new(queue: instant_queue, config: config)
 
                   worker.act
                   worker.act
@@ -255,8 +243,9 @@ module Procrastinator
 
                expect(TaskMetaData).to receive(:new).with(task_data).and_call_original
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: fake_persister([task_data]))
+               config.load_with fake_persister([task_data])
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                worker.act
             end
@@ -272,8 +261,9 @@ module Procrastinator
                                                    run_at: task_data[:run_at])
                                              .and_call_original
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: fake_persister([task_data]))
+               config.load_with fake_persister([task_data])
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                worker.act
             end
@@ -286,8 +276,9 @@ module Procrastinator
 
                expect(TaskWorker).to receive(:new).with(hash_including(metadata: meta)).and_call_original
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: fake_persister([task_data]))
+               config.load_with fake_persister([task_data])
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                worker.act
             end
@@ -298,9 +289,10 @@ module Procrastinator
 
                expect(TaskWorker).to receive(:new).with(hash_including(context: context)).and_call_original
 
-               worker = QueueWorker.new(queue:        instant_queue,
-                                        task_context: context,
-                                        persister:    fake_persister([task_data]))
+               config.load_with fake_persister([task_data])
+               config.provide_context context
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                worker.act
             end
@@ -308,8 +300,9 @@ module Procrastinator
             it 'should pass the TaskWorker the queue settings' do
                expect(TaskWorker).to receive(:new).with(hash_including(queue: instant_queue)).and_call_original
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: fake_persister([{run_at: 1}]))
+               config.load_with fake_persister([{run_at: 1}])
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                worker.act
             end
@@ -319,9 +312,9 @@ module Procrastinator
 
                expect(TaskWorker).to receive(:new).with(hash_including(scheduler: scheduler)).and_call_original
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        scheduler: scheduler,
-                                        persister: fake_persister([{run_at: 1}]))
+               config.load_with fake_persister([{run_at: 1}])
+
+               worker = QueueWorker.new(queue: instant_queue, scheduler: scheduler, config: config)
 
                worker.act
             end
@@ -332,10 +325,11 @@ module Procrastinator
                allow(Logger).to receive(:new).and_return(logger)
                expect(TaskWorker).to receive(:new).with(hash_including(logger: logger)).and_call_original
 
+               config.load_with fake_persister([{run_at: 1}])
+               config.log_inside '/log'
+
                FakeFS do
-                  worker = QueueWorker.new(queue:     instant_queue,
-                                           log_dir:   '/log',
-                                           persister: fake_persister([{run_at: 1}]))
+                  worker = QueueWorker.new(queue: instant_queue, config: config)
 
 
                   worker.act
@@ -345,8 +339,10 @@ module Procrastinator
             it 'should pass the TaskWorker a nil logger if logging disabled' do
                expect(TaskWorker).to receive(:new).with(hash_including(logger: nil)).and_call_original
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: fake_persister([{run_at: 1}]))
+               config.load_with fake_persister([{run_at: 1}])
+               config.log_inside false
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                worker.act
             end
@@ -358,10 +354,9 @@ module Procrastinator
 
                expect(TaskWorker).to receive(:new).exactly(3).times.and_call_original
 
-               persister = fake_persister([task_data1, task_data2, task_data3])
+               config.load_with fake_persister([task_data1, task_data2, task_data3])
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: persister)
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                worker.act
             end
@@ -375,10 +370,9 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).ordered.and_call_original
                expect(TaskWorker).to_not receive(:new).ordered.and_call_original
 
-               persister = fake_persister([task_data1, task_data2])
+               config.load_with fake_persister([task_data1, task_data2])
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: persister)
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                Timecop.freeze(now) do
                   worker.act
@@ -398,8 +392,9 @@ module Procrastinator
                                                  update_period: 0,
                                                  max_tasks:     1)
 
-               worker = QueueWorker.new(queue:     queue,
-                                        persister: persister)
+               config.load_with persister
+
+               worker = QueueWorker.new(queue: queue, config: config)
 
                worker.act
             end
@@ -414,8 +409,9 @@ module Procrastinator
 
                allow(persister).to receive(:read).and_return([task_data])
 
-               worker = QueueWorker.new(queue:     instant_queue,
-                                        persister: persister)
+               config.load_with persister
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                expect(persister).to receive(:delete).with(task_data[:id])
 
@@ -438,6 +434,8 @@ module Procrastinator
 
                   persister = fake_persister([task_data])
 
+                  config.load_with persister
+
                   # allow_any_instance_of(TaskWorker).to receive(:to_h).and_return(task_hash)
 
                   queue = Procrastinator::Queue.new(name:          name,
@@ -445,13 +443,11 @@ module Procrastinator
                                                     update_period: 0,
                                                     max_attempts:  max_attempts)
 
-                  worker = QueueWorker.new(queue:     queue,
-                                           persister: persister)
+                  worker = QueueWorker.new(queue: queue, config: config)
 
-                  expect(persister).to receive(:update).with(id,
-                                                             hash_including(id:     id,
-                                                                            run_at: nil,
-                                                                            queue:  name))
+                  expect(persister).to receive(:update).with(id, hash_including(id:     id,
+                                                                                run_at: nil,
+                                                                                queue:  name))
 
                   worker.act
                end
@@ -460,23 +456,22 @@ module Procrastinator
       end
 
       describe '#start_log' do
-         before do
-            FakeFS.activate!
+         include FakeFS::SpecHelpers
 
+         before(:each) do
             if FakeFS.activated?
                FileUtils.rm_rf('/*')
             end
          end
 
-         after do
-            FakeFS.deactivate!
-         end
-
          # falsey is the default for workers
          context 'logging directory falsey' do
+            before(:each) do
+               config.log_inside false
+            end
+
             it 'should NOT create the log directory' do
-               worker = QueueWorker.new(queue:     queue,
-                                        persister: persister)
+               worker = QueueWorker.new(queue: queue, config: config)
 
                worker.start_log(false)
 
@@ -487,8 +482,7 @@ module Procrastinator
                queue = Procrastinator::Queue.new(name:       :queue1,
                                                  task_class: Test::Task::AllHooks)
 
-               worker = QueueWorker.new(queue:     queue,
-                                        persister: persister)
+               worker = QueueWorker.new(queue: queue, config: config)
 
                worker.start_log(false)
 
@@ -498,8 +492,7 @@ module Procrastinator
 
          context 'logging directory provided' do
             it 'should create the log directory if it does not exist' do
-               worker = QueueWorker.new(queue:     queue,
-                                        persister: persister)
+               worker = QueueWorker.new(queue: queue, config: config)
 
                worker.start_log('some_dir/')
 
@@ -518,8 +511,7 @@ module Procrastinator
                   queue = Procrastinator::Queue.new(name:       queue_name,
                                                     task_class: Test::Task::AllHooks)
 
-                  worker = QueueWorker.new(queue:     queue,
-                                           persister: persister)
+                  worker = QueueWorker.new(queue: queue, config: config)
 
                   allow(Process).to receive(:ppid).and_return(parent_pid)
                   allow(Process).to receive(:pid).and_return(child_pid)
@@ -542,8 +534,7 @@ module Procrastinator
             it 'should append to the log file if it already exists' do
                log_dir = 'some_dir'
 
-               worker = QueueWorker.new(queue:     queue,
-                                        persister: persister)
+               worker = QueueWorker.new(queue: queue, config: config)
 
                log_path = "#{log_dir}/#{worker.long_name}.log"
 
@@ -562,8 +553,7 @@ module Procrastinator
             it 'should log at the provided level' do
                log_dir = 'log/'
 
-               worker = QueueWorker.new(queue:     queue,
-                                        persister: persister)
+               worker = QueueWorker.new(queue: queue, config: config)
 
                worker.start_log(log_dir, level: Logger::FATAL)
 
@@ -578,9 +568,9 @@ module Procrastinator
 
       describe '#log_parent_exit' do
          it 'should complain if logger not built' do
-            worker = QueueWorker.new(queue:     queue,
-                                     persister: persister,
-                                     log_dir:   nil)
+            config.log_inside nil
+
+            worker = QueueWorker.new(queue: queue, config: config)
 
             err = 'Cannot log when logger not defined. Call #start_log first.'
 
@@ -589,8 +579,7 @@ module Procrastinator
 
          it 'should log exiting when parent process disappears' do
             FakeFS do
-               worker = QueueWorker.new(queue:     queue,
-                                        persister: persister)
+               worker = QueueWorker.new(queue: queue, config: config)
 
                worker.start_log('log/')
 

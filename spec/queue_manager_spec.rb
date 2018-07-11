@@ -4,7 +4,58 @@ module Procrastinator
    describe QueueManager do
       let(:test_task) {Test::Task::AllHooks}
 
+      describe '#initialize' do
+         include FakeFS::SpecHelpers
+
+         let(:config) {Config.new}
+
+         before(:each) do
+            FileUtils.rm_rf('/*') if FakeFS.activated?
+         end
+
+         it 'should start a log file for the main process' do
+            QueueManager.new(config)
+
+            expect(File).to exist("#{config.log_dir}/queue-manager.log")
+         end
+
+         it 'should put the log file in the log directory' do
+            %w[/var/log/myapp
+               another/log/place].each do |dir|
+               config.log_inside dir
+
+               QueueManager.new(config)
+
+               expect(File).to exist(dir)
+               expect(File).to exist("#{dir}/queue-manager.log")
+            end
+         end
+
+         it 'should NOT start a log file if logging is disabled' do
+            config.log_inside false
+
+            QueueManager.new(config)
+
+            expect(File).to_not exist(Config::DEFAULT_LOG_DIRECTORY)
+            expect(File).to_not exist("#{Config::DEFAULT_LOG_DIRECTORY}/queue-manager.log")
+         end
+
+         it 'should log at the given level' do
+            logger = double('log')
+
+            allow(Logger).to receive(:new).and_return(logger)
+
+            config.log_at_level Logger::FATAL
+
+            expect(logger).to receive(:level=).with(Logger::FATAL)
+
+            QueueManager.new(config)
+         end
+      end
+
       describe '#spawn_workers' do
+         include FakeFS::SpecHelpers
+
          let(:persister) {Test::Persister.new}
          let(:config) do
             config = Config.new
@@ -14,16 +65,8 @@ module Procrastinator
 
          let(:manager) {QueueManager.new(config)}
 
-         before do
-            FakeFS.activate!
-         end
-
-         after do
-            if FakeFS.activated?
-               FileUtils.rm_rf('/*')
-            end
-
-            FakeFS.deactivate!
+         before(:each) do
+            FileUtils.rm_rf('/*') if FakeFS.activated?
          end
 
          context 'test mode' do
@@ -78,7 +121,7 @@ module Procrastinator
                expect(manager.spawn_workers).to be scheduler
             end
 
-            it 'should pass each queue the evaluated persister instance' do
+            it 'should pass each queue the config instance' do
                queue_defs = [:test2a, :test2b, :test2c]
                queue_defs.each do |name|
                   config.define_queue(name, test_task)
@@ -86,7 +129,7 @@ module Procrastinator
 
                queue_defs.each do
                   expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(persister: persister))
+                                               .with(hash_including(config: config))
                                                .and_return(double('worker', work: nil))
                end
 
@@ -129,30 +172,12 @@ module Procrastinator
                end
             end
 
-            it 'should evaluate load_with and pass it to the worker' do
-               persister = double('specific persister', read: nil, create: nil, update: nil, delete: nil)
-
-               config.load_with(persister)
+            it 'should evaluate pass the config to the worker' do
+               config.load_with double('specific persister', read: nil, create: nil, update: nil, delete: nil)
 
                config.define_queue(:test, test_task)
 
-               expect(QueueWorker).to receive(:new).with(hash_including(persister: persister)).and_call_original
-
-               manager.spawn_workers
-            end
-
-            it 'should evaluate task_context and pass it to the worker' do
-               context = double('task context')
-
-               config.provide_context(context)
-               config.define_queue(:queue_name, test_task)
-
-               expect(QueueWorker).to receive(:new)
-                                            .with(hash_including(task_context: context))
-                                            .and_return(double('worker',
-                                                               work:      nil,
-                                                               start_log: nil,
-                                                               long_name: ''))
+               expect(QueueWorker).to receive(:new).with(hash_including(config: config)).and_call_original
 
                manager.spawn_workers
             end
@@ -166,6 +191,8 @@ module Procrastinator
 
          context 'live mode' do
             context 'parent process' do
+               include FakeFS::SpecHelpers
+
                before(:each) do
                   allow(Process).to receive(:detach)
                end
@@ -209,7 +236,21 @@ module Procrastinator
                   end
                end
 
-               it 'should record its spawned processes' do
+               it 'should store the PID of children in the manager' do
+                  allow(manager).to receive(:fork).and_return(1, 2, 3)
+
+                  config.define_queue(:test1, test_task)
+                  config.define_queue(:test2, test_task)
+                  config.define_queue(:test3, test_task)
+
+                  manager.spawn_workers
+
+                  expect(manager.workers).to eq [1, 2, 3]
+               end
+
+               it 'should write a PID file for each child within the pid directory' do
+                  config.prefix_processes 'myapp'
+
                   config.define_queue(:test1, test_task)
                   config.define_queue(:test2, test_task)
                   config.define_queue(:test3, test_task)
@@ -222,19 +263,137 @@ module Procrastinator
 
                   manager.spawn_workers
 
-                  expect(manager.workers).to eq [pid1, pid2, pid3]
+                  expect(File).to exist('pid/myapp-test1-queue-worker.pid')
+                  expect(File).to exist('pid/myapp-test2-queue-worker.pid')
+                  expect(File).to exist('pid/myapp-test3-queue-worker.pid')
                end
 
-               it 'should store the PID of children in the manager' do
-                  allow(manager).to receive(:fork).and_return(1, 2, 3)
+               it 'should write PID files in the given directory' do
+                  %w[/var/pid
+                     some/pid/place].each do |dir|
+
+                     config.save_pids_in dir
+
+                     config.define_queue(:test1, test_task)
+
+                     pid = 18
+
+                     allow(manager).to receive(:fork).and_return(pid)
+
+                     manager.spawn_workers
+
+                     expect(File).to exist("#{dir}/test1-queue-worker.pid")
+                  end
+               end
+
+               it 'should store the child PID in that queue pid file' do
+                  config.prefix_processes 'myapp'
 
                   config.define_queue(:test1, test_task)
                   config.define_queue(:test2, test_task)
-                  config.define_queue(:test3, test_task)
+
+                  pid1 = 2543
+                  pid2 = 15845
+
+                  allow(manager).to receive(:fork).and_return(pid1, pid2)
 
                   manager.spawn_workers
 
-                  expect(manager.workers).to eq [1, 2, 3]
+                  queue1_file = File.read('pid/myapp-test1-queue-worker.pid')
+                  queue2_file = File.read('pid/myapp-test2-queue-worker.pid')
+
+                  expect(queue1_file).to eq pid1.to_s
+                  expect(queue2_file).to eq pid2.to_s
+               end
+
+               it 'should kill all PIDs found in the files before forking' do
+                  pid1 = 1192
+                  pid2 = 12907
+
+                  FileUtils.mkpath 'pid/'
+                  File.open('pid/test1-queue-worker.pid', 'w') {|f| f.print pid1}
+                  File.open('pid/test2-queue-worker.pid', 'w') {|f| f.print pid2}
+
+                  expect(manager).to_not receive(:fork)
+                  expect(Process).to receive(:kill).with('KILL', pid1)
+                  expect(Process).to receive(:kill).with('KILL', pid2)
+
+                  manager.spawn_workers
+               end
+
+               it 'should delete the pid files for the killed processes' do
+                  pid1 = 1192
+                  pid2 = 12907
+
+                  dir = 'pid/'
+
+                  FileUtils.mkpath 'pid/'
+                  File.open('pid/test1-queue-worker.pid', 'w') {|f| f.print pid1}
+                  File.open('pid/test2-queue-worker.pid', 'w') {|f| f.print pid2}
+
+                  expect(manager).to_not receive(:fork)
+                  allow(Process).to receive(:kill)
+
+                  manager.spawn_workers
+
+                  expect(Pathname.new(dir)).to be_empty
+               end
+
+               it 'should log all killed PIDs' do
+                  pid1 = 5411
+                  pid2 = 13134
+
+                  FileUtils.mkpath 'pid/'
+                  File.open('pid/test1-queue-worker.pid', 'w') {|f| f.print pid1}
+                  File.open('pid/test2-queue-worker.pid', 'w') {|f| f.print pid2}
+
+                  expect(manager).to_not receive(:fork) # sanity/protection
+                  allow(Process).to receive(:kill)
+
+                  manager.spawn_workers
+
+                  log = File.read('log/queue-manager.log')
+
+                  expect(log).to include("Killing old worker process pid: #{pid1}")
+                  expect(log).to include("Killing old worker process pid: #{pid2}")
+               end
+
+               it 'should ignore missing PIDs' do
+                  missing_pid = 5411
+                  old_pid     = 12314
+
+                  FileUtils.mkpath 'pid/'
+                  File.open('pid/test1-queue-worker.pid', 'w') {|f| f.print missing_pid}
+                  File.open('pid/test2-queue-worker.pid', 'w') {|f| f.print old_pid}
+
+                  expect(manager).to_not receive(:fork) # sanity/protection
+                  raised = false
+                  expect(Process).to receive(:kill).twice do
+                     if raised
+                        old_pid
+                     else
+                        raise Errno::ESRCH
+                        raised = true
+                     end
+                  end
+
+                  manager.spawn_workers
+               end
+
+               it 'should log missing PIDs' do
+                  pid = 5411
+
+                  FileUtils.mkpath 'pid/'
+                  File.open('pid/test1-queue-worker.pid', 'w') {|f| f.print pid}
+
+                  expect(manager).to_not receive(:fork) # sanity/protection
+                  allow(Process).to receive(:kill).and_raise Errno::ESRCH
+
+                  manager.spawn_workers
+
+                  log = File.read('log/queue-manager.log')
+
+                  expect(log).to include("Expected old worker process pid=#{pid}, but none was found")
                end
 
                it 'should return a scheduler with the same config' do
@@ -282,37 +441,16 @@ module Procrastinator
                   manager.spawn_workers
                end
 
-               it 'should pass the worker default log settings' do
+               it 'should pass the worker the config' do
                   config.define_queue(:test_queue, test_task)
 
                   expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(log_dir:   Config::DEFAULT_LOG_DIRECTORY,
-                                                                    log_level: Logger::INFO))
+                                               .with(hash_including(config: config))
                                                .and_return(double('worker',
                                                                   work:      nil,
                                                                   start_log: nil,
                                                                   long_name: ''))
                   manager.spawn_workers
-               end
-
-               it 'should pass the worker the logging settings' do
-                  dir = double('dir')
-                  lvl = double('lvl')
-
-                  config.define_queue(:test_queue, test_task)
-
-                  config.log_inside(dir)
-                  config.log_at_level(lvl)
-
-                  expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(log_dir:   dir,
-                                                                    log_level: lvl))
-                                               .and_return(double('worker',
-                                                                  work:      nil,
-                                                                  start_log: nil,
-                                                                  long_name: ''))
-                  manager.spawn_workers
-
                end
 
                it 'should pass the worker the queue settings' do
@@ -356,6 +494,8 @@ module Procrastinator
                it 'should run the each_process hook in each queue' do
                   subprocess_persister = double('child persister', read: nil, create: nil, update: nil, delete: nil)
 
+                  expect(config).to receive(:load_with).with(subprocess_persister).ordered
+
                   config.each_process do
                      config.load_with(subprocess_persister)
                   end
@@ -363,8 +503,9 @@ module Procrastinator
                   config.define_queue(:test, test_task)
 
                   expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(persister: subprocess_persister))
+                                               .with(hash_including(config: config))
                                                .and_call_original
+                                               .ordered
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
                   manager.spawn_workers
@@ -382,7 +523,7 @@ module Procrastinator
                   config.define_queue(:test, test_task)
 
                   expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(persister: subprocess_persister))
+                                               .with(hash_including(config: config))
                                                .and_call_original
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
@@ -403,7 +544,7 @@ module Procrastinator
 
                   expect(config).to receive(:run_process_block).and_call_original.ordered
                   expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(persister: subprocess_persister))
+                                               .with(hash_including(config: config))
                                                .and_call_original
                                                .ordered
                   allow_any_instance_of(QueueWorker).to receive(:work)
@@ -411,7 +552,7 @@ module Procrastinator
                   manager.spawn_workers
                end
 
-               it 'should pass the worker the loader instance' do
+               it 'should pass the worker the config instance' do
                   subprocess_persister = double('child persister', read: nil, create: nil, update: nil, delete: nil)
 
                   config.each_process do
@@ -421,27 +562,9 @@ module Procrastinator
                   config.define_queue(:test, test_task)
 
                   expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(persister: subprocess_persister))
+                                               .with(hash_including(config: config))
                                                .and_call_original
                   allow_any_instance_of(QueueWorker).to receive(:work)
-
-                  manager.spawn_workers
-               end
-
-               it 'should provide the worker the task context' do
-                  context = double('task context')
-
-                  config.each_process do
-                     config.provide_context(context)
-                  end
-                  config.define_queue(:queue_name, test_task)
-
-                  expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(task_context: context))
-                                               .and_return(double('worker',
-                                                                  work:      nil,
-                                                                  start_log: nil,
-                                                                  long_name: ''))
 
                   manager.spawn_workers
                end
@@ -501,75 +624,6 @@ module Procrastinator
                   expect(manager.workers).to be_empty
                end
 
-               it 'should monitor the parent process' do
-                  config.define_queue(:test, test_task)
-
-                  parent_pid = 10
-
-                  allow_any_instance_of(QueueWorker).to receive(:work)
-
-                  allow(Process).to receive(:pid).and_return(parent_pid)
-
-                  allow(Thread).to receive(:new) do |&block|
-                     begin
-                        block.call(parent_pid)
-                     rescue Errno::ESRCH
-                        exit
-                     end
-
-                     thread = double('thread double')
-
-                     allow(thread).to receive(:abort_on_exception=).with(true)
-
-                     thread
-                  end
-
-                  # control looping, otherwise infiniloop by design
-                  allow(manager).to receive(:sleep)
-                  allow(manager).to receive(:loop) do |&block|
-                     block.call
-                  end
-
-                  expect(Process).to receive(:kill).with(0, parent_pid)
-
-                  manager.spawn_workers
-
-                  allow(Process).to receive(:pid).and_call_original
-                  allow(Process).to receive(:kill).and_call_original
-               end
-
-               it 'should exit if the parent process dies' do
-                  exited = false
-
-                  config.define_queue(:test, test_task)
-
-                  parent_pid = 10
-
-                  allow_any_instance_of(QueueWorker).to receive(:work)
-                  allow_any_instance_of(QueueWorker).to receive(:log_parent_exit)
-
-                  allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
-
-                  allow(Thread).to receive(:new) do |&block|
-                     block.call(parent_pid)
-                  end
-
-                  # control looping, otherwise infiniloop by design
-                  allow(manager).to receive(:sleep)
-                  allow(manager).to receive(:loop) do |&block|
-                     block.call
-                  end
-
-                  begin
-                     manager.spawn_workers
-                  rescue SystemExit
-                     # this is safer than stubbing exit, which can have weird consequences on the test system
-                     exited = true
-                  end
-
-                  expect(exited).to be true
-               end
-
                it 'should use a default log directory if not provided in setup' do
                   config.define_queue(:queue1, test_task)
 
@@ -594,39 +648,6 @@ module Procrastinator
                   expect(File.file?('some_dir/queue2-queue-worker.log')).to be true
                end
 
-               it 'should log exiting when parent process dies' do
-                  config.define_queue(:test, test_task)
-
-                  parent_pid = 10
-                  child_pid  = 2000
-
-                  allow_any_instance_of(QueueWorker).to receive(:work)
-
-                  allow(Process).to receive(:kill).with(0, parent_pid).and_raise(Errno::ESRCH)
-                  allow(Process).to receive(:ppid).and_return(parent_pid)
-                  allow(Process).to receive(:pid).and_return(child_pid)
-
-                  allow(Thread).to receive(:new) do |&block|
-                     block.call(parent_pid)
-                  end
-
-                  # control looping, otherwise infiniloop by design
-                  allow(manager).to receive(:sleep)
-                  allow(manager).to receive(:loop) do |&block|
-                     block.call
-                  end
-
-                  begin
-                     manager.spawn_workers
-                  rescue SystemExit
-                     # this is safer than stubbing exit, which can have weird consequences on the test system
-                  end
-
-                  log_path = 'log/test-queue-worker.log'
-
-                  expect(File.read(log_path)).to include('Terminated worker process')
-               end
-
                after(:each) do
                   # need to kill any processes that may be left over from failing tests.
                   `pgrep -f queue-worker`.split.each do |pid|
@@ -636,7 +657,10 @@ module Procrastinator
             end
          end
       end
+
       describe '#act' do
+         include FakeFS::SpecHelpers
+
          let(:persister) {double('persister', read: [], create: nil, update: nil, delete: nil)}
 
          let(:config) do
@@ -687,7 +711,7 @@ module Procrastinator
                Either use Procrastinator.spawn_workers or call #enable_test_mode in Procrastinator.setup.
             ERR
 
-            expect {normal_manager.act}.to raise_error(RuntimeError,)
+            expect {normal_manager.act}.to raise_error RuntimeError, err
          end
       end
    end

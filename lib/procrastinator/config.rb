@@ -1,9 +1,10 @@
 module Procrastinator
    class Config
-      attr_reader :queues, :log_level, :log_dir, :prefix, :test_mode, :context, :loader
+      attr_reader :queues, :log_level, :log_dir, :prefix, :test_mode, :context, :loader, :pid_dir
       alias_method :test_mode?, :test_mode
 
       DEFAULT_LOG_DIRECTORY = 'log/'
+      DEFAULT_PID_DIRECTORY = 'pid/'
 
       def initialize
          @test_mode        = false
@@ -13,6 +14,7 @@ module Procrastinator
          @subprocess_block = nil
          @log_dir          = DEFAULT_LOG_DIRECTORY
          @log_level        = Logger::INFO
+         @pid_dir          = DEFAULT_PID_DIRECTORY
       end
 
       module DSL
@@ -73,6 +75,10 @@ module Procrastinator
 
          def log_at_level(lvl)
             @log_level = lvl
+         end
+
+         def save_pids_in(path)
+            @pid_dir = path
          end
 
          def prefix_processes(prefix)

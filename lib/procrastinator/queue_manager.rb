@@ -1,3 +1,5 @@
+require 'pathname'
+
 module Procrastinator
    class QueueManager
       attr_reader :workers
@@ -7,18 +9,36 @@ module Procrastinator
          @workers = []
 
          @config = config
+
+         @logger = start_log(config.log_dir, @config.log_level)
       end
 
       def spawn_workers
          scheduler = Scheduler.new(@config)
-         loader    = @config.loader
+
+         pid_dir = Pathname.new(@config.pid_dir)
+
+         pid_dir.mkpath
+         pid_dir.each_child do |file|
+            pid = file.read.to_i
+
+            begin
+               Process.kill('KILL', pid)
+               @logger.info("Killing old worker process pid: #{pid}")
+            rescue Errno::ESRCH
+               @logger.info("Expected old worker process pid=#{pid}, but none was found")
+            end
+
+            file.delete
+         end
 
          @config.queues.each do |queue|
             if @config.test_mode?
-               @workers << QueueWorker.new(queue:        queue,
-                                           task_context: @config.context,
-                                           scheduler:    scheduler,
-                                           persister:    loader)
+               @config.log_inside false
+
+               @workers << QueueWorker.new(queue:     queue,
+                                           config:    @config,
+                                           scheduler: scheduler)
             else
                pid = fork
 
@@ -26,28 +46,11 @@ module Procrastinator
                   # === PARENT PROCESS ===
                   Process.detach(pid)
                   @workers << pid
+
+                  write_pid_file(pid, QueueWorker.generate_long_name(prefix: @config.prefix, queue: queue))
                else
                   # === CHILD PROCESS ===
-                  @config.run_process_block
-
-                  worker = QueueWorker.new(queue:        queue,
-                                           task_context: @config.context,
-                                           scheduler:    scheduler,
-                                           persister:    @config.loader,
-                                           log_dir:      @config.log_dir,
-                                           log_level:    @config.log_level)
-
-                  title = if @config.prefix
-                             "#{@config.prefix}-#{worker.long_name}"
-                          else
-                             worker.long_name
-                          end
-
-                  Process.setproctitle(title)
-
-                  monitor_parent(worker)
-
-                  worker.work
+                  become_childish(queue, scheduler)
                end
             end
          end
@@ -78,23 +81,45 @@ module Procrastinator
 
       private
 
-      def monitor_parent(worker)
-         parent_pid = Process.ppid
+      def write_pid_file(pid, filename)
+         pid_file = "#{@config.pid_dir}/#{filename}.pid"
 
-         heartbeat_thread = Thread.new(parent_pid) do |ppid|
-            loop do
-               begin
-                  Process.kill(0, ppid) # kill with 0 flag checks if the process exists & has permissions
-               rescue Errno::ESRCH
-                  worker.log_parent_exit(ppid: ppid, pid: Process.pid)
-                  exit
-               end
-
-               sleep(5)
-            end
+         File.open(pid_file, 'w') do |f|
+            f.print(pid)
          end
+      end
 
-         heartbeat_thread.abort_on_exception = true
+      def become_childish(queue, scheduler)
+         @config.run_process_block
+
+         worker = QueueWorker.new(queue:     queue,
+                                  config:    @config,
+                                  scheduler: scheduler)
+
+         Process.setproctitle(worker.long_name)
+
+         worker.work
+      end
+
+      def start_log(directory, level)
+         return unless directory
+
+         log_path = Pathname.new("#{directory}/queue-manager.log")
+
+         log_path.dirname.mkpath
+         File.open(log_path.to_path, 'a+') {|f| f.write ''}
+
+         logger = Logger.new(log_path.to_path)
+
+         logger.level = level
+
+         # @logger.info(['',
+         #               '===================================',
+         #               "Started worker process, #{long_name}, to work off queue #{@queue.name}.",
+         #               "Worker pid=#{Process.pid}; parent pid=#{Process.ppid}.",
+         #               '==================================='].join("\n"))
+
+         logger
       end
    end
 end

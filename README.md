@@ -78,9 +78,10 @@ Procrastinator.setup do |env|
 end
 ```
 
-It then spins off a sub process to work on each queue and returns the configured scheduler,
-which is used to `#delay` tasks. Sub-processes check that their parent process is still alive every 5 seconds. 
-If there is no process with the parent's PID, the sub-process will self-exit. 
+When setup is complete, Procrastinator spins off a sub process to work on each queue and 
+returns the configured scheduler, which is used to `#delay` tasks. 
+
+If there are old queue processes, Procrastinator will kill them before spawning a replacement. 
 
 ### Defining Queues: `#define_queue`
 In the setup block, you can call `#define_queue` on the environment: 
@@ -256,7 +257,7 @@ end
 
 NB: The `each_process` block is **not run in Test Mode**. 
 
-### Naming Processes: `#process_prefix`
+### Naming Processes: `#prefix_processes`
 Each queue subprocess is named after the queue it's working on, 
 eg. `greeting-queue-worker` or `thumbnails-queue-worker`.
 
@@ -271,6 +272,20 @@ scheduler = Procrastinator.setup do |env|
    env.prefix_processes 'myapp'
 end
 ```
+
+### Tracking Process IDs: `#save_pids_in`
+The sub processes are tracked by saving their PIDs in files. You can set where those files are saved: 
+
+```ruby
+scheduler = Procrastinator.setup do |env|
+   # ... other setup stuff ...
+   
+   env.save_pids_in '/var/run/myapp/'
+end
+```
+
+Any PIDs found in those files are killed right before Procrastinator spawns queues, 
+so that it can replace them with new code.  
 
 ## Tasks
 Your task class is what actually gets run on the task queue. They will look something like this: 
@@ -548,7 +563,6 @@ end
 |event               |level  |
 |--------------------|-------|
 |process started     | INFO  |
-|parent process gone | ERROR |
 |#success called     | DEBUG |
 |#fail called        | DEBUG |
 |#final_fail called  | DEBUG |
