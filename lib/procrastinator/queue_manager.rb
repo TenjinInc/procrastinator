@@ -32,25 +32,30 @@ module Procrastinator
             file.delete
          end
 
-         @config.queues.each do |queue|
-            if @config.test_mode?
-               @config.log_inside false
+         if ENV['PROCRASTINATOR_STOP']
 
-               @workers << QueueWorker.new(queue:     queue,
-                                           config:    @config,
-                                           scheduler: scheduler)
-            else
-               pid = fork
+            @logger.warn('Cannot spawn queue workers because environment variable PROCRASTINATOR_STOP is set')
+         else
+            @config.queues.each do |queue|
+               if @config.test_mode?
+                  @config.log_inside false
 
-               if pid
-                  # === PARENT PROCESS ===
-                  Process.detach(pid)
-                  @workers << pid
-
-                  write_pid_file(pid, QueueWorker.generate_long_name(prefix: @config.prefix, queue: queue))
+                  @workers << QueueWorker.new(queue:     queue,
+                                              config:    @config,
+                                              scheduler: scheduler)
                else
-                  # === CHILD PROCESS ===
-                  become_childish(queue, scheduler)
+                  pid = fork
+
+                  if pid
+                     # === PARENT PROCESS ===
+                     Process.detach(pid)
+                     @workers << pid
+
+                     write_pid_file(pid, QueueWorker.generate_long_name(prefix: @config.prefix, queue: queue))
+                  else
+                     # === CHILD PROCESS ===
+                     become_childish(queue, scheduler)
+                  end
                end
             end
          end

@@ -48,13 +48,16 @@ scheduler.delay(:send_birthday_email, run_at: Time.now + 3600, data: {user_id: 5
 ```
 
 ##Contents
+  * [Installation](#installation)
+  * [Big Picture](#big-picture)
   * [Setup](#setup)
     + [Defining Queues: `#define_queue`](#defining-queues----define-queue-)
     + [The Task Loader: `#load_with`](#the-task-loader----load-with-)
       - [Task Data](#task-data)
     + [The Task Context: `#provide_context`](#the-task-context----provide-context-)
     + [The Subprocess Hook: `#each_process`](#the-subprocess-hook----each-process-)
-    + [Naming Processes: `#process_prefix`](#naming-processes----process-prefix-)
+    + [Naming Processes: `#prefix_processes`](#naming-processes----prefix-processes-)
+    + [Tracking Process IDs: `#save_pids_in`](#tracking-process-ids----save-pids-in-)
   * [Tasks](#tasks)
     + [Accessing Task Attributes](#accessing-task-attributes)
     + [Retries](#retries)
@@ -63,13 +66,17 @@ scheduler.delay(:send_birthday_email, run_at: Time.now + 3600, data: {user_id: 5
     + [Controlling Timing](#controlling-timing)
     + [Rescheduling](#rescheduling)
     + [Cancelling](#cancelling)
+  * [Preventing Queue Workers](#preventing-queue-workers)
   * [Test Mode](#test-mode)
   * [Errors & Logging](#errors---logging)
+  * [Contributing](#contributing)
+    + [Developers](#developers)
+  * [License](#license)
 
 <!-- ToC generated with http://ecotrust-canada.github.io/markdown-toc/ -->
 
 ## Setup
-Procrastinator.setup allows you to define which queues are available. You can also optionally
+`Procrastinator.setup` allows you to define which queues are available. You can also optionally
 specify a task loader IO object, task context, and other settings.
 
 ```ruby
@@ -487,6 +494,17 @@ scheduler.reschedule(:reminder, run_at: Time.parse('June 1'), data: 'bob@example
 # you could also use the id number directly, if you have it
 scheduler.reschedule(:reminder, id: 137)
 ```
+
+## Preventing Queue Workers
+Sometimes you want to be able to put your app into a maintenance mode temporarily. 
+If Procrastinator sees the environment variable `PROCRASTINATOR_STOP` is set, it
+will not spawn child process queue workers at all. 
+
+To kill workers, set `PROCRASTINATOR_STOP` to 1 and then restart your app. It will
+find all the old subprocesses and halt them, but not create new ones.  
+
+This is distinct from Test Mode, because Test Mode will still create workers, but on the
+same process as the original caller to setup. 
 
 ## Test Mode
 Procrastinator uses multi-threading and multi-processing internally, which is a nightmare for automated testing. 

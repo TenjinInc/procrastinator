@@ -396,6 +396,63 @@ module Procrastinator
                   expect(log).to include("Expected old worker process pid=#{pid}, but none was found")
                end
 
+               it 'should NOT fork when ENV variable PROCRASTINATOR_STOP is enabled' do
+                  old_stop = ENV['PROCRASTINATOR_STOP']
+
+                  ENV['PROCRASTINATOR_STOP'] = 'true'
+
+                  queue_defs = [:test2a, :test2b, :test2c]
+                  queue_defs.each do |name|
+                     config.define_queue(name, test_task)
+                  end
+
+                  expect(manager).to_not receive(:fork)
+
+                  manager.spawn_workers
+
+                  ENV['PROCRASTINATOR_STOP'] = old_stop
+               end
+
+               it 'should still remove old processes when ENV variable PROCRASTINATOR_STOP is enabled' do
+                  old_stop = ENV['PROCRASTINATOR_STOP']
+
+                  ENV['PROCRASTINATOR_STOP'] = 'true'
+
+                  FileUtils.mkpath 'pid/'
+                  File.open('pid/test1-queue-worker.pid', 'w') {|f| f.print 144}
+
+                  allow(manager).to receive(:fork) # stub
+
+                  expect(Process).to receive(:kill)
+
+                  manager.spawn_workers
+
+                  ENV['PROCRASTINATOR_STOP'] = old_stop
+               end
+
+               it 'should log that it cannot spawn queues when ENV variable PROCRASTINATOR_STOP is enabled' do
+                  old_stop = ENV['PROCRASTINATOR_STOP']
+
+                  ENV['PROCRASTINATOR_STOP'] = 'true'
+
+                  queue_defs = [:test2a, :test2b, :test2c]
+                  queue_defs.each do |name|
+                     config.define_queue(name, test_task)
+                  end
+
+                  allow(manager).to receive(:fork).and_return 1 # stub fork
+
+                  manager.spawn_workers
+
+                  log = File.read('log/queue-manager.log')
+
+                  msg = 'Cannot spawn queue workers because environment variable PROCRASTINATOR_STOP is set'
+
+                  expect(log).to include(msg)
+
+                  ENV['PROCRASTINATOR_STOP'] = old_stop
+               end
+
                it 'should return a scheduler with the same config' do
                   expect(Scheduler).to receive(:new).with(config).and_call_original
 
