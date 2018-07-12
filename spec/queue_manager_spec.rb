@@ -237,7 +237,12 @@ module Procrastinator
                end
 
                it 'should store the PID of children in the manager' do
-                  allow(manager).to receive(:fork).and_return(1, 2, 3)
+                  worker1 = double('queue worker 1', long_name: 'work1')
+                  worker2 = double('queue worker 2', long_name: 'work2')
+                  worker3 = double('queue worker 3', long_name: 'work3')
+
+                  allow(manager).to receive(:fork).and_return(11, 12, 13)
+                  allow(QueueWorker).to receive(:new).and_return worker1, worker2, worker3
 
                   config.define_queue(:test1, test_task)
                   config.define_queue(:test2, test_task)
@@ -245,7 +250,7 @@ module Procrastinator
 
                   manager.spawn_workers
 
-                  expect(manager.workers).to eq [1, 2, 3]
+                  expect(manager.workers).to eq(worker1 => 11, worker2 => 12, worker3 => 13)
                end
 
                it 'should write a PID file for each child within the pid directory' do
@@ -435,10 +440,9 @@ module Procrastinator
 
                   ENV['PROCRASTINATOR_STOP'] = 'true'
 
-                  queue_defs = [:test2a, :test2b, :test2c]
-                  queue_defs.each do |name|
-                     config.define_queue(name, test_task)
-                  end
+                  config.define_queue(:test2a, test_task)
+                  config.define_queue(:test2b, test_task)
+                  config.define_queue(:test2c, test_task)
 
                   allow(manager).to receive(:fork).and_return 1 # stub fork
 
@@ -484,6 +488,7 @@ module Procrastinator
                before(:each) do
                   allow(Process).to receive(:setproctitle)
                   allow(manager).to receive(:fork).and_return(nil)
+                  allow_any_instance_of(QueueManager).to receive(:shutdown_worker)
                end
 
                it 'should create a QueueWorker' do
@@ -559,11 +564,9 @@ module Procrastinator
 
                   config.define_queue(:test, test_task)
 
-                  expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(config: config))
-                                               .and_call_original
-                                               .ordered
                   allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  expect(config).to receive(:run_process_block).and_call_original
 
                   manager.spawn_workers
                end
@@ -591,6 +594,7 @@ module Procrastinator
                end
 
                it 'should run the each_process hook before running work' do
+                  worker               = double('worker', long_name: 'test-queue-worker')
                   subprocess_persister = Test::Persister.new
 
                   config.each_process do
@@ -599,12 +603,10 @@ module Procrastinator
 
                   config.define_queue(:test, test_task)
 
+                  allow(QueueWorker).to receive(:new).and_return(worker)
+
                   expect(config).to receive(:run_process_block).and_call_original.ordered
-                  expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(config: config))
-                                               .and_call_original
-                                               .ordered
-                  allow_any_instance_of(QueueWorker).to receive(:work)
+                  expect(worker).to receive(:work).ordered
 
                   manager.spawn_workers
                end
@@ -691,18 +693,16 @@ module Procrastinator
                   expect(File.directory?('log/')).to be true
                end
 
-               it 'should get each worker to start its log' do
+               it 'should never proceed past #work' do
                   config.define_queue(:queue1, test_task)
-                  config.define_queue(:queue2, test_task)
-
-                  config.log_inside('some_dir/')
 
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
-                  manager.spawn_workers
+                  expect(manager).to receive(:shutdown_worker).and_call_original
 
-                  expect(File.file?('some_dir/queue1-queue-worker.log')).to be true
-                  expect(File.file?('some_dir/queue2-queue-worker.log')).to be true
+                  expect do
+                     manager.spawn_workers
+                  end.to raise_exception SystemExit
                end
 
                after(:each) do
@@ -733,12 +733,14 @@ module Procrastinator
 
          before(:each) do
             config.enable_test_mode
+            allow(manager).to receive(:fork).and_return(5, 6, 7)
             manager.spawn_workers
          end
 
          it 'should call QueueWorker#act on every queue worker' do
             expect(manager.workers.size).to eq 3
-            manager.workers.each do |worker|
+
+            manager.workers.keys.each do |worker|
                expect(worker).to receive(:act)
             end
 
@@ -746,9 +748,15 @@ module Procrastinator
          end
 
          it 'should call QueueWorker#act on queue worker for given queues only' do
-            expect(manager.workers[0]).to_not receive(:act)
-            expect(manager.workers[1]).to receive(:act)
-            expect(manager.workers[2]).to receive(:act)
+            workers = manager.workers.keys
+
+            worker1 = workers.find {|w| w.name == :test1}
+            worker2 = workers.find {|w| w.name == :test2}
+            worker3 = workers.find {|w| w.name == :test3}
+
+            expect(worker1).to_not receive(:act)
+            expect(worker2).to receive(:act)
+            expect(worker3).to receive(:act)
 
             manager.act(:test2, :test3)
          end

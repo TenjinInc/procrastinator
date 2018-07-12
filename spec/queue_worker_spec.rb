@@ -9,7 +9,6 @@ module Procrastinator
       let(:instant_queue) {Procrastinator::Queue.new(name: :test_queue, task_class: test_task, update_period: 0)}
 
       describe '#initialize' do
-
          it 'should require a queue' do
             expect {QueueWorker.new(config: nil)}.to raise_error(ArgumentError, 'missing keyword: queue')
          end
@@ -22,14 +21,24 @@ module Procrastinator
       describe '#work' do
          include FakeFS::SpecHelpers
 
+         it 'should start a new log' do
+            queue  = Procrastinator::Queue.new(name: :queue, task_class: test_task)
+            worker = QueueWorker.new(queue: queue, config: Config.new)
+
+            allow(worker).to receive(:loop) # stub loop
+
+            expect(worker).to receive(:start_log)
+
+            worker.work
+         end
+
          it 'should wait for update_period' do
             [0.01, 0.02].each do |period|
                queue = Procrastinator::Queue.new(name:          :fast_queue,
                                                  task_class:    test_task,
                                                  update_period: period)
 
-               worker = QueueWorker.new(queue:  queue,
-                                        config: Config.new)
+               worker = QueueWorker.new(queue: queue, config: Config.new)
 
                expect(worker).to receive(:loop) do |&block|
                   block.call
@@ -140,6 +149,27 @@ module Procrastinator
 
                   worker.act
                end
+            end
+
+            it 'should always fetch the persister from config' do
+               wrong_loader   = fake_persister([{id: 1}])
+               correct_loader = fake_persister([{id: 2}])
+
+               queue = Procrastinator::Queue.new(name:          :queueA,
+                                                 task_class:    test_task,
+                                                 update_period: 0.01)
+
+               config = Config.new
+               config.load_with wrong_loader
+
+               worker = QueueWorker.new(queue: queue, config: config)
+
+               config.load_with correct_loader
+
+               expect(correct_loader).to receive(:read)
+               expect(wrong_loader).to_not receive(:read)
+
+               worker.act
             end
 
             it 'should sort tasks by run_at' do
@@ -330,7 +360,7 @@ module Procrastinator
 
                FakeFS do
                   worker = QueueWorker.new(queue: instant_queue, config: config)
-
+                  worker.start_log
 
                   worker.act
                end
@@ -343,6 +373,7 @@ module Procrastinator
                config.log_inside false
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker.start_log
 
                worker.act
             end
@@ -473,9 +504,17 @@ module Procrastinator
             it 'should NOT create the log directory' do
                worker = QueueWorker.new(queue: queue, config: config)
 
-               worker.start_log(false)
+               worker.start_log
 
                expect(Dir.glob('/*')).to be_empty
+            end
+
+            it 'should NOT create a logger instance for this worker' do
+               worker = QueueWorker.new(queue: queue, config: config)
+
+               expect(Logger).to_not receive :new
+
+               worker.start_log
             end
 
             it 'should NOT create a log file for this worker' do
@@ -484,7 +523,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: queue, config: config)
 
-               worker.start_log(false)
+               worker.start_log
 
                expect(File.file?('/queue1-queue-worker.log')).to be false
             end
@@ -492,9 +531,11 @@ module Procrastinator
 
          context 'logging directory provided' do
             it 'should create the log directory if it does not exist' do
+               config.log_inside 'some_dir/'
+
                worker = QueueWorker.new(queue: queue, config: config)
 
-               worker.start_log('some_dir/')
+               worker.start_log
 
                expect(File.directory?('some_dir/')).to be true
             end
@@ -508,6 +549,8 @@ module Procrastinator
 
                   log_dir = 'some_dir'
 
+                  config.log_inside log_dir
+
                   queue = Procrastinator::Queue.new(name:       queue_name,
                                                     task_class: Test::Task::AllHooks)
 
@@ -516,7 +559,7 @@ module Procrastinator
                   allow(Process).to receive(:ppid).and_return(parent_pid)
                   allow(Process).to receive(:pid).and_return(child_pid)
 
-                  worker.start_log(log_dir)
+                  worker.start_log
 
                   log_path = "#{log_dir}/#{worker.long_name}.log"
 
@@ -534,6 +577,8 @@ module Procrastinator
             it 'should append to the log file if it already exists' do
                log_dir = 'some_dir'
 
+               config.log_inside log_dir
+
                worker = QueueWorker.new(queue: queue, config: config)
 
                log_path = "#{log_dir}/#{worker.long_name}.log"
@@ -545,57 +590,39 @@ module Procrastinator
                   f.write existing_data
                end
 
-               worker.start_log(log_dir)
+               worker.start_log
 
                expect(File.read(log_path)).to include(existing_data)
             end
 
             it 'should log at the provided level' do
-               log_dir = 'log/'
+               Logger::Severity.constants.each do |level|
+                  logger = Logger.new(StringIO.new)
 
-               worker = QueueWorker.new(queue: queue, config: config)
+                  worker = QueueWorker.new(queue: queue, config: config)
 
-               worker.start_log(log_dir, level: Logger::FATAL)
+                  config.log_at_level level
 
-               worker.log_parent_exit(ppid: 0, pid: 0)
+                  allow(Logger).to receive(:new).and_return logger
 
-               log_path = "#{log_dir}/#{worker.long_name}.log"
+                  expect(logger).to receive(:level=).with(level)
 
-               expect(File.read(log_path)).to_not include('Terminated')
-            end
-         end
-      end
-
-      describe '#log_parent_exit' do
-         it 'should complain if logger not built' do
-            config.log_inside nil
-
-            worker = QueueWorker.new(queue: queue, config: config)
-
-            err = 'Cannot log when logger not defined. Call #start_log first.'
-
-            expect {worker.log_parent_exit(ppid: 0, pid: 1)}.to raise_error(err)
-         end
-
-         it 'should log exiting when parent process disappears' do
-            FakeFS do
-               worker = QueueWorker.new(queue: queue, config: config)
-
-               worker.start_log('log/')
-
-               [{parent: 10, child: 2000},
-                {parent: 30, child: 4000}].each do |pid_hash|
-                  parent_pid = pid_hash[:parent]
-                  child_pid  = pid_hash[:child]
-
-                  worker.log_parent_exit(ppid: parent_pid, pid: child_pid)
-
-                  log_path = 'log/test_queue-queue-worker.log'
-
-                  err = "Terminated worker process (pid=#{child_pid}) due to main process (ppid=#{parent_pid}) disappearing."
-
-                  expect(File.read(log_path)).to include(err)
+                  worker.start_log
                end
+            end
+
+            it 'should not start a new logger if there is a logger defined' do
+               log_dir = 'some/dir'
+
+               config.log_inside log_dir
+
+               worker = QueueWorker.new(queue: queue, config: config)
+
+               worker.start_log
+
+               expect(Logger).to_not receive(:new)
+
+               worker.start_log
             end
          end
       end

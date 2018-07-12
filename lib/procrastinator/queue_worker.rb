@@ -8,16 +8,16 @@ module Procrastinator
       PERSISTER_METHODS = [:read, :update, :delete]
 
       def initialize(queue:, config:, scheduler: nil)
-         @queue        = queue
-         @persister    = config.loader
-         @task_context = config.context
-         @scheduler    = scheduler
-         @prefix       = config.prefix
+         @queue     = queue
+         @config    = config
+         @scheduler = scheduler
 
-         start_log(config.log_dir, level: config.log_level)
+         @logger = nil
       end
 
       def work
+         start_log
+
          begin
             loop do
                sleep(@queue.update_period)
@@ -34,11 +34,13 @@ module Procrastinator
       end
 
       def act
+         persister = @config.loader
+
          # shuffling and re-sorting to avoid worst case O(n^2) when receiving already sorted data
          # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
          # results
          # Ideally, we'd use a better algo than qsort for this, but this will do for now
-         tasks = @persister.read(queue: @queue.name)
+         tasks = persister.read(queue: @queue.name)
 
          tasks = tasks.reject {|t| t[:run_at].nil?}.shuffle.sort_by {|t| t[:run_at]}
 
@@ -53,28 +55,39 @@ module Procrastinator
                tw = TaskWorker.new(metadata:  metadata,
                                    queue:     @queue,
                                    scheduler: @scheduler,
-                                   context:   @task_context,
+                                   context:   @config.context,
                                    logger:    @logger)
 
                tw.work
 
                if tw.successful?
-                  @persister.delete(metadata.id)
+                  persister.delete(metadata.id)
                else
-                  @persister.update(metadata.id, tw.to_h.merge(queue: @queue.name))
+                  persister.update(metadata.id, tw.to_h.merge(queue: @queue.name))
                end
             end
          end
       end
 
       def long_name
-         QueueWorker.generate_long_name(prefix: @prefix, queue: @queue)
+         name = "#{@queue.name}-queue-worker"
+
+         if @config.prefix
+            name = "#{@config.prefix}-#{name}"
+         end
+
+         name
       end
 
       # Starts a log file and stores the logger within this queue worker.
       #
       # Separate from init because logging is context-dependent
-      def start_log(directory, level: Logger::INFO)
+      def start_log
+         return if @logger
+
+         directory = @config.log_dir
+         level     = @config.log_level || Logger::INFO
+
          if directory
             log_path = Pathname.new("#{directory}/#{long_name}.log")
 
@@ -92,29 +105,9 @@ module Procrastinator
                           "Started worker process, #{long_name}, to work off queue #{@queue.name}.",
                           "Worker pid=#{Process.pid}; parent pid=#{Process.ppid}.",
                           '==================================='].join("\n"))
+
+            @logger
          end
-      end
-
-      # Logs a termination due to parent process termination
-      #
-      # == Parameters:
-      # @param ppid the parent's process id
-      # @param pid the child's process id
-      #
-      def log_parent_exit(ppid:, pid:)
-         raise RuntimeError, 'Cannot log when logger not defined. Call #start_log first.' unless @logger
-
-         @logger.error("Terminated worker process (pid=#{pid}) due to main process (ppid=#{ppid}) disappearing.")
-      end
-
-      def self.generate_long_name(prefix:, queue:)
-         name = "#{queue.name}-queue-worker"
-
-         if prefix
-            name = "#{prefix}-#{name}"
-         end
-
-         name
       end
    end
 

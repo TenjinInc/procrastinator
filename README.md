@@ -256,8 +256,8 @@ Procrastinator.setup do |env|
       connection = SomeDatabase.connect('bob@mainframe/my_database')
       
       # these two are the configuration methods you're most likely to use in #each_process
-      config.provide_context MyApp.build_task_package
-      config.load_with MyDatabase.new(connection)
+      env.provide_context MyApp.build_task_package
+      env.load_with MyDatabase.new(connection)
    end
 end
 ```

@@ -1,6 +1,6 @@
 module Procrastinator
    class Config
-      attr_reader :queues, :log_level, :log_dir, :prefix, :test_mode, :context, :loader, :pid_dir
+      attr_reader :queues, :log_level, :prefix, :test_mode, :context, :loader, :pid_dir
       alias_method :test_mode?, :test_mode
 
       DEFAULT_LOG_DIRECTORY = 'log/'
@@ -114,6 +114,10 @@ module Procrastinator
          end
 
          self
+      end
+
+      def log_dir
+         @test_mode ? false : @log_dir
       end
 
       def queues_string
