@@ -47,7 +47,7 @@ module Procrastinator
                   # better to use backticks so we can get the info and not spam user's stdout
                   unless `pgrep -f #{worker_name}`.empty?
                      err = <<~WARNING
-                        Warning: there is another process named "#{worker_name}". Use #prefix_process(prefix) in
+                        Warning: there is another process named "#{worker_name}". Use #each_process(prefix: '') in
                                  Procrastinator setup if you want to help yourself distinguish them.
                      WARNING
 

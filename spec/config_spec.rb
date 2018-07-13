@@ -215,13 +215,19 @@ module Procrastinator
             end
          end
 
-         describe '#prefix_processes' do
+         describe '#each_process' do
             it 'should set the process prefix' do
                prefix = double('lvl')
 
-               config.prefix_processes(prefix)
+               config.each_process(prefix: prefix)
 
                expect(config.prefix).to be prefix
+            end
+
+            it 'should default to a nil process prefix' do
+               config.each_process
+
+               expect(config.prefix).to be_nil
             end
          end
       end
@@ -264,16 +270,6 @@ module Procrastinator
                   c.load_with(Test::Persister.new)
                end
             end.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
-         end
-      end
-
-      describe '#each_process' do
-         it 'should complain if no block is provided' do
-            err = '#provide_context must be given a block. That block will be run on each sub-process.'
-
-            expect do
-               config.each_process
-            end.to raise_error(ArgumentError, err)
          end
       end
 

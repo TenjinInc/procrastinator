@@ -46,13 +46,8 @@ module Procrastinator
          end
 
          # Accepts a block that will be executed on the queue sub-processes. Use it to control resource allocations.
-         def each_process(&block)
-            unless block
-               err = '#provide_context must be given a block. That block will be run on each sub-process.'
-
-               raise ArgumentError, err
-            end
-
+         def each_process(prefix: nil, &block)
+            @prefix           = prefix
             @subprocess_block = block
          end
 
@@ -79,10 +74,6 @@ module Procrastinator
 
          def save_pids_in(path)
             @pid_dir = path
-         end
-
-         def prefix_processes(prefix)
-            @prefix = prefix
          end
       end
 

@@ -222,7 +222,7 @@ module Procrastinator
                   config.define_queue(:reminders, test_task)
 
                   err = <<~WARNING
-                     Warning: there is another process named "#{name}". Use #prefix_process(prefix) in
+                     Warning: there is another process named "#{name}". Use #each_process(prefix: '') in
                               Procrastinator setup if you want to help yourself distinguish them.
                   WARNING
 
@@ -281,7 +281,7 @@ module Procrastinator
                end
 
                it 'should write a PID file for each child within the pid directory' do
-                  config.prefix_processes 'myapp'
+                  config.each_process prefix: 'myapp'
 
                   config.define_queue(:test1, test_task)
                   config.define_queue(:test2, test_task)
@@ -319,7 +319,7 @@ module Procrastinator
                end
 
                it 'should store the child PID in that queue pid file' do
-                  config.prefix_processes 'myapp'
+                  config.each_process prefix: 'myapp'
 
                   config.define_queue(:test1, test_task)
                   config.define_queue(:test2, test_task)
@@ -673,7 +673,7 @@ module Procrastinator
                it 'should name each worker process with provided prefix' do
                   [:app1, :app2, :app3].each do |prefix|
                      config.define_queue(:test_queue, test_task)
-                     config.prefix_processes(prefix)
+                     config.each_process(prefix: prefix)
 
                      allow_any_instance_of(QueueWorker).to receive(:work)
 

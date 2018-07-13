@@ -56,7 +56,7 @@ scheduler.delay(:send_birthday_email, run_at: Time.now + 3600, data: {user_id: 5
       - [Task Data](#task-data)
     + [The Task Context: `#provide_context`](#the-task-context----provide-context-)
     + [The Subprocess Hook: `#each_process`](#the-subprocess-hook----each-process-)
-    + [Naming Processes: `#prefix_processes`](#naming-processes----prefix-processes-)
+      - [Naming Processes](#naming-processes)
     + [Tracking Process IDs: `#save_pids_in`](#tracking-process-ids----save-pids-in-)
   * [Tasks](#tasks)
     + [Accessing Task Attributes](#accessing-task-attributes)
@@ -264,19 +264,19 @@ end
 
 NB: The `each_process` block is **not run in Test Mode**. 
 
-### Naming Processes: `#prefix_processes`
-Each queue subprocess is named after the queue it's working on, 
-eg. `greeting-queue-worker` or `thumbnails-queue-worker`.
+#### Naming Processes
+Each queue subprocess is named after the queue it's working on, eg. `greeting-queue-worker` or 
+`thumbnails-queue-worker`.
 
 If you're running multiple apps on the same machine, then you may want to distinguish which app the queue worker 
-was spawned for. You can call `#prefix_process` and provide a string that will be added to the front of the prcoess 
-names.
+was spawned for. You can provide a `prefix:` argument to `#each_process` with a string that will be prepended to the 
+process command name.  
 
 ```ruby
 scheduler = Procrastinator.setup do |env|
    # ... other setup stuff ...
    
-   env.prefix_processes 'myapp'
+   env.each_process(prefix: 'myapp')
 end
 ```
 
