@@ -5,18 +5,6 @@ Once the scheduled time arrives, the queue worker performs that task.
 
 If the task fails to complete or takes too long, it delays it and tries again later.
 
-## Installation
-
-Add this line to your application's Gemfile:
-
-```ruby
-gem 'procrastinator'
-```
-
-And then run:
-
-    bundle install
-
 ## Big Picture
 If you have tasks like this:
 
@@ -47,17 +35,17 @@ scheduler.delay(:thumbnail, data: {file: 'full_image.png', width: 100, height: 1
 scheduler.delay(:send_birthday_email, run_at: Time.now + 3600, data: {user_id: 5})
 ```
 
-##Contents
+## Contents
   * [Installation](#installation)
-  * [Big Picture](#big-picture)
   * [Setup](#setup)
     + [Defining Queues: `#define_queue`](#defining-queues----define-queue-)
     + [The Task Loader: `#load_with`](#the-task-loader----load-with-)
       - [Task Data](#task-data)
     + [The Task Context: `#provide_context`](#the-task-context----provide-context-)
-    + [The Subprocess Hook: `#each_process`](#the-subprocess-hook----each-process-)
+    + [Controlling Queue Processes: `#each_process`](#controlling-queue-processes----each-process-)
+      - [The Subprocess Hook](#the-subprocess-hook)
       - [Naming Processes](#naming-processes)
-    + [Tracking Process IDs: `#save_pids_in`](#tracking-process-ids----save-pids-in-)
+      - [Tracking Process IDs](#tracking-process-ids)
   * [Tasks](#tasks)
     + [Accessing Task Attributes](#accessing-task-attributes)
     + [Retries](#retries)
@@ -74,6 +62,18 @@ scheduler.delay(:send_birthday_email, run_at: Time.now + 3600, data: {user_id: 5
   * [License](#license)
 
 <!-- ToC generated with http://ecotrust-canada.github.io/markdown-toc/ -->
+
+## Installation
+
+Add this line to your application's Gemfile:
+
+```ruby
+gem 'procrastinator'
+```
+
+And then run:
+
+    bundle install
 
 ## Setup
 `Procrastinator.setup` allows you to define which queues are available. You can also optionally
@@ -242,9 +242,12 @@ class MyTask
 end
 ```
 
-### The Subprocess Hook: `#each_process`
-In the setup block, you specify which actions to take specifically on the subprocesses with `#each_process`. Whatever
-is in the block will be run after the process is forked and before the queue worker starts. 
+### Controlling Queue Processes: `#each_process`
+In the setup block, use `#each_process` to configure details about the queue subprocesses. 
+
+#### The Subprocess Hook
+If you pass a block to `#each_process`, it will be run after the process is forked, 
+but before the queue worker starts working on tasks.
 
 ```ruby
 Procrastinator.setup do |env|
@@ -262,7 +265,7 @@ Procrastinator.setup do |env|
 end
 ```
 
-NB: The `each_process` block is **not run in Test Mode**. 
+NB: The `each_process` block **does not run in Test Mode**. 
 
 #### Naming Processes
 Each queue subprocess is named after the queue it's working on, eg. `greeting-queue-worker` or 
@@ -280,14 +283,14 @@ scheduler = Procrastinator.setup do |env|
 end
 ```
 
-### Tracking Process IDs: `#save_pids_in`
-The sub processes are tracked by saving their PIDs in files. You can set where those files are saved: 
+#### Tracking Process IDs
+The sub processes are tracked by saving their PIDs in files. You can set the directory where those files are saved: 
 
 ```ruby
 scheduler = Procrastinator.setup do |env|
    # ... other setup stuff ...
    
-   env.save_pids_in '/var/run/myapp/'
+   env.each_process(pid_dir: '/var/run/myapp/')
 end
 ```
 

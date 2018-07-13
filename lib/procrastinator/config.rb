@@ -46,9 +46,10 @@ module Procrastinator
          end
 
          # Accepts a block that will be executed on the queue sub-processes. Use it to control resource allocations.
-         def each_process(prefix: nil, &block)
+         def each_process(prefix: nil, pid_dir: DEFAULT_PID_DIRECTORY, &block)
             @prefix           = prefix
             @subprocess_block = block
+            @pid_dir          = pid_dir
          end
 
          def define_queue(name, task_class, properties = {})
@@ -70,10 +71,6 @@ module Procrastinator
 
          def log_at_level(lvl)
             @log_level = lvl
-         end
-
-         def save_pids_in(path)
-            @pid_dir = path
          end
       end
 

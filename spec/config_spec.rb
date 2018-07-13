@@ -204,17 +204,6 @@ module Procrastinator
             end
          end
 
-         describe '#save_pids_in' do
-            it 'should set the pid directory' do
-               config = Config.new
-               dir    = double('dir')
-
-               config.save_pids_in(dir)
-
-               expect(config.pid_dir).to be dir
-            end
-         end
-
          describe '#each_process' do
             it 'should set the process prefix' do
                prefix = double('lvl')
@@ -228,6 +217,21 @@ module Procrastinator
                config.each_process
 
                expect(config.prefix).to be_nil
+            end
+
+            it 'should set the pid directory' do
+               config = Config.new
+               dir    = double('dir')
+
+               config.each_process pid_dir: dir
+
+               expect(config.pid_dir).to be dir
+            end
+
+            it 'should default to a known default directory' do
+               config.each_process
+
+               expect(config.pid_dir).to eq Config::DEFAULT_PID_DIRECTORY
             end
          end
       end

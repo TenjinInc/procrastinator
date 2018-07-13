@@ -304,7 +304,7 @@ module Procrastinator
                   %w[/var/pid
                      some/pid/place].each do |dir|
 
-                     config.save_pids_in dir
+                     config.each_process pid_dir: dir
 
                      config.define_queue(:test1, test_task)
 
