@@ -16,7 +16,7 @@ module Procrastinator
          it 'should start a log file for the main process' do
             QueueManager.new(config)
 
-            expect(File).to exist("#{config.log_dir}/queue-manager.log")
+            expect(File).to exist(config.log_dir + 'queue-manager.log')
          end
 
          it 'should put the log file in the log directory' do

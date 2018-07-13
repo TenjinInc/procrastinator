@@ -8,8 +8,9 @@ require 'procrastinator/queue_manager'
 require 'procrastinator/task'
 require 'procrastinator/scheduler'
 require 'procrastinator/loaders/csv_loader'
-require 'logger'
 
+require 'logger'
+require 'pathname'
 
 module Procrastinator
    @@test_mode = false

@@ -184,11 +184,11 @@ module Procrastinator
          describe '#log_inside' do
             it 'should set the log directory' do
                config = Config.new
-               dir    = double('dir')
+               dir    = '/a/logging/directory'
 
                config.log_inside(dir)
 
-               expect(config.log_dir).to be dir
+               expect(config.log_dir.to_s).to eq dir
             end
          end
 
@@ -221,17 +221,18 @@ module Procrastinator
 
             it 'should set the pid directory' do
                config = Config.new
-               dir    = double('dir')
+               dir    = '/some/dir'
 
                config.each_process pid_dir: dir
 
-               expect(config.pid_dir).to be dir
+               expect(config.pid_dir).to be_a Pathname
+               expect(config.pid_dir.to_s).to eq dir
             end
 
             it 'should default to a known default directory' do
                config.each_process
 
-               expect(config.pid_dir).to eq Config::DEFAULT_PID_DIRECTORY
+               expect(config.pid_dir.to_s).to eq Config::DEFAULT_PID_DIRECTORY
             end
          end
       end
@@ -305,16 +306,16 @@ module Procrastinator
 
       describe '#log_dir' do
          it 'should return the log direcory' do
-            dir = double('path')
+            dir = '/logging/path'
 
             config.log_inside dir
 
-            expect(config.log_dir).to be dir
+            expect(config.log_dir.to_s).to eq dir
          end
 
          it 'should return false if test_mode is enabled' do
             config.enable_test_mode
-            config.log_inside double('path')
+            config.log_inside 'path'
 
             expect(config.log_dir).to be false
          end

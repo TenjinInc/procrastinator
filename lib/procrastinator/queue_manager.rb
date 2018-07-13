@@ -1,5 +1,3 @@
-require 'pathname'
-
 module Procrastinator
    class QueueManager
       attr_reader :workers
@@ -10,16 +8,15 @@ module Procrastinator
 
          @config = config
 
-         @logger = start_log(config.log_dir, @config.log_level)
+         @logger = start_log
       end
 
       def spawn_workers
          scheduler = Scheduler.new(@config)
 
-         pid_dir = Pathname.new(@config.pid_dir)
+         @config.pid_dir.mkpath
 
-         pid_dir.mkpath
-         pid_dir.each_child do |file|
+         @config.pid_dir.each_child do |file|
             pid = file.read.to_i
 
             begin
@@ -110,24 +107,26 @@ module Procrastinator
       end
 
       def write_pid_file(pid, filename)
-         pid_file = "#{@config.pid_dir}/#{filename}.pid"
+         pid_file = @config.pid_dir + "#{filename}.pid"
 
          File.open(pid_file, 'w') do |f|
             f.print(pid)
          end
       end
 
-      def start_log(directory, level)
+      def start_log
+         directory = @config.log_dir
+
          return unless directory
 
-         log_path = Pathname.new("#{directory}/queue-manager.log")
+         log_path = directory + 'queue-manager.log'
 
-         log_path.dirname.mkpath
+         directory.mkpath
          File.open(log_path.to_path, 'a+') {|f| f.write ''}
 
          logger = Logger.new(log_path.to_path)
 
-         logger.level = level
+         logger.level = @config.log_level
 
          # @logger.info(['',
          #               '===================================',

@@ -89,9 +89,9 @@ module Procrastinator
          level     = @config.log_level || Logger::INFO
 
          if directory
-            log_path = Pathname.new("#{directory}/#{long_name}.log")
+            log_path = directory + "#{long_name}.log"
 
-            log_path.dirname.mkpath
+            directory.mkpath
             File.open(log_path.to_path, 'a+') do |f|
                f.write ''
             end

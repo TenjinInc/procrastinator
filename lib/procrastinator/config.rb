@@ -12,9 +12,9 @@ module Procrastinator
          @loader           = nil
          @context          = nil
          @subprocess_block = nil
-         @log_dir          = DEFAULT_LOG_DIRECTORY
+         @log_dir          = Pathname.new(DEFAULT_LOG_DIRECTORY)
          @log_level        = Logger::INFO
-         @pid_dir          = DEFAULT_PID_DIRECTORY
+         @pid_dir          = Pathname.new(DEFAULT_PID_DIRECTORY)
       end
 
       module DSL
@@ -49,7 +49,7 @@ module Procrastinator
          def each_process(prefix: nil, pid_dir: DEFAULT_PID_DIRECTORY, &block)
             @prefix           = prefix
             @subprocess_block = block
-            @pid_dir          = pid_dir
+            @pid_dir          = Pathname.new(pid_dir)
          end
 
          def define_queue(name, task_class, properties = {})
@@ -66,7 +66,7 @@ module Procrastinator
          end
 
          def log_inside(path)
-            @log_dir = path
+            @log_dir = path ? Pathname.new(path) : path
          end
 
          def log_at_level(lvl)
