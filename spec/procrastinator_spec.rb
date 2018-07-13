@@ -55,7 +55,7 @@ module Procrastinator
             config = Config.new
 
             config.load_with(persister)
-            config.define_queue(:test_queue, test_task)
+            config.define_queue(:configured_queue, test_task)
 
             expect(Config).to receive(:new).and_return(config)
             expect(QueueManager).to receive(:new).with(config).and_call_original
@@ -171,7 +171,7 @@ module Procrastinator
                   built_config = config
 
                   config.load_with(persister)
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:normal_queue, test_task)
                end
 
                expect(built_config.test_mode?).to be false
@@ -185,13 +185,13 @@ module Procrastinator
                   config_1 = config
 
                   config.load_with(persister)
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:first_setup_queue, test_task)
                end
                Procrastinator.setup do |config|
                   config_2 = config
 
                   config.load_with(persister)
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:second_setup_queue, test_task)
                end
 
                expect(config_1.test_mode?).to be false
@@ -207,13 +207,13 @@ module Procrastinator
 
                   config.enable_test_mode
                   config.load_with(persister)
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:override_setup_queue1, test_task)
                end
                Procrastinator.setup do |config|
                   config_2 = config
 
                   config.load_with(persister)
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:override_setup_queue2, test_task)
                end
 
                expect(config_1.test_mode?).to be true

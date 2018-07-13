@@ -198,7 +198,7 @@ module Procrastinator
                end
 
                it 'should fork a worker process' do
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:fork_test_queue, test_task)
 
                   expect(manager).to receive(:fork).once.and_return(double('a child pid'))
 
@@ -214,6 +214,33 @@ module Procrastinator
                   expect(manager).to receive(:fork).exactly(queue_defs.size).times.and_return(double('a child pid'))
 
                   manager.spawn_workers
+               end
+
+               it 'should warn if the worker name is identical to another process on the system' do
+                  name = 'reminders-queue-worker'
+
+                  config.define_queue(:reminders, test_task)
+
+                  err = <<~WARNING
+                     Warning: there is another process named "#{name}". Use #prefix_process(prefix) in
+                              Procrastinator setup if you want to help yourself distinguish them.
+                  WARNING
+
+                  expect(manager).to receive(:`).with("pgrep -f #{name}").and_return("13412")
+
+                  expect do
+                     manager.spawn_workers
+                  end.to output(err).to_stderr
+               end
+
+               it 'should NOT warn if the worker name is unique' do
+                  config.define_queue(:reminders, test_task)
+
+                  allow(manager).to receive(:`).and_return('')
+
+                  expect do
+                     manager.spawn_workers
+                  end.to_not output.to_stderr
                end
 
                it 'should not wait for the QueueWorker' do
@@ -470,7 +497,7 @@ module Procrastinator
                      run = true
                   end
 
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:parent_process_test_queue, test_task)
 
                   expect(config).to_not receive(:subprocess_block)
                   expect(run).to be false
@@ -483,7 +510,7 @@ module Procrastinator
                let(:worker) {double('worker',
                                     work:      nil,
                                     start_log: nil,
-                                    long_name: '')}
+                                    long_name: 'test-worker')}
 
                before(:each) do
                   allow(Process).to receive(:setproctitle)
@@ -499,7 +526,7 @@ module Procrastinator
                                                .and_return(double('worker',
                                                                   work:      nil,
                                                                   start_log: nil,
-                                                                  long_name: ''))
+                                                                  long_name: 'test-worker'))
                   manager.spawn_workers
                end
 
@@ -511,7 +538,7 @@ module Procrastinator
                                                .and_return(double('worker',
                                                                   work:      nil,
                                                                   start_log: nil,
-                                                                  long_name: ''))
+                                                                  long_name: 'test-worker'))
                   manager.spawn_workers
                end
 
@@ -661,15 +688,14 @@ module Procrastinator
                   config.define_queue(:test2, test_task)
                   config.define_queue(:test3, test_task)
 
-                  worker1 = double('worker1')
-                  worker2 = double('worker2')
-                  worker3 = double('worker3')
+                  worker1 = double('worker1', long_name: 'worker1-queue-worker')
+                  worker2 = double('worker2', long_name: 'worker2-queue-worker')
+                  worker3 = double('worker3', long_name: 'worker3-queue-worker')
 
                   [worker1, worker2, worker3].each do |worker|
                      expect(worker).to receive(:work)
 
                      allow(worker).to receive(:start_log)
-                     allow(worker).to receive(:long_name)
                   end
 
                   allow(QueueWorker).to receive(:new).and_return(worker1, worker2, worker3)

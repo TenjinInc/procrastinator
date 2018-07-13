@@ -301,7 +301,11 @@ module Procrastinator
                expect(task).to_not receive(:fail)
 
                worker = TaskWorker.new(metadata: meta, queue: fail_queue)
-               worker.work
+
+               # silence the stdout warning
+               expect do
+                  worker.work
+               end.to output.to_stderr
             end
 
             it 'should NOT call #fail if calling #final_fail' do

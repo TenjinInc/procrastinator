@@ -42,16 +42,28 @@ module Procrastinator
                if @config.test_mode?
                   @workers[worker] = Process.pid
                else
+                  worker_name = worker.long_name
+
+                  # better to use backticks so we can get the info and not spam user's stdout
+                  unless `pgrep -f #{worker_name}`.empty?
+                     err = <<~WARNING
+                        Warning: there is another process named "#{worker_name}". Use #prefix_process(prefix) in
+                                 Procrastinator setup if you want to help yourself distinguish them.
+                     WARNING
+
+                     warn(err)
+                  end
+
                   pid = fork
 
                   if pid
                      # === PARENT PROCESS ===
                      Process.detach(pid)
                      @workers[worker] = pid
-                     write_pid_file(pid, worker.long_name)
+                     write_pid_file(pid, worker_name)
                   else
                      # === CHILD PROCESS ===
-                     Process.setproctitle(worker.long_name)
+                     Process.setproctitle(worker_name)
 
                      @config.run_process_block
 
