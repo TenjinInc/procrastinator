@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Procrastinator
    class Queue
       DEFAULT_TIMEOUT       = 3600 # in seconds; one hour total
@@ -19,7 +21,7 @@ module Procrastinator
 
          raise ArgumentError, 'Task class must be initializable' unless task_class.respond_to? :new
 
-         raise ArgumentError, 'timeout cannot be negative' if timeout && timeout < 0
+         raise ArgumentError, 'timeout cannot be negative' if timeout&.negative?
 
          @name          = name.to_s.strip.gsub(/[^A-Za-z0-9]+/, '_').to_sym
          @task_class    = task_class

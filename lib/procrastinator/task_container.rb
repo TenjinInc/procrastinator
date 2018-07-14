@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Procrastinator
    class TaskContainer
       attr_accessor :context, :logger, :data, :procrastinator

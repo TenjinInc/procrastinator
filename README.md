@@ -211,9 +211,8 @@ these are the field names. If you have a database, use this to inform your table
 
 > ¹ If `nil`, that indicates that it is permanently failed and will never run, either due to expiry or too many attempts.
 
-> ² Serialized using YAML.dump. Keep to simple data types (eg. id numbers) to reduce storage space, eliminate 
-> redundancy, and reduce the chance of a serialization error.
->  
+> ² Serialized using YAML.dump and unserialized with YAML.safe_load. Keep to simple data types (eg. id numbers) to 
+> reduce storage space, eliminate redundancy, and reduce the chance of a serialization error.
 
 Notice that the times are all stored as unix epoch integer timestamps. This is to avoid confusion or conversion
 errors with timezones or daylight savings.

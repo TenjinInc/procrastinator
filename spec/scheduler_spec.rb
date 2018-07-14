@@ -2,12 +2,12 @@ require 'spec_helper'
 
 module Procrastinator
    describe Procrastinator::Scheduler do
-      let(:test_task) {Test::Task::AllHooks}
+      let(:test_task) { Test::Task::AllHooks }
 
       describe '#delay' do
          # api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
 
-         let(:persister) {Test::Persister.new}
+         let(:persister) { Test::Persister.new }
          let(:config) do
             config = Config.new
             config.load_with(persister)
@@ -15,7 +15,7 @@ module Procrastinator
             config
          end
 
-         let(:scheduler) {Scheduler.new(config)}
+         let(:scheduler) { Scheduler.new(config) }
 
          it 'should record a task on the given queue' do
             [:queue1, :queue2].each do |queue_name|
@@ -115,10 +115,10 @@ module Procrastinator
             "queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2"
             "queue must be specified when more than one is registered. Defined queues are: test_queue, queue1, queue2"
 
-            expect {scheduler.delay(run_at: 0)}.to raise_error(ArgumentError, msg)
+            expect { scheduler.delay(run_at: 0) }.to raise_error(ArgumentError, msg)
 
             # also test the negative
-            expect {scheduler.delay(:queue1, run_at: 0)}.to_not raise_error
+            expect { scheduler.delay(:queue1, run_at: 0) }.to_not raise_error
          end
 
          it 'should NOT require queue be provided if only one queue is defined' do
@@ -128,7 +128,7 @@ module Procrastinator
 
             scheduler = Scheduler.new(config)
 
-            expect {scheduler.delay}.to_not raise_error
+            expect { scheduler.delay }.to_not raise_error
          end
 
          it 'should assume the queue name if only one queue is defined' do
@@ -149,7 +149,7 @@ module Procrastinator
             [:bogus, :other_bogus].each do |name|
                err = %[there is no :#{name} queue registered. Defined queues are: :test_queue, :another_queue]
 
-               expect {scheduler.delay(name)}.to raise_error(ArgumentError, err)
+               expect { scheduler.delay(name) }.to raise_error(ArgumentError, err)
             end
          end
 
@@ -167,7 +167,7 @@ module Procrastinator
 
             err = %[task #{test_task} expects to receive :data. Provide :data to #delay.]
 
-            expect {scheduler.delay(:data_queue)}.to raise_error(ArgumentError, err)
+            expect { scheduler.delay(:data_queue) }.to raise_error(ArgumentError, err)
          end
 
          it 'should complain if they provide :data in #delay, but the task does NOT import it' do
@@ -181,23 +181,23 @@ module Procrastinator
             config.define_queue(:data_queue, test_task)
 
             err = <<~ERROR
-               task #{test_task} does not import :data. Add this in your class definition: 
+               task #{test_task} does not import :data. Add this in your class definition:
                      import_test_data :data
             ERROR
 
-            expect {scheduler.delay(:data_queue, data: 'some data')}.to raise_error(ArgumentError, err)
+            expect { scheduler.delay(:data_queue, data: 'some data') }.to raise_error(ArgumentError, err)
          end
       end
 
       describe '#reschedule' do
-         let(:persister) {Test::Persister.new}
+         let(:persister) { Test::Persister.new }
          let(:config) do
             config = Config.new
             config.load_with(persister)
             config.define_queue(:test_queue, test_task)
             config
          end
-         let(:scheduler) {Scheduler.new(config)}
+         let(:scheduler) { Scheduler.new(config) }
 
          it 'should create a proxy for the given search parameters' do
             queue      = double('q')
@@ -221,7 +221,7 @@ module Procrastinator
       end
 
       describe '#cancel' do
-         let(:persister) {Test::Persister.new}
+         let(:persister) { Test::Persister.new }
          let(:config) do
             config = Config.new
             config.load_with(persister)
@@ -229,7 +229,7 @@ module Procrastinator
             config.define_queue(:reminder, test_task)
             config
          end
-         let(:scheduler) {Scheduler.new(config)}
+         let(:scheduler) { Scheduler.new(config) }
 
          it 'should delete the task matching the given search data' do
             tasks = [{id: 1, queue: :reminder, data: 'user_id: 5'},
@@ -296,18 +296,18 @@ module Procrastinator
 
    describe Scheduler::UpdateProxy do
 
-      let(:test_task) {Test::Task::AllHooks}
-      let(:persister) {Test::Persister.new}
+      let(:test_task) { Test::Task::AllHooks }
+      let(:persister) { Test::Persister.new }
       let(:config) do
          config = Config.new
          config.load_with(persister)
          config.define_queue(:test_queue, test_task)
          config
       end
-      let(:identifier) {{id: 'id'}}
-      let(:update_proxy) {Scheduler::UpdateProxy.new(config,
-                                                     queue_name: :test_queue,
-                                                     identifier: identifier)}
+      let(:identifier) { {id: 'id'} }
+      let(:update_proxy) { Scheduler::UpdateProxy.new(config,
+                                                      queue_name: :test_queue,
+                                                      identifier: identifier) }
 
       describe '#to' do
          before(:each) do
@@ -352,7 +352,7 @@ module Procrastinator
 
          it 'should complain if multiple tasks match the given information' do
             (3..5).each do |n|
-               tasks = Array.new(n) {|i| double("task#{i}")}
+               tasks = Array.new(n) { |i| double("task#{i}") }
 
                allow(persister).to receive(:read).and_return(tasks)
 

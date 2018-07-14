@@ -3,7 +3,7 @@ require 'spec_helper'
 module Procrastinator
    describe TaskMetaData do
       describe '#inititalize' do
-         let(:task) {double('task', run: nil)}
+         let(:task) { double('task', run: nil) }
 
          it 'should store id' do
             id = double('id')
@@ -14,7 +14,7 @@ module Procrastinator
          end
 
          it 'should deserialize data parameter' do
-            task_data = double('task', run: nil)
+            task_data = {name: 'task-data', list: [1, 2, 3]}
             task_yml  = YAML.dump(task_data)
 
             allow(YAML).to receive(:load).with(task_yml).and_return(task_data)
@@ -76,18 +76,18 @@ module Procrastinator
          it 'should complain if the task has not been run yet' do
             task = TaskMetaData.new(attempts: 0)
 
-            expect {task.successful?}.to raise_error(RuntimeError, 'you cannot check for success before running #work')
+            expect { task.successful? }.to raise_error(RuntimeError, 'you cannot check for success before running #work')
          end
 
          it 'should NOT complain if the task is expired' do
             task = TaskMetaData.new(attempts: 0, expire_at: 0)
 
-            expect {task.successful?}.to_not raise_error
+            expect { task.successful? }.to_not raise_error
          end
       end
 
       describe '#expired?' do
-         let(:now) {now = Time.now}
+         let(:now) { now = Time.now }
 
          it 'should return true when the expiry date has passed' do
             task = TaskMetaData.new(expire_at: now.to_i - 1)
@@ -179,7 +179,7 @@ module Procrastinator
          end
 
          it 'should pass in the data to the task initialization if data' do
-            data = double('task data')
+            data = 'task data'
             allow(YAML).to receive(:load).and_return(data)
 
             meta       = TaskMetaData.new(data: YAML.dump(data))
@@ -200,7 +200,7 @@ module Procrastinator
                   attempts:     double('attempts'),
                   last_fail_at: double('last_fail_at'),
                   last_error:   double('last_error'),
-                  data:         YAML.dump(double('data'))
+                  data:         YAML.dump('some data')
             }
 
             run_at         = double('run_at', to_i: double('run_at_i'))

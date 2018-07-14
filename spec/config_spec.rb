@@ -2,8 +2,8 @@ module Procrastinator
    require 'spec_helper'
 
    describe Config do
-      let(:config) {Config.new}
-      let(:test_task) {Test::Task::AllHooks}
+      let(:config) { Config.new }
+      let(:test_task) { Test::Task::AllHooks }
 
       context 'DSL' do
          describe '#load_with' do
@@ -41,7 +41,7 @@ module Procrastinator
 
                err = "task loader #{bad_loader.class} must respond to #read"
 
-               expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
+               expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
             end
 
             it 'should complain if the loader does not respond to #create' do
@@ -49,7 +49,7 @@ module Procrastinator
 
                err = "task loader #{bad_loader.class} must respond to #create"
 
-               expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
+               expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
             end
 
             it 'should complain if the loader does not respond to #update' do
@@ -57,7 +57,7 @@ module Procrastinator
 
                err = "task loader #{bad_loader.class} must respond to #update"
 
-               expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
+               expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
             end
 
             it 'should complain if the loader does not respond to #delete' do
@@ -65,7 +65,7 @@ module Procrastinator
 
                err = "task loader #{bad_loader.class} must respond to #delete"
 
-               expect {config.load_with(bad_loader)}.to raise_error(MalformedTaskLoaderError, err)
+               expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
             end
          end
 
@@ -81,11 +81,11 @@ module Procrastinator
 
          describe '#define_queue' do
             it 'should require that the queue name NOT be nil' do
-               expect {config.define_queue(nil, double('taskClass'))}.to raise_error(ArgumentError, 'queue name cannot be nil')
+               expect { config.define_queue(nil, double('taskClass')) }.to raise_error(ArgumentError, 'queue name cannot be nil')
             end
 
             it 'should require that the queue task class NOT be nil' do
-               expect {config.define_queue(:queue_name, nil)}.to raise_error(ArgumentError, 'queue task class cannot be nil')
+               expect { config.define_queue(:queue_name, nil) }.to raise_error(ArgumentError, 'queue task class cannot be nil')
             end
 
             it 'should add a queue with its timeout, max_tasks, max_attempts, update_period' do
@@ -193,7 +193,7 @@ module Procrastinator
          end
 
          describe '#log_at_level' do
-            let(:config) {Config.new}
+            let(:config) { Config.new }
 
             it 'should set the log level' do
                lvl = double('lvl')
@@ -241,7 +241,7 @@ module Procrastinator
          it 'should yield itself' do
             config.define_queue(:test_queue, test_task)
 
-            expect {|b| config.setup &b}.to yield_with_args(config)
+            expect { |b| config.setup &b }.to yield_with_args(config)
          end
 
          it 'should use the given test mode' do
@@ -280,7 +280,7 @@ module Procrastinator
 
       describe '#run_process_block' do
          it 'should run the stored block' do
-            block = Proc.new {true}
+            block = Proc.new { true }
 
             config.each_process &block
 

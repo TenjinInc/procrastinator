@@ -45,8 +45,8 @@ module Procrastinator
          describe 'read' do
             include FakeFS::SpecHelpers
 
-            let(:path) {'procrastinator-data.csv'}
-            let(:loader) {CSVLoader.new(path)}
+            let(:path) { 'procrastinator-data.csv' }
+            let(:loader) { CSVLoader.new(path) }
 
             before(:each) do
                contents = <<~CONTENTS
@@ -134,8 +134,8 @@ module Procrastinator
          describe 'create' do
             include FakeFS::SpecHelpers
 
-            let(:path) {'procrastinator-data.csv'}
-            let(:loader) {CSVLoader.new(path)}
+            let(:path) { 'procrastinator-data.csv' }
+            let(:loader) { CSVLoader.new(path) }
 
             let(:required_args) do
                {queue: :some_queue, run_at: 0, initial_run_at: 0, expire_at: nil, data: ''}
@@ -241,8 +241,8 @@ module Procrastinator
          describe 'update' do
             include FakeFS::SpecHelpers
 
-            let(:path) {'procrastinator-data.csv'}
-            let(:loader) {CSVLoader.new(path)}
+            let(:path) { 'procrastinator-data.csv' }
+            let(:loader) { CSVLoader.new(path) }
 
             before(:each) do
                contents = <<~CONTENTS
@@ -311,8 +311,8 @@ module Procrastinator
          describe 'delete' do
             include FakeFS::SpecHelpers
 
-            let(:path) {'procrastinator-data.csv'}
-            let(:loader) {CSVLoader.new(path)}
+            let(:path) { 'procrastinator-data.csv' }
+            let(:loader) { CSVLoader.new(path) }
 
             before(:each) do
                contents = <<~CONTENTS
@@ -357,8 +357,8 @@ module Procrastinator
          describe 'write' do
             include FakeFS::SpecHelpers
 
-            let(:path) {'procrastinator-data.csv'}
-            let(:loader) {CSVLoader.new(path)}
+            let(:path) { 'procrastinator-data.csv' }
+            let(:loader) { CSVLoader.new(path) }
 
             it 'should create a file if it does not exist' do
                %w[missing-file.csv
@@ -397,7 +397,7 @@ module Procrastinator
 
                file_content = File.new(path).readlines
 
-               new_row = task_info.values.collect {|x| %["#{x}"]}.join(',')
+               new_row = task_info.values.collect { |x| %["#{x}"] }.join(',')
 
                expect(file_content.last.strip).to eq new_row
             end

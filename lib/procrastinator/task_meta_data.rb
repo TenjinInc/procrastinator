@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 module Procrastinator
    class TaskMetaData
       # These are the attributes expected to be in the persistence mechanism
-      EXPECTED_DATA = [:id, :run_at, :initial_run_at, :expire_at, :attempts, :last_error, :last_fail_at, :data]
+      EXPECTED_DATA = [:id, :run_at, :initial_run_at, :expire_at, :attempts, :last_error, :last_fail_at, :data].freeze
 
       attr_reader(*EXPECTED_DATA)
 
@@ -20,7 +22,7 @@ module Procrastinator
          @attempts       = attempts || 0
          @last_error     = last_error
          @last_fail_at   = last_fail_at
-         @data           = data ? YAML.load(data) : nil
+         @data           = data ? YAML.safe_load(data, [Symbol, Date]) : nil
       end
 
       def init_task(queue)
@@ -59,25 +61,26 @@ module Procrastinator
       end
 
       def successful?
-         if !expired? && @attempts <= 0
-            raise(RuntimeError, 'you cannot check for success before running #work')
-         end
+         raise 'you cannot check for success before running #work' if !expired? && @attempts <= 0
 
          !expired? && @last_error.nil? && @last_fail_at.nil?
       end
 
+      # rubocop:disable Layout/SpaceAroundOperators
       def reschedule
          # (30 + n_attempts^4) seconds is chosen to rapidly expand
          # but with the baseline of 30s to avoid hitting the disk too frequently.
          @run_at += 30 + (@attempts ** 4) unless @run_at.nil?
       end
 
+      # rubocop:enable Layout/SpaceAroundOperators
+
       def serialized_data
          YAML.dump(@data)
       end
 
       def verify_expiry!
-         raise TaskExpiredError, "task is over its expiry time of #{@expire_at}" if expired?
+         raise TaskExpiredError, "task is over its expiry time of #{ @expire_at }" if expired?
       end
 
       def to_h

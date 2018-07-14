@@ -2,15 +2,15 @@ require 'spec_helper'
 
 module Procrastinator
    describe TaskWorker do
-      let(:queue) {Procrastinator::Queue.new(name: :test_queue, task_class: Test::Task::AllHooks)}
-      let(:meta) {TaskMetaData.new}
-      let(:fail_queue) {Procrastinator::Queue.new(name: :fail_queue, task_class: Test::Task::Fail)}
-      let(:final_fail_queue) {Procrastinator::Queue.new(name: :fail_queue, task_class: Test::Task::Fail, max_attempts: 0)}
+      let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: Test::Task::AllHooks) }
+      let(:meta) { TaskMetaData.new }
+      let(:fail_queue) { Procrastinator::Queue.new(name: :fail_queue, task_class: Test::Task::Fail) }
+      let(:final_fail_queue) { Procrastinator::Queue.new(name: :fail_queue, task_class: Test::Task::Fail, max_attempts: 0) }
 
       describe '#inititalize' do
-         let(:task_instance) {double('task', run: nil)}
-         let(:task_class) {double('task class', new: task_instance)}
-         let(:queue) {Procrastinator::Queue.new(name: :test_queue, task_class: task_class)}
+         let(:task_instance) { double('task', run: nil) }
+         let(:task_class) { double('task class', new: task_instance) }
+         let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: task_class) }
 
          it 'should complain when no queue is given' do
             expect do
@@ -47,8 +47,8 @@ module Procrastinator
                end
             end
 
-            let(:task) {task_class.new}
-            let(:meta) {TaskMetaData.new}
+            let(:task) { task_class.new }
+            let(:meta) { TaskMetaData.new }
 
             before(:each) do
                allow(task_class).to receive(:new).and_return(task)
@@ -57,7 +57,7 @@ module Procrastinator
             it 'should provide the data to the new task instance if requested' do
                task_class.task_attr :data
 
-               meta = TaskMetaData.new(data: YAML.dump(double('data')))
+               meta = TaskMetaData.new(data: YAML.dump('data here'))
 
                queue = Procrastinator::Queue.new(name:       :test_queue,
                                                  task_class: task_class)
@@ -190,7 +190,7 @@ module Procrastinator
 
                worker = TaskWorker.new(metadata: meta, queue: queue)
 
-               expect {worker.work}.to output("Success hook error: #{err}\n").to_stderr
+               expect { worker.work }.to output("Success hook error: #{ err }\n").to_stderr
             end
 
             it 'should do nothing if the task does not include #success' do
@@ -198,7 +198,7 @@ module Procrastinator
 
                worker = TaskWorker.new(metadata: meta, queue: queue)
 
-               expect {worker.work}.to_not output.to_stderr
+               expect { worker.work }.to_not output.to_stderr
             end
 
             it 'should blank the error message' do
@@ -232,7 +232,7 @@ module Procrastinator
 
             it 'should log #success at debug level' do
                logger    = double('logger')
-               data_yaml = YAML.dump(double('text'))
+               data_yaml = YAML.dump('some data text')
 
                worker = TaskWorker.new(queue:    queue,
                                        logger:   logger,
@@ -335,13 +335,13 @@ module Procrastinator
 
                worker = TaskWorker.new(metadata: meta, queue: fail_queue)
 
-               expect {worker.work}.to output("Fail hook error: #{err}\n").to_stderr
+               expect { worker.work }.to output("Fail hook error: #{err}\n").to_stderr
             end
 
             it 'should do nothing if the task does not include #fail' do
                worker = TaskWorker.new(metadata: meta, queue: fail_queue)
 
-               expect {worker.work}.to_not output.to_stderr
+               expect { worker.work }.to_not output.to_stderr
             end
 
             it 'should record the most recent failure time' do
@@ -427,7 +427,7 @@ module Procrastinator
             end
 
             it 'should log #fail at debug level' do
-               data       = double('data')
+               data       = 'itsa me, a data-o'
                task       = double('task')
                task_class = double('task class', new: task)
 
@@ -606,7 +606,7 @@ module Procrastinator
                                     attempts:       double('attempts'),
                                     last_fail_at:   double('last_fail_at'),
                                     last_error:     double('last_error'),
-                                    data:           YAML.dump(double('data')),
+                                    data:           YAML.dump('one data, please'),
                                     initial_run_at: initial_run_at,
                                     run_at:         run_at,
                                     expire_at:      expire_at)

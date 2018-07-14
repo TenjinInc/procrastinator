@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'procrastinator/version'
 require 'procrastinator/task_meta_data'
 require 'procrastinator/task_worker'
@@ -13,6 +15,7 @@ require 'logger'
 require 'pathname'
 
 module Procrastinator
+   # rubocop:disable Style/ClassVars
    @@test_mode = false
 
    def self.test_mode=(value)
@@ -22,6 +25,7 @@ module Procrastinator
    def self.test_mode
       @@test_mode
    end
+   # rubocop:enable Style/ClassVars
 
    # Creates a configuration object and passes it into the given block.
    #

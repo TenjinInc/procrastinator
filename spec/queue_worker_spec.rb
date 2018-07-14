@@ -2,19 +2,19 @@ require 'spec_helper'
 
 module Procrastinator
    describe QueueWorker do
-      let(:config) {Config.new}
-      let(:persister) {double('loader', read: [], create: nil, update: nil, delete: nil)}
-      let(:test_task) {Test::Task::AllHooks}
-      let(:queue) {Procrastinator::Queue.new(name: :test_queue, task_class: test_task)}
-      let(:instant_queue) {Procrastinator::Queue.new(name: :test_queue, task_class: test_task, update_period: 0)}
+      let(:config) { Config.new }
+      let(:persister) { double('loader', read: [], create: nil, update: nil, delete: nil) }
+      let(:test_task) { Test::Task::AllHooks }
+      let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: test_task) }
+      let(:instant_queue) { Procrastinator::Queue.new(name: :test_queue, task_class: test_task, update_period: 0) }
 
       describe '#initialize' do
          it 'should require a queue' do
-            expect {QueueWorker.new(config: nil)}.to raise_error(ArgumentError, 'missing keyword: queue')
+            expect { QueueWorker.new(config: nil) }.to raise_error(ArgumentError, 'missing keyword: queue')
          end
 
          it 'should require a persister' do
-            expect {QueueWorker.new(queue: nil)}.to raise_error(ArgumentError, 'missing keyword: config')
+            expect { QueueWorker.new(queue: nil) }.to raise_error(ArgumentError, 'missing keyword: config')
          end
       end
 
@@ -64,7 +64,7 @@ module Procrastinator
 
             # control looping, otherwise infiniloop by design
             allow(worker).to receive(:loop) do |&block|
-               n_loops.times {block.call}
+               n_loops.times { block.call }
             end
 
             expect(worker).to receive(:act).exactly(n_loops).times
@@ -269,7 +269,7 @@ module Procrastinator
                             attempts:       0,
                             last_error:     double('last error'),
                             last_fail_at:   double('last fail at'),
-                            data:           YAML.dump(double('data'))}
+                            data:           YAML.dump(['some', 'data'])}
 
                expect(TaskMetaData).to receive(:new).with(task_data).and_call_original
 

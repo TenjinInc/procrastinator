@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'yaml'
 require 'ostruct'
 require 'timeout'
@@ -30,9 +32,7 @@ module Procrastinator
          @logger  = logger
          @context = context
 
-         unless @task.respond_to? :run
-            raise MalformedTaskError, "task #{@task.class} does not support #run method"
-         end
+         raise MalformedTaskError, "task #{ @task.class } does not support #run method" unless @task.respond_to? :run
       end
 
       def work
@@ -41,32 +41,20 @@ module Procrastinator
          begin
             @metadata.verify_expiry!
 
-            result = Timeout::timeout(@queue.timeout) do
+            result = Timeout.timeout(@queue.timeout) do
                @task.run
             end
 
-            @logger.debug("Task completed: #{@task.class} [#{@metadata.serialized_data}]") if @logger
+            @logger&.debug("Task completed: #{ @task.class } [#{ @metadata.serialized_data }]")
 
             @metadata.clear_fails
 
             try_hook(:success, result)
-         rescue StandardError => e
+         rescue StandardError => error
             if @metadata.final_fail?(@queue)
-               trace = e.backtrace.join("\n")
-               msg   = "#{@metadata.expired? ? 'Task expired' : 'Task failed too many times'}: #{trace}"
-
-               @metadata.fail(msg, final: true)
-
-               @logger.debug("Task failed permanently: #{YAML.dump(@task)}") if @logger
-
-               try_hook(:final_fail, e)
+               handle_final_failure(error)
             else
-               @metadata.fail(%[Task failed: #{e.message}\n#{e.backtrace.join("\n")}])
-               @logger.debug("Task failed: #{@queue.name} with #{@metadata.serialized_data}") if @logger
-
-               @metadata.reschedule
-
-               try_hook(:fail, e)
+               handle_failure(error)
             end
          end
       end
@@ -74,11 +62,29 @@ module Procrastinator
       private
 
       def try_hook(method, *params)
-         begin
-            @task.send(method, *params) if @task.respond_to? method
-         rescue StandardError => e
-            $stderr.puts "#{method.to_s.capitalize} hook error: #{e.message}"
-         end
+         @task.send(method, *params) if @task.respond_to? method
+      rescue StandardError => e
+         warn "#{ method.to_s.capitalize } hook error: #{ e.message }"
+      end
+
+      def handle_failure(error)
+         @metadata.fail(%[Task failed: #{ error.message }\n#{ error.backtrace.join("\n") }])
+         @logger&.debug("Task failed: #{ @queue.name } with #{ @metadata.serialized_data }")
+
+         @metadata.reschedule
+
+         try_hook(:fail, error)
+      end
+
+      def handle_final_failure(error)
+         trace = error.backtrace.join("\n")
+         msg   = "#{ @metadata.expired? ? 'Task expired' : 'Task failed too many times' }: #{ trace }"
+
+         @metadata.fail(msg, final: true)
+
+         @logger&.debug("Task failed permanently: #{ YAML.dump(@task) }")
+
+         try_hook(:final_fail, error)
       end
    end
 

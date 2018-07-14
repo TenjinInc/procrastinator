@@ -18,13 +18,13 @@ module Procrastinator
       describe '.setup' do
          include FakeFS::SpecHelpers
 
-         let(:test_task) {Test::Task::AllHooks}
-         let(:persister) {Test::Persister.new}
+         let(:test_task) { Test::Task::AllHooks }
+         let(:persister) { Test::Persister.new }
 
          it 'should provide the block a configuration instance' do
             config = Config.new
             config.load_with(persister)
-            config.define_queue(:test_queue, test_task)
+            config.define_queue(:setup_test_queue, test_task)
 
             allow(Config).to receive(:new).and_return(config)
             allow(QueueManager).to receive(:new).and_return(double('qm', spawn_workers: nil))
@@ -39,7 +39,7 @@ module Procrastinator
             config    = Config.new
 
             config.load_with(persister)
-            config.define_queue(:test_queue, test_task)
+            config.define_queue(:setup_test_queue, test_task)
 
             expect(Config).to receive(:new).and_return(config)
             expect(Scheduler).to receive(:new).with(config).and_return(scheduler)
@@ -60,26 +60,26 @@ module Procrastinator
             expect(Config).to receive(:new).and_return(config)
             expect(QueueManager).to receive(:new).with(config).and_call_original
 
-            expect {|b| Procrastinator.setup &b}.to yield_with_args(config)
+            expect { |b| Procrastinator.setup &b }.to yield_with_args(config)
          end
 
          it 'should call #spawn_workers on the manager' do
             expect_any_instance_of(QueueManager).to receive(:spawn_workers)
 
             Procrastinator.setup do |config|
-               config.define_queue(:test, test_task)
+               config.define_queue(:setup_test, test_task)
                config.load_with(persister)
             end
          end
 
          it 'should require that a block is provided' do
-            expect {Procrastinator.setup}.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
+            expect { Procrastinator.setup }.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
          end
 
          it 'should require at least one queue is defined' do
-            expect {Procrastinator.setup do |config|
+            expect { Procrastinator.setup do |config|
                config.load_with(persister)
-            end}.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
+            end }.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
          end
 
          it 'should complain if provide_context was called but no queues import context' do
@@ -98,11 +98,11 @@ module Procrastinator
                   task_attr :context
             ERROR
 
-            expect {Procrastinator.setup do |config|
-               config.define_queue(:test, task_class)
+            expect { Procrastinator.setup do |config|
+               config.define_queue(:setup_test, task_class)
                config.load_with(persister)
                config.provide_context(double('some context'))
-            end}.to raise_error(RuntimeError, err)
+            end }.to raise_error(RuntimeError, err)
          end
 
          it 'should NOT complain if provide_context was NOT called and no queues import context' do
@@ -113,7 +113,7 @@ module Procrastinator
 
             expect do
                Procrastinator.setup do |config|
-                  config.define_queue(:test, task_class)
+                  config.define_queue(:setup_test, task_class)
                   config.load_with(persister)
                end
             end.to_not raise_error
@@ -131,7 +131,7 @@ module Procrastinator
                   built_config = config
 
                   config.load_with(persister)
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:setup_test, test_task)
                end
 
                expect(built_config.test_mode?).to be true
@@ -145,13 +145,13 @@ module Procrastinator
                   config_1 = config
 
                   config.load_with(persister)
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:setup_test, test_task)
                end
                Procrastinator.setup do |config|
                   config_2 = config
 
                   config.load_with(persister)
-                  config.define_queue(:test, test_task)
+                  config.define_queue(:setup_test, test_task)
                end
 
                expect(config_1.test_mode?).to be true
@@ -171,7 +171,7 @@ module Procrastinator
                   built_config = config
 
                   config.load_with(persister)
-                  config.define_queue(:normal_queue, test_task)
+                  config.define_queue(:normal_setup_queue, test_task)
                end
 
                expect(built_config.test_mode?).to be false

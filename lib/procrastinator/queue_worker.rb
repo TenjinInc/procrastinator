@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Procrastinator
    class QueueWorker
       extend Forwardable
@@ -5,7 +7,7 @@ module Procrastinator
       def_delegators :@queue, :name
 
       # expected methods for all persistence strategies
-      PERSISTER_METHODS = [:read, :update, :delete]
+      PERSISTER_METHODS = [:read, :update, :delete].freeze
 
       def initialize(queue:, config:, scheduler: nil)
          @queue     = queue
@@ -25,56 +27,38 @@ module Procrastinator
                act
             end
          rescue StandardError => e
-            if @logger
-               @logger.fatal(e)
-            else
-               raise e
-            end
+            raise e unless @logger
+
+            @logger.fatal(e)
          end
       end
 
       def act
          persister = @config.loader
 
-         # shuffling and re-sorting to avoid worst case O(n^2) when receiving already sorted data
-         # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
-         # results
-         # Ideally, we'd use a better algo than qsort for this, but this will do for now
-         tasks = persister.read(queue: @queue.name)
+         tasks = fetch_tasks(persister)
 
-         tasks = tasks.reject {|t| t[:run_at].nil?}.shuffle.sort_by {|t| t[:run_at]}
+         tasks.each do |metadata|
+            tw = TaskWorker.new(metadata:  metadata,
+                                queue:     @queue,
+                                scheduler: @scheduler,
+                                context:   @config.context,
+                                logger:    @logger)
 
-         tasks = tasks.collect do |t|
-            t.delete_if {|key| !TaskMetaData::EXPECTED_DATA.include?(key)}
-         end
+            tw.work
 
-         tasks.first(@queue.max_tasks).each do |task_hash|
-            metadata = TaskMetaData.new(task_hash)
-
-            if metadata.runnable?
-               tw = TaskWorker.new(metadata:  metadata,
-                                   queue:     @queue,
-                                   scheduler: @scheduler,
-                                   context:   @config.context,
-                                   logger:    @logger)
-
-               tw.work
-
-               if tw.successful?
-                  persister.delete(metadata.id)
-               else
-                  persister.update(metadata.id, tw.to_h.merge(queue: @queue.name))
-               end
+            if tw.successful?
+               persister.delete(metadata.id)
+            else
+               persister.update(metadata.id, tw.to_h.merge(queue: @queue.name))
             end
          end
       end
 
       def long_name
-         name = "#{@queue.name}-queue-worker"
+         name = "#{ @queue.name }-queue-worker"
 
-         if @config.prefix
-            name = "#{@config.prefix}-#{name}"
-         end
+         name = "#{ @config.prefix }-#{ name }" if @config.prefix
 
          name
       end
@@ -83,31 +67,55 @@ module Procrastinator
       #
       # Separate from init because logging is context-dependent
       def start_log
-         return if @logger
+         return if @logger || !@config.log_dir
 
-         directory = @config.log_dir
-         level     = @config.log_level || Logger::INFO
+         log_path = @config.log_dir + "#{ long_name }.log"
 
-         if directory
-            log_path = directory + "#{long_name}.log"
+         write_log_file(log_path)
 
-            directory.mkpath
-            File.open(log_path.to_path, 'a+') do |f|
-               f.write ''
-            end
+         @logger = Logger.new(log_path.to_path)
 
-            @logger = Logger.new(log_path.to_path)
+         @logger.level = @config.log_level || Logger::INFO
 
-            @logger.level = level
+         msg = <<~MSG
+            ======================================================================
+            Started worker process, #{ long_name }, to work off queue #{ @queue.name }.
+            Worker pid=#{ Process.pid }; parent pid=#{ Process.ppid }.
+            ======================================================================
+         MSG
 
-            @logger.info(['',
-                          '===================================',
-                          "Started worker process, #{long_name}, to work off queue #{@queue.name}.",
-                          "Worker pid=#{Process.pid}; parent pid=#{Process.ppid}.",
-                          '==================================='].join("\n"))
+         @logger.info("\n#{ msg }")
 
-            @logger
+         @logger
+      end
+
+      private
+
+      def write_log_file(log_path)
+         @config.log_dir.mkpath
+         File.open(log_path.to_path, 'a+') do |f|
+            f.write ''
          end
+      end
+
+      def fetch_tasks(persister)
+         tasks = persister.read(queue: @queue.name).reject { |t| t[:run_at].nil? }
+
+         tasks = sort_tasks(tasks)
+
+         metas = tasks.collect do |t|
+            TaskMetaData.new(t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) })
+         end
+
+         metas.select(&:runnable?)
+      end
+
+      def sort_tasks(tasks)
+         # shuffling and re-sorting to avoid worst case O(n^2) when receiving already sorted data
+         # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
+         # results
+         # Ideally, we'd use a better algo than qsort for this, but this will do for now
+         tasks.shuffle.sort_by { |t| t[:run_at] }.first(@queue.max_tasks)
       end
    end
 

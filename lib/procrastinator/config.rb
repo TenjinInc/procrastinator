@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 module Procrastinator
    class Config
       attr_reader :queues, :log_level, :prefix, :test_mode, :context, :loader, :pid_dir
-      alias_method :test_mode?, :test_mode
+      alias test_mode? test_mode
 
       DEFAULT_LOG_DIRECTORY = 'log/'
       DEFAULT_PID_DIRECTORY = 'pid/'
@@ -23,7 +25,7 @@ module Procrastinator
          # distinct resources (eg. DB connections) from the parent process.
          def load_with(loader)
             if loader.is_a? Hash
-               unless loader.has_key? :location
+               unless loader.key? :location
                   raise ArgumentError, 'Must pass keyword :location if specifying a location for CSV file'
                end
 
@@ -34,7 +36,7 @@ module Procrastinator
 
             [:read, :create, :update, :delete].each do |method|
                unless loader.respond_to? method
-                  raise MalformedTaskLoaderError, "task loader #{loader.class} must respond to ##{method}"
+                  raise MalformedTaskLoaderError, "task loader #{ loader.class } must respond to ##{ method }"
                end
             end
 
@@ -81,14 +83,12 @@ module Procrastinator
 
          enable_test_mode if test_mode
 
-         unless @loader
-            load_with(Loader::CSVLoader.new)
-         end
+         load_with(Loader::CSVLoader.new) unless @loader
 
-         raise RuntimeError, 'setup block must call #define_queue on the environment' if @queues.empty?
+         raise 'setup block must call #define_queue on the environment' if @queues.empty?
 
-         if @context && !@queues.any? {|queue| queue.task_class.method_defined?(:context=)}
-            err = <<~ERROR
+         if @context && @queues.none? { |queue| queue.task_class.method_defined?(:context=) }
+            raise <<~ERROR
                setup block called #provide_context, but no queue task classes import :context.
 
                Add this to your Task classes that expect to receive the context:
@@ -97,8 +97,6 @@ module Procrastinator
 
                   task_attr :context
             ERROR
-
-            raise RuntimeError, err
          end
 
          self
@@ -110,19 +108,15 @@ module Procrastinator
 
       def queues_string
          # it drops the colon if you call #to_s on a symbol, so we need to add it back
-         @queues.map {|queue| ":#{queue.name}"}.join(', ')
+         @queues.map { |queue| ":#{ queue.name }" }.join(', ')
       end
 
       def single_queue?
          @queues.size == 1
       end
 
-      def multiqueue?
-         @queues.size > 1
-      end
-
       def run_process_block
-         @subprocess_block.call if @subprocess_block
+         @subprocess_block&.call
       end
 
       def queue(name: nil)
@@ -139,14 +133,14 @@ module Procrastinator
 
       def verify_task_class(task_class)
          unless task_class.method_defined? :run
-            raise MalformedTaskError, "task #{task_class} does not support #run method"
+            raise MalformedTaskError, "task #{ task_class } does not support #run method"
          end
 
          # We're checking the interface compliance on init because it's one of those extremely rare cases where
          # you'd want to know early because the sub-processes would crash async, which is harder to debug.
          # It's a bit belt-and suspenders, but UX is important for devs, too. - robinetmiller
-         if task_class.method_defined?(:run) && task_class.instance_method(:run).arity > 0
-            err = "task #{task_class} cannot require parameters to its #run method"
+         if task_class.method_defined?(:run) && task_class.instance_method(:run).arity.positive?
+            err = "task #{ task_class } cannot require parameters to its #run method"
 
             raise MalformedTaskError, err
          end
@@ -154,12 +148,12 @@ module Procrastinator
          expected_arity = 1
 
          [:success, :fail, :final_fail].each do |method_name|
-            if task_class.method_defined?(method_name) &&
-                  task_class.instance_method(method_name).arity != expected_arity
-               err = "task #{task_class} must accept #{expected_arity} parameter to its ##{method_name} method"
+            next unless task_class.method_defined?(method_name)
+            next if task_class.instance_method(method_name).arity == expected_arity
 
-               raise MalformedTaskError, err
-            end
+            err = "task #{ task_class } must accept #{ expected_arity } parameter to its ##{ method_name } method"
+
+            raise MalformedTaskError, err
          end
       end
    end

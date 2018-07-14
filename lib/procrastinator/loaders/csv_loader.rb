@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'csv'
 require 'pathname'
 
@@ -5,7 +7,8 @@ module Procrastinator
    module Loader
       class CSVLoader
          # ordered
-         HEADERS = [:id, :queue, :run_at, :initial_run_at, :expire_at, :attempts, :last_fail_at, :last_error, :data]
+         HEADERS = [:id, :queue, :run_at, :initial_run_at, :expire_at,
+                    :attempts, :last_fail_at, :last_error, :data].freeze
 
          DEFAULT_FILE = 'procrastinator-tasks.csv'
 
@@ -15,7 +18,7 @@ module Procrastinator
             if @path.directory? || @path.to_s.end_with?('/')
                @path += DEFAULT_FILE
             elsif @path.extname.empty?
-               @path = Pathname.new("#{file_path}.csv")
+               @path = Pathname.new("#{ file_path }.csv")
             end
          end
 
@@ -40,7 +43,7 @@ module Procrastinator
                []
             end
 
-            max_id = existing_data.collect {|task| task[:id]}.max || 0
+            max_id = existing_data.collect { |task| task[:id] }.max || 0
 
             new_data = {
                   id:             max_id + 1,

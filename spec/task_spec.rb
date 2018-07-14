@@ -2,7 +2,7 @@ require 'spec_helper'
 
 module Procrastinator
    describe Task do
-      let(:all_attrs) {Procrastinator::Task::KNOWN_ATTRIBUTES}
+      let(:all_attrs) { Procrastinator::Task::KNOWN_ATTRIBUTES }
 
       describe '#task_attr' do
          let(:task_class) do
@@ -101,12 +101,12 @@ module Procrastinator
          end
 
          it 'should complain if provided an unknown attribute' do
-            known_attrs = all_attrs.collect {|a| ":#{a}"}.join(', ')
+            known_attrs = all_attrs.collect { |a| ":#{a}" }.join(', ')
 
             [:bogus, :typo].each do |attr|
                err = "Unknown Procrastinator::Task attribute :#{attr}. Importable attributes are: #{known_attrs}"
 
-               expect {task_class.task_attr(attr)}.to raise_error(ArgumentError, err)
+               expect { task_class.task_attr(attr) }.to raise_error(ArgumentError, err)
             end
          end
       end
@@ -123,7 +123,7 @@ module Procrastinator
                err = "To access Procrastinator::Task attribute :#{attr}, " +
                      "call task_attr(:#{attr}) in your class definition."
 
-               expect {task.send(attr)}.to raise_error(NameError, err)
+               expect { task.send(attr) }.to raise_error(NameError, err)
             end
          end
 
@@ -137,7 +137,7 @@ module Procrastinator
             task = task_class.new
 
             all_attrs.each do |attr|
-               expect {task.send(attr)}.to_not raise_error
+               expect { task.send(attr) }.to_not raise_error
             end
          end
 
@@ -154,7 +154,7 @@ module Procrastinator
 
             err = "undefined method `some_other_method' for #{task}"
 
-            expect {task.run}.to raise_error(NameError, err)
+            expect { task.run }.to raise_error(NameError, err)
          end
       end
    end

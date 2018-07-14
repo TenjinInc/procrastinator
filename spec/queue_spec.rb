@@ -2,15 +2,15 @@ require 'spec_helper'
 
 module Procrastinator
    describe Queue do
-      let(:test_task) {Test::Task::AllHooks}
+      let(:test_task) { Test::Task::AllHooks }
 
       describe '#initialize' do
          it 'should require a name' do
-            expect {Procrastinator::Queue.new(task_class: nil)}.to raise_error(ArgumentError, 'missing keyword: name')
+            expect { Procrastinator::Queue.new(task_class: nil) }.to raise_error(ArgumentError, 'missing keyword: name')
          end
 
          it 'should require a task_class' do
-            expect {Procrastinator::Queue.new(name: '')}.to raise_error(ArgumentError, 'missing keyword: task_class')
+            expect { Procrastinator::Queue.new(name: '') }.to raise_error(ArgumentError, 'missing keyword: task_class')
          end
 
          it 'should convert the queue name to a symbol' do
