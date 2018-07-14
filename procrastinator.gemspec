@@ -10,8 +10,8 @@ Gem::Specification.new do |spec|
    spec.authors = ['Robin Miller']
    spec.email   = ['robin@tenjin.ca']
 
-   spec.summary     = 'Delayed job queues made simple.'
-   spec.description = 'A straightforward, pure Ruby job queue that you can customize to your needs.'
+   spec.summary     = 'For apps that put work off until later'
+   spec.description = 'A straightforward, customizable Ruby job queue with zero dependencies.'
    spec.homepage    = 'https://github.com/TenjinInc/procrastinator'
    spec.license     = 'MIT'
 
@@ -20,7 +20,7 @@ Gem::Specification.new do |spec|
    spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
    spec.require_paths = ['lib']
 
-   spec.required_ruby_version = '> 2.3'
+   spec.required_ruby_version = '>= 2.3'
 
    spec.add_development_dependency 'bundler', '~> 1.11'
    spec.add_development_dependency 'fakefs', '~> 0.10'

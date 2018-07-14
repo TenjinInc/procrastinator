@@ -5,6 +5,13 @@ require 'ostruct'
 require 'timeout'
 
 module Procrastinator
+   # Works on a given task by creating a new instance of the queue's task class and running the appropriate hooks.
+   #
+   # The behaviour outside of the actual user-defined task is guided by the provided metadata.
+   #
+   # @author Robin Miller
+   #
+   # @see TaskMetaData
    class TaskWorker
       extend Forwardable
 

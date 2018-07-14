@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 module Procrastinator
+   # A QueueWorker checks for tasks to run from the loader defined in the provided config and executes them,
+   # updating information in the task loader as necessary.
+   #
+   # @author Robin Miller
    class QueueWorker
       extend Forwardable
 

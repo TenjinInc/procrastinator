@@ -1,11 +1,18 @@
 # frozen_string_literal: true
 
 module Procrastinator
+   # Spawns and manages work queue subprocesses.
+   #
+   # This is where all of the multi-process logic should be kept to.
+   #
+   # @author Robin Miller
+   #
+   # @!attribute [r] :workers
+   #    @return [Hash] Maps the constructed QueueWorkers to their process ID.
    class QueueManager
       attr_reader :workers
 
       def initialize(config)
-         # Workers is either QueueWorkers directly or process IDs for their wrapping process
          @workers = {}
 
          @config = config
@@ -13,6 +20,9 @@ module Procrastinator
          @logger = start_log
       end
 
+      # Shuts down any remaining old queue workers and spawns a new one for each queue defined in the config
+      #
+      # @return [Scheduler] a scheduler object that can be used to interact with the queues
       def spawn_workers
          scheduler = Scheduler.new(@config)
 
@@ -29,6 +39,13 @@ module Procrastinator
          scheduler
       end
 
+      # Produces a new QueueWorker for the given queue.
+      #
+      # If Test Mode is disabled in the config, then it will also fork a new independent process for that worker
+      # to work in.
+      #
+      # @param queue [Queue] the queue to build a worker for
+      # @param scheduler [Scheduler] an optional scheduler instance to pass to the worker
       def spawn_worker(queue, scheduler: nil)
          worker = QueueWorker.new(queue:     queue,
                                   config:    @config,

@@ -14,6 +14,16 @@ require 'procrastinator/loaders/csv_loader'
 require 'logger'
 require 'pathname'
 
+# Top-level module for the Procrastinator Gem.
+#
+# Call Procrastinator.setup with a block to initialize and run independent worker sub processes to complete tasks
+# asynchronously from your main application.
+#
+# Read the README for details.
+#
+# @author Robin Miller
+#
+# @see https://github.com/TenjinInc/procrastinator
 module Procrastinator
    # rubocop:disable Style/ClassVars
    @@test_mode = false
@@ -25,6 +35,7 @@ module Procrastinator
    def self.test_mode
       @@test_mode
    end
+
    # rubocop:enable Style/ClassVars
 
    # Creates a configuration object and passes it into the given block.

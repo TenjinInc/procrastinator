@@ -1,6 +1,33 @@
 # frozen_string_literal: true
 
 module Procrastinator
+   # TaskMetaData objects are State Patterns that record information about the work done on a particular task.
+   #
+   # It contains the specific information needed to run a task instance. Users define a task class, which describes
+   # the "how" of a task and TaskMetaData represents the "what" and "when".
+   #
+   # It contains task-specific data, timing information, and error records.
+   #
+   # All of its state is read-only.
+   #
+   # @author Robin Miller
+   #
+   # @!attribute [r] :id
+   #    @return [Integer] the unique identifier for this task
+   # @!attribute [r] :run_at
+   #    @return [Integer] Linux epoch timestamp of when to attempt this task next
+   # @!attribute [r] :initial_run_at
+   #    @return [Integer] Linux epoch timestamp of the original value for run_at
+   # @!attribute [r] :expire_at
+   #    @return [Integer] Linux epoch timestamp of when to consider this task obsolete
+   # @!attribute [r] :attempts
+   #    @return [Integer] The number of times this task has been attempted
+   # @!attribute [r] :last_error
+   #    @return [String] The message and stack trace of the error encountered on the most recent failed attempt
+   # @!attribute [r] :last_fail_at
+   #    @return [Integer] Linux epoch timestamp of when the last_error was recorded
+   # @!attribute [r] :data
+   #    @return [String] User-provided data serialized to string using YAML
    class TaskMetaData
       # These are the attributes expected to be in the persistence mechanism
       EXPECTED_DATA = [:id, :run_at, :initial_run_at, :expire_at, :attempts, :last_error, :last_fail_at, :data].freeze
@@ -66,6 +93,7 @@ module Procrastinator
          !expired? && @last_error.nil? && @last_fail_at.nil?
       end
 
+      # TODO: This cop for ** is currently incorrect. This disable can be removed once they fix it.
       # rubocop:disable Layout/SpaceAroundOperators
       def reschedule
          # (30 + n_attempts^4) seconds is chosen to rapidly expand

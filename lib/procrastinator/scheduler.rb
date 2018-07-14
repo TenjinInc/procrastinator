@@ -1,11 +1,22 @@
 # frozen_string_literal: true
 
 module Procrastinator
+   # A Scheduler object provides the API for client applications to manage delayed tasks.
+   #
+   # Use #delay to schedule new tasks, #reschedule to alter existing tasks, and #cancel to remove unwanted tasks.
+   #
+   # @author Robin Miller
    class Scheduler
       def initialize(config)
          @config = config
       end
 
+      # Records a new task to be executed at the given time.
+      #
+      # @param queue [Symbol] the symbol identifier for the queue to add a new task on
+      # @param run_at [Time, Integer] Optional time when this task should be executed. Defaults to the current time.
+      # @param data [Hash, Array] Optional simple data object to be provided to the task upon execution.
+      # @param expire_at [Time, Integer] Optional time when the task should be abandoned
       def delay(queue = nil, data: nil, run_at: Time.now.to_i, expire_at: nil)
          verify_queue_arg!(queue)
 
@@ -20,10 +31,32 @@ module Procrastinator
                        data:           YAML.dump(data))
       end
 
+      # Alters an existing task to run at a new time, expire at a new time, or both.
+      #
+      # Call #to on the result and pass in the new :run_at and/or :expire_at.
+      #
+      # Example:
+      #
+      # scheduler.reschedule(:alerts, data: {user_id: 5}).to(run_at: Time.now, expire_at: Time.now + 10)
+      #
+      # The identifier can include any data field stored in the task loader. Often this is the information in :data.
+      #
+      # @param queue [Symbol] the symbol identifier for the queue to add a new task on
+      # @param identifier [Hash] Some identifying information to find the appropriate task.
+      #
+      # @see TaskMetaData
       def reschedule(queue, identifier)
-         UpdateProxy.new(@config, queue_name: queue, identifier: identifier)
+         UpdateProxy.new(@config, identifier: identifier.merge(queue: queue))
       end
 
+      # Removes an existing task, as located by the givne identifying information.
+      #
+      # The identifier can include any data field stored in the task loader. Often this is the information in :data.
+      #
+      # @param queue [Symbol] the symbol identifier for the queue to add a new task on
+      # @param identifier [Hash] Some identifying information to find the appropriate task.
+      #
+      # @see TaskMetaData
       def cancel(queue, identifier)
          tasks = loader.read(identifier.merge(queue: queue))
 
@@ -33,17 +66,19 @@ module Procrastinator
          loader.delete(tasks.first[:id])
       end
 
+      # Provides a more natural syntax for rescheduling tasks
+      #
+      # @see Scheduler#reschedule
       class UpdateProxy
-         def initialize(config, queue_name:, identifier:)
+         def initialize(config, identifier:)
             identifier[:data] = YAML.dump(identifier[:data]) if identifier[:data]
 
             @config     = config
             @identifier = identifier
-            @queue_name = queue_name
          end
 
          def to(run_at: nil, expire_at: nil)
-            task = fetch_task
+            task = fetch_task(@identifier)
 
             verify_time_provided(run_at, expire_at)
             validate_run_at(run_at, task[:expire_at], expire_at)
@@ -80,11 +115,11 @@ module Procrastinator
             raise "given run_at (#{ run_at }) is later than saved expire_at (#{ saved_expire_at })" if after_old_expire
          end
 
-         def fetch_task
-            tasks = @config.loader.read(@identifier)
+         def fetch_task(identifier)
+            tasks = @config.loader.read(identifier)
 
-            raise "no task found matching #{ @identifier }" if tasks.nil? || tasks.empty?
-            raise "too many (#{ tasks.size }) tasks match #{ @identifier }. Found: #{ tasks }" if tasks.size > 1
+            raise "no task found matching #{ identifier }" if tasks.nil? || tasks.empty?
+            raise "too many (#{ tasks.size }) tasks match #{ identifier }. Found: #{ tasks }" if tasks.size > 1
 
             tasks.first
          end

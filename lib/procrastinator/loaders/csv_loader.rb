@@ -5,6 +5,9 @@ require 'pathname'
 
 module Procrastinator
    module Loader
+      # Simple Task I/O object that writes task information (ie. TaskMetaData attributes) to a CSV file.
+      #
+      # @author Robin Miller
       class CSVLoader
          # ordered
          HEADERS = [:id, :queue, :run_at, :initial_run_at, :expire_at,

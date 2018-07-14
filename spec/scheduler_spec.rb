@@ -201,12 +201,10 @@ module Procrastinator
 
          it 'should create a proxy for the given search parameters' do
             queue      = double('q')
-            identifier = double('i')
+            identifier = {id: 4}
 
             expect(Scheduler::UpdateProxy).to receive(:new)
-                                                    .with(config,
-                                                          queue_name: queue,
-                                                          identifier: identifier)
+                                                    .with(config, identifier: hash_including(id: 4, queue: queue))
 
             scheduler.reschedule(queue, identifier)
          end
@@ -216,7 +214,7 @@ module Procrastinator
 
             allow(Scheduler::UpdateProxy).to receive(:new).and_return(proxy)
 
-            expect(scheduler.reschedule(:test_queue, double('id'))).to be proxy
+            expect(scheduler.reschedule(:test_queue, {})).to be proxy
          end
       end
 
@@ -305,9 +303,7 @@ module Procrastinator
          config
       end
       let(:identifier) { {id: 'id'} }
-      let(:update_proxy) { Scheduler::UpdateProxy.new(config,
-                                                      queue_name: :test_queue,
-                                                      identifier: identifier) }
+      let(:update_proxy) { Scheduler::UpdateProxy.new(config, identifier: identifier) }
 
       describe '#to' do
          before(:each) do
@@ -316,7 +312,7 @@ module Procrastinator
 
          it 'should find the task matching the given information' do
             [{id: 5}, {data: {user_id: 5, appointment_id: 2}}].each do |identifier|
-               update_proxy = Scheduler::UpdateProxy.new(config, identifier: identifier, queue_name: :test_queue)
+               update_proxy = Scheduler::UpdateProxy.new(config, identifier: identifier)
 
                expect(persister).to receive(:read).with(identifier).and_return([double('task', '[]': 6)])
 
@@ -327,7 +323,7 @@ module Procrastinator
          it 'should find the task matching the given serialized :data' do
             data = {user_id: 5, appointment_id: 2}
 
-            update_proxy = Scheduler::UpdateProxy.new(config, identifier: {data: data}, queue_name: :test_queue)
+            update_proxy = Scheduler::UpdateProxy.new(config, identifier: {data: data})
 
             expect(persister).to receive(:read).with(data: YAML.dump(data)).and_return([double('task', '[]': 6)])
 
@@ -337,9 +333,7 @@ module Procrastinator
          it 'should complain if no task matches the given information' do
             identifier = {bogus: 66}
 
-            update_proxy = Scheduler::UpdateProxy.new(config,
-                                                      queue_name: :test_queue,
-                                                      identifier: identifier)
+            update_proxy = Scheduler::UpdateProxy.new(config, identifier: identifier)
 
             [[], nil].each do |ret|
                allow(persister).to receive(:read).and_return(ret)

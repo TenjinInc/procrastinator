@@ -3,4 +3,5 @@ inherit_from: ../.rubocop.yml
 AllCops:
   Exclude:
     - 'bin/*'
+
   TargetRubyVersion: 2.3

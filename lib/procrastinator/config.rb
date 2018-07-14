@@ -1,6 +1,29 @@
 # frozen_string_literal: true
 
 module Procrastinator
+   # Configuration object (State Pattern) used to coordinate settings across
+   # various components within Procrastinator.
+   #
+   # All of its state is read-only, set using the methods in the DSL module below.
+   #
+   # @author Robin Miller
+   #
+   # @!attribute [r] :test_mode?
+   #    @return [Boolean] Whether test mode is enabled
+   # @!attribute [r] :queues
+   #    @return [Array] List of defined queues
+   # @!attribute [r] :context
+   #    @return [Object] Provided context object that will be forwarded to tasks
+   # @!attribute [r] :loader
+   #    @return [Object] Provided persistence strategy object to use for task I/O
+   # @!attribute [r] :log_dir
+   #    @return [Pathname] Directory to write log files in
+   # @!attribute [r] :log_level
+   #    @return [Integer] Logging level to use
+   # @!attribute [r] :prefix
+   #    @return [String] The prefix to prepend to process names
+   # @!attribute [r] :pid_dir
+   #    @return [Pathname] Directory to write process ID records in
    class Config
       attr_reader :queues, :log_level, :prefix, :test_mode, :context, :loader, :pid_dir
       alias test_mode? test_mode
@@ -19,6 +42,9 @@ module Procrastinator
          @pid_dir          = Pathname.new(DEFAULT_PID_DIRECTORY)
       end
 
+      # Collection of all of the methods intended for use within Procrastinator.setup
+      #
+      # @see Procrastinator
       module DSL
          # Assigns a task loader
          # It should be called in an each_process block as well so that they get
