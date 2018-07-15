@@ -312,13 +312,6 @@ module Procrastinator
 
             expect(config.log_dir.to_s).to eq dir
          end
-
-         it 'should return false if test_mode is enabled' do
-            config.enable_test_mode
-            config.log_inside 'path'
-
-            expect(config.log_dir).to be false
-         end
       end
    end
 end

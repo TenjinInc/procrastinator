@@ -112,6 +112,34 @@ module Procrastinator
             config.log_inside false
 
             worker = QueueWorker.new(queue: queue, config: config)
+            worker.start_log
+
+            err = 'some fatal error'
+
+            allow(worker).to receive(:sleep) # stub sleep
+
+            # control looping, otherwise infiniloop by design
+            allow(worker).to receive(:loop) do |&block|
+               block.call
+            end
+
+            allow(worker).to receive(:act).and_raise(RuntimeError, err)
+
+            expect do
+               worker.work
+            end.to raise_error(RuntimeError, err)
+         end
+
+         it 'should reraise fatal errors from #act if in test mode' do
+            queue = Procrastinator::Queue.new(name:          :fast_queue,
+                                              task_class:    test_task,
+                                              update_period: 0.1)
+
+            config = Config.new
+            config.enable_test_mode
+
+            worker = QueueWorker.new(queue: queue, config: config)
+            worker.start_log
 
             err = 'some fatal error'
 
@@ -368,7 +396,7 @@ module Procrastinator
                worker.act
             end
 
-            it 'should pass the TaskWorker the logger if logging enabled' do
+            it 'should pass the TaskWorker the logger if log directory given' do
                logger = Logger.new(StringIO.new)
 
                allow(Logger).to receive(:new).and_return(logger)
@@ -385,14 +413,18 @@ module Procrastinator
                end
             end
 
-            it 'should pass the TaskWorker a nil logger if logging disabled' do
-               expect(TaskWorker).to receive(:new).with(hash_including(logger: nil)).and_call_original
+            it 'should pass the TaskWorker a stdout logger if logging disabled' do
+               logger = Logger.new(StringIO.new)
+
+               expect(Logger).to receive(:new).with($stdout, anything).and_return(logger)
+
+               expect(TaskWorker).to receive(:new).with(hash_including(logger: logger)).and_call_original
 
                config.load_with fake_persister([{run_at: 1}])
-               config.log_inside false
+               config.log_inside 'dir'
+               config.enable_test_mode
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
-               worker.start_log
 
                worker.act
             end
@@ -531,7 +563,7 @@ module Procrastinator
             it 'should NOT create a logger instance for this worker' do
                worker = QueueWorker.new(queue: queue, config: config)
 
-               expect(Logger).to_not receive :new
+               expect(Logger).to_not receive(:new)
 
                worker.start_log
             end
@@ -549,99 +581,115 @@ module Procrastinator
          end
 
          context 'logging directory provided' do
-            it 'should create the log directory if it does not exist' do
+            before(:each) do
                config.log_inside 'some_dir/'
-
-               worker = QueueWorker.new(queue: queue, config: config)
-
-               worker.start_log
-
-               expect(File.directory?('some_dir/')).to be true
             end
 
-            it 'should log starting a queue worker' do
-               [{parent: 10, child: 2000, queues: :test1},
-                {parent: 30, child: 4000, queues: :test2}].each do |pid_hash|
-                  parent_pid = pid_hash[:parent]
-                  child_pid  = pid_hash[:child]
-                  queue_name = pid_hash[:queues]
+            context 'test mode' do
+               before(:each) do
+                  config.enable_test_mode
+               end
 
-                  log_dir = 'some_dir'
+               it 'should create a logger for stdout' do
+                  worker = QueueWorker.new(queue: queue, config: config)
+
+                  expect(Logger).to receive(:new).with($stdout, anything).and_call_original
+
+                  worker.start_log
+               end
+
+               it 'should NOT create a physical logfile' do
+                  worker = QueueWorker.new(queue: queue, config: config)
+
+                  worker.start_log
+
+                  expect(File.directory?('some_dir/')).to be false
+               end
+            end
+
+            context 'normal mode' do
+               it 'should create the log directory if it does not exist' do
+                  worker = QueueWorker.new(queue: queue, config: config)
+
+                  worker.start_log
+
+                  expect(File.directory?('some_dir/')).to be true
+               end
+
+               it 'should log starting a queue worker' do
+                  [{parent: 10, child: 2000, queues: :test1},
+                   {parent: 30, child: 4000, queues: :test2}].each do |pid_hash|
+                     parent_pid = pid_hash[:parent]
+                     child_pid  = pid_hash[:child]
+                     queue_name = pid_hash[:queues]
+
+                     queue = Procrastinator::Queue.new(name:       queue_name,
+                                                       task_class: Test::Task::AllHooks)
+
+                     worker = QueueWorker.new(queue: queue, config: config)
+
+                     allow(Process).to receive(:ppid).and_return(parent_pid)
+                     allow(Process).to receive(:pid).and_return(child_pid)
+
+                     worker.start_log
+
+                     log_path = "some_dir/#{worker.long_name}.log"
+
+                     log_contents = File.read(log_path)
+
+                     msgs = ['===================================',
+                             "Started worker process, #{queue_name}-queue-worker, to work off queue #{queue_name}.",
+                             "Worker pid=#{child_pid}; parent pid=#{parent_pid}.",
+                             '===================================']
+
+                     expect(log_contents).to include(msgs.join("\n"))
+                  end
+               end
+
+               it 'should append to the log file if it already exists' do
+                  log_dir = 'a/log/directory'
 
                   config.log_inside log_dir
 
-                  queue = Procrastinator::Queue.new(name:       queue_name,
-                                                    task_class: Test::Task::AllHooks)
-
                   worker = QueueWorker.new(queue: queue, config: config)
-
-                  allow(Process).to receive(:ppid).and_return(parent_pid)
-                  allow(Process).to receive(:pid).and_return(child_pid)
-
-                  worker.start_log
 
                   log_path = "#{log_dir}/#{worker.long_name}.log"
 
-                  log_contents = File.read(log_path)
+                  existing_data = 'abcdef'
 
-                  msgs = ['===================================',
-                          "Started worker process, #{queue_name}-queue-worker, to work off queue #{queue_name}.",
-                          "Worker pid=#{child_pid}; parent pid=#{parent_pid}.",
-                          '===================================']
+                  FileUtils.mkdir_p(log_dir)
+                  File.open(log_path, 'a+') do |f|
+                     f.write existing_data
+                  end
 
-                  expect(log_contents).to include(msgs.join("\n"))
-               end
-            end
+                  worker.start_log
 
-            it 'should append to the log file if it already exists' do
-               log_dir = 'some_dir'
-
-               config.log_inside log_dir
-
-               worker = QueueWorker.new(queue: queue, config: config)
-
-               log_path = "#{log_dir}/#{worker.long_name}.log"
-
-               existing_data = 'abcdef'
-
-               FileUtils.mkdir_p(log_dir)
-               File.open(log_path, 'a+') do |f|
-                  f.write existing_data
+                  expect(File.read(log_path)).to include(existing_data)
                end
 
-               worker.start_log
-
-               expect(File.read(log_path)).to include(existing_data)
-            end
-
-            it 'should log at the provided level' do
-               Logger::Severity.constants.each do |level|
+               it 'should log at the provided level' do
                   logger = Logger.new(StringIO.new)
 
+                  Logger::Severity.constants.each do |level|
+                     worker = QueueWorker.new(queue: queue, config: config)
+
+                     config.log_at_level level
+
+                     expect(Logger).to receive(:new).with(anything, hash_including(level: level)).and_return logger
+
+                     worker.start_log
+                  end
+               end
+
+               it 'should not start a new logger if there is a logger defined' do
                   worker = QueueWorker.new(queue: queue, config: config)
 
-                  config.log_at_level level
+                  worker.start_log
 
-                  allow(Logger).to receive(:new).and_return logger
-
-                  expect(logger).to receive(:level=).with(level)
+                  expect(Logger).to_not receive(:new)
 
                   worker.start_log
                end
-            end
-
-            it 'should not start a new logger if there is a logger defined' do
-               log_dir = 'some/dir'
-
-               config.log_inside log_dir
-
-               worker = QueueWorker.new(queue: queue, config: config)
-
-               worker.start_log
-
-               expect(Logger).to_not receive(:new)
-
-               worker.start_log
             end
          end
       end

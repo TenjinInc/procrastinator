@@ -25,7 +25,7 @@ module Procrastinator
    # @!attribute [r] :pid_dir
    #    @return [Pathname] Directory to write process ID records in
    class Config
-      attr_reader :queues, :log_level, :prefix, :test_mode, :context, :loader, :pid_dir
+      attr_reader :queues, :log_dir, :log_level, :prefix, :test_mode, :context, :loader, :pid_dir
       alias test_mode? test_mode
 
       DEFAULT_LOG_DIRECTORY = 'log/'
@@ -126,10 +126,6 @@ module Procrastinator
          end
 
          self
-      end
-
-      def log_dir
-         @test_mode ? false : @log_dir
       end
 
       def queues_string

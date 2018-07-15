@@ -31,7 +31,7 @@ module Procrastinator
                act
             end
          rescue StandardError => e
-            raise e unless @logger
+            raise if @config.test_mode? || !@logger
 
             @logger.fatal(e)
          end
@@ -43,11 +43,7 @@ module Procrastinator
          tasks = fetch_tasks(persister)
 
          tasks.each do |metadata|
-            tw = TaskWorker.new(metadata:  metadata,
-                                queue:     @queue,
-                                scheduler: @scheduler,
-                                context:   @config.context,
-                                logger:    @logger)
+            tw = build_worker(metadata)
 
             tw.work
 
@@ -73,13 +69,7 @@ module Procrastinator
       def start_log
          return if @logger || !@config.log_dir
 
-         log_path = @config.log_dir + "#{ long_name }.log"
-
-         write_log_file(log_path)
-
-         @logger = Logger.new(log_path.to_path)
-
-         @logger.level = @config.log_level || Logger::INFO
+         @logger = Logger.new(log_target, level: @config.log_level)
 
          msg = <<~MSG
             ======================================================================
@@ -89,11 +79,29 @@ module Procrastinator
          MSG
 
          @logger.info("\n#{ msg }")
-
-         @logger
       end
 
       private
+
+      def build_worker(metadata)
+         start_log
+
+         TaskWorker.new(metadata:  metadata,
+                        queue:     @queue,
+                        scheduler: @scheduler,
+                        context:   @config.context,
+                        logger:    @logger)
+      end
+
+      def log_target
+         return $stdout if @config.test_mode?
+
+         log_path = @config.log_dir + "#{ long_name }.log"
+
+         write_log_file(log_path)
+
+         log_path.to_path
+      end
 
       def write_log_file(log_path)
          @config.log_dir.mkpath
