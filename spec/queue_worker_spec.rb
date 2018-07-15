@@ -280,6 +280,25 @@ module Procrastinator
                worker.act
             end
 
+            it 'should convert the read results to hash' do
+               task_data = double('data struct', to_h: {id:             double('id'),
+                                                        run_at:         double('run_at', to_i: 1),
+                                                        initial_run_at: double('initial', to_i: 1),
+                                                        expire_at:      double('expiry', to_i: 1),
+                                                        attempts:       0,
+                                                        last_error:     double('last error'),
+                                                        last_fail_at:   double('last fail at'),
+                                                        data:           YAML.dump(['some', 'data'])})
+
+               expect(TaskMetaData).to receive(:new).with(task_data.to_h).and_call_original
+
+               config.load_with fake_persister([task_data])
+
+               worker = QueueWorker.new(queue: instant_queue, config: config)
+
+               worker.act
+            end
+
             it 'should ignore any unused or unknown data' do
                task_data = {id:     1,
                             queue:  double('queue'),

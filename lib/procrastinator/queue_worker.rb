@@ -103,7 +103,7 @@ module Procrastinator
       end
 
       def fetch_tasks(persister)
-         tasks = persister.read(queue: @queue.name).reject { |t| t[:run_at].nil? }
+         tasks = persister.read(queue: @queue.name).map(&:to_h).reject { |t| t[:run_at].nil? }
 
          tasks = sort_tasks(tasks)
 
