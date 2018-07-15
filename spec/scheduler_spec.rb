@@ -21,7 +21,7 @@ module Procrastinator
             [:queue1, :queue2].each do |queue_name|
                config.define_queue(queue_name, test_task)
 
-               expect(persister).to receive(:create).with(include(queue: queue_name))
+               expect(persister).to receive(:create).with(include(queue: queue_name.to_s))
 
                scheduler.delay(queue_name)
             end
@@ -138,7 +138,7 @@ module Procrastinator
 
             scheduler = Scheduler.new(config)
 
-            expect(persister).to receive(:create).with(hash_including(queue: :some_queue))
+            expect(persister).to receive(:create).with(hash_including(queue: :some_queue.to_s))
 
             scheduler.delay
          end
@@ -200,11 +200,11 @@ module Procrastinator
          let(:scheduler) { Scheduler.new(config) }
 
          it 'should create a proxy for the given search parameters' do
-            queue      = double('q')
+            queue      = double('q', to_s: 'q')
             identifier = {id: 4}
 
-            expect(Scheduler::UpdateProxy).to receive(:new)
-                                                    .with(config, identifier: hash_including(id: 4, queue: queue))
+            expect(Scheduler::UpdateProxy).to receive(:new).with(config, identifier: hash_including(id:    4,
+                                                                                                    queue: queue.to_s))
 
             scheduler.reschedule(queue, identifier)
          end
@@ -251,7 +251,7 @@ module Procrastinator
                      {id: 2, queue: :greeting, data: 'user_id: 5'}]
 
             allow(persister).to receive(:read) do |attrs|
-               attrs[:queue] == :reminder ? [tasks.first] : [tasks.last]
+               attrs[:queue] == :reminder.to_s ? [tasks.first] : [tasks.last]
             end
 
             # first search

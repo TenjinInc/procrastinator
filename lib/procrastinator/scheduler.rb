@@ -24,7 +24,7 @@ module Procrastinator
 
          verify_queue_data!(queue, data)
 
-         loader.create(queue:          queue,
+         loader.create(queue:          queue.to_s,
                        run_at:         run_at.to_i,
                        initial_run_at: run_at.to_i,
                        expire_at:      expire_at.nil? ? nil : expire_at.to_i,
@@ -46,7 +46,7 @@ module Procrastinator
       #
       # @see TaskMetaData
       def reschedule(queue, identifier)
-         UpdateProxy.new(@config, identifier: identifier.merge(queue: queue))
+         UpdateProxy.new(@config, identifier: identifier.merge(queue: queue.to_s))
       end
 
       # Removes an existing task, as located by the givne identifying information.
@@ -58,7 +58,7 @@ module Procrastinator
       #
       # @see TaskMetaData
       def cancel(queue, identifier)
-         tasks = loader.read(identifier.merge(queue: queue))
+         tasks = loader.read(identifier.merge(queue: queue.to_s))
 
          raise "no task matches search: #{ identifier }" if tasks.empty?
          raise "multiple tasks match search: #{ identifier }" if tasks.size > 1
