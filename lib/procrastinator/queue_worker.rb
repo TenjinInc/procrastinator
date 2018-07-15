@@ -54,7 +54,7 @@ module Procrastinator
             if tw.successful?
                persister.delete(metadata.id)
             else
-               persister.update(metadata.id, tw.to_h.merge(queue: @queue.name))
+               persister.update(metadata.id, tw.to_h.merge(queue: @queue.name.to_s))
             end
          end
       end
