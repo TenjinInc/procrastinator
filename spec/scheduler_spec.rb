@@ -182,7 +182,7 @@ module Procrastinator
 
             err = <<~ERROR
                task #{test_task} does not import :data. Add this in your class definition:
-                     import_test_data :data
+                     task_attr :data
             ERROR
 
             expect { scheduler.delay(:data_queue, data: 'some data') }.to raise_error(ArgumentError, err)

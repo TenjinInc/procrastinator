@@ -157,7 +157,7 @@ module Procrastinator
          elsif !queue.task_class.method_defined?(:data=)
             raise ArgumentError, <<~ERROR
                task #{ queue.task_class } does not import :data. Add this in your class definition:
-                     import_test_data :data
+                     task_attr :data
             ERROR
          end
       end
