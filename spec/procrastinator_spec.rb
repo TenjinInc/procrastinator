@@ -42,7 +42,7 @@ module Procrastinator
             config.define_queue(:setup_test_queue, test_task)
 
             expect(Config).to receive(:new).and_return(config)
-            expect(Scheduler).to receive(:new).with(config).and_return(scheduler)
+            expect(Scheduler).to receive(:new).with(config, anything).and_return(scheduler)
 
             returned = Procrastinator.setup do |config|
                expect(config).to be config

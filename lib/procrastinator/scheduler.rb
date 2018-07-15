@@ -7,8 +7,13 @@ module Procrastinator
    #
    # @author Robin Miller
    class Scheduler
-      def initialize(config)
-         @config = config
+      extend Forwardable
+
+      def_delegators :@queue_manager, :act
+
+      def initialize(config, queue_manager)
+         @config        = config
+         @queue_manager = queue_manager
       end
 
       # Records a new task to be executed at the given time.

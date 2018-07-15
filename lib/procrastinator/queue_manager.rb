@@ -24,7 +24,7 @@ module Procrastinator
       #
       # @return [Scheduler] a scheduler object that can be used to interact with the queues
       def spawn_workers
-         scheduler = Scheduler.new(@config)
+         scheduler = Scheduler.new(@config, self)
 
          kill_old_workers
 

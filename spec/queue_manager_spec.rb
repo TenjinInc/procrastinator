@@ -89,7 +89,7 @@ module Procrastinator
          it 'should return the scheduler it made' do
             scheduler = double('s')
 
-            expect(Scheduler).to receive(:new).with(config).and_return(scheduler)
+            expect(Scheduler).to receive(:new).with(config, manager).and_return(scheduler)
 
             allow(manager).to receive(:fork)
 
