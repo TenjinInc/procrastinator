@@ -139,12 +139,13 @@ module Procrastinator
       end
 
       def verify_queue_arg!(queue_name)
-         return if !queue_name.nil? || @config.single_queue?
+         raise ArgumentError, <<~ERR if !queue_name.nil? && !queue_name.is_a?(Symbol)
+            must provide a queue name as the first argument. Received: #{ queue_name }
+         ERR
 
-         queue_list = @config.queues_string
-         err        = "queue must be specified when more than one is registered. Defined queues are: #{ queue_list }"
-
-         raise ArgumentError, err
+         raise ArgumentError, <<~ERR if queue_name.nil? && !@config.single_queue?
+            queue must be specified when more than one is registered. Defined queues are: #{ @config.queues_string }
+         ERR
       end
 
       def verify_queue_data!(queue_name, data)

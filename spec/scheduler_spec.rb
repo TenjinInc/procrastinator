@@ -110,12 +110,9 @@ module Procrastinator
             config.define_queue(:queue1, test_task)
             config.define_queue(:queue2, test_task)
 
-            msg = "queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2"
-
-            "queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2"
-            "queue must be specified when more than one is registered. Defined queues are: test_queue, queue1, queue2"
-
-            expect { scheduler.delay(run_at: 0) }.to raise_error(ArgumentError, msg)
+            expect { scheduler.delay(run_at: 0) }.to raise_error ArgumentError, <<~ERR
+               queue must be specified when more than one is registered. Defined queues are: :test_queue, :queue1, :queue2
+            ERR
 
             # also test the negative
             expect { scheduler.delay(:queue1, run_at: 0) }.to_not raise_error
@@ -150,6 +147,16 @@ module Procrastinator
                err = %[there is no :#{name} queue registered. Defined queues are: :test_queue, :another_queue]
 
                expect { scheduler.delay(name) }.to raise_error(ArgumentError, err)
+            end
+         end
+
+         it 'should complain when the first argument is not a symbol' do
+            config.define_queue(:another_queue, test_task)
+
+            [5, double('trouble')].each do |arg|
+               expect { scheduler.delay(arg) }.to raise_error ArgumentError, <<~ERR
+                  must provide a queue name as the first argument. Received: #{arg}
+               ERR
             end
          end
 
