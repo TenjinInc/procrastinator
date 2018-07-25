@@ -428,53 +428,6 @@ module Procrastinator
                   expect(manager.workers).to eq(worker => 1337)
                end
 
-               it 'should write a PID file for each child within the pid directory' do
-                  config.each_process prefix: 'myapp'
-
-                  queue = Procrastinator::Queue.new(name: :reminder, task_class: test_task)
-
-                  pid = 1234
-
-                  allow(manager).to receive(:fork).and_return(pid)
-
-                  manager.spawn_worker(queue)
-
-                  expect(File).to exist('pid/myapp-reminder-queue-worker.pid')
-               end
-
-               it 'should write PID files in the given directory' do
-                  %w[/var/pid
-                     some/pid/place].each do |dir|
-
-                     config.each_process pid_dir: dir
-
-                     config.define_queue(:test1, test_task)
-
-                     pid = 18
-
-                     allow(manager).to receive(:fork).and_return(pid)
-
-                     manager.spawn_worker(queue)
-
-                     expect(File).to exist("#{dir}/test_queue-queue-worker.pid")
-                  end
-               end
-
-               it 'should store the child PID in that queue pid file' do
-                  config.define_queue(:test1, test_task)
-                  config.define_queue(:test2, test_task)
-
-                  pid = 15845
-
-                  allow(manager).to receive(:fork).and_return(pid)
-
-                  manager.spawn_worker(queue)
-
-                  queue_file = File.read('pid/test_queue-queue-worker.pid')
-
-                  expect(queue_file).to eq pid.to_s
-               end
-
                it 'should NOT run the each_process hook' do
                   run = false
 
@@ -501,7 +454,15 @@ module Procrastinator
 
                before(:each) do
                   allow(Process).to receive(:setproctitle)
+                  allow(Process).to receive(:daemon)
+                  allow(Process).to receive(:setsid)
+
                   allow(manager).to receive(:fork).and_return(nil)
+                  allow(manager).to receive(:srand)
+                  allow(manager).to receive(:close_io)
+
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
                   allow_any_instance_of(QueueManager).to receive(:shutdown_worker)
                end
 
@@ -579,37 +540,136 @@ module Procrastinator
                   manager.spawn_worker(queue)
                end
 
-               it 'should run the each_process hook after running fork' do
-                  manager = QueueManager.new(config)
-
-                  subprocess_persister = double('child persister', read: nil, create: nil, update: nil, delete: nil)
-
-                  config.each_process do
-                     config.load_with(subprocess_persister)
-                  end
-
-                  config.define_queue(:test, test_task)
-
-                  expect(QueueWorker).to receive(:new)
-                                               .with(hash_including(config: config))
-                                               .and_call_original
+               it 'should run the each_process hook after running forking and daemonizing' do
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
-                  expect(manager).to receive(:fork).and_return(nil).ordered
+                  expect(Process).to receive(:daemon).ordered
                   expect(config).to receive(:run_process_block).and_call_original.ordered
 
                   manager.spawn_worker(queue)
                end
 
+               # this is to allow the user's Procrastinator.setup call to retain the same relative directories
+               it 'should daemonize without changing the working directory' do
+                  expect(Process).to receive(:daemon).with(true)
+
+                  manager.spawn_worker(queue)
+               end
+
+               it 'should reset the session id and random seed after daemonizing' do
+                  expect(Process).to receive(:daemon).ordered
+                  expect(Process).to receive(:setsid).ordered
+                  expect(manager).to receive(:srand).ordered
+
+                  manager.spawn_worker(queue)
+               end
+
+               it 'should only access pid after daemonizing' do
+                  expect(Process).to receive(:daemon).ordered
+                  expect(Process).to receive(:pid).ordered
+
+                  manager.spawn_worker(queue)
+               end
+
+               it 'should only set proc title after daemonizing' do
+                  expect(Process).to receive(:daemon).ordered
+                  expect(Process).to receive(:setproctitle).ordered
+
+                  manager.spawn_worker(queue)
+               end
+
+               it 'should close_io after daemonizing' do
+                  expect(Process).to receive(:daemon).ordered
+                  expect(manager).to receive(:close_io).ordered
+
+                  manager.spawn_worker(queue)
+               end
+
+               it 'should redirect all the standard connections in close_io' do
+                  manager = QueueManager.new(config)
+
+                  allow(manager).to receive(:fork).and_return(nil)
+                  allow(manager).to receive(:srand)
+
+                  allow(ObjectSpace).to receive(:each_object)
+
+                  expect(STDIN).to receive(:reopen)
+                  expect(STDOUT).to receive(:reopen)
+                  expect(STDERR).to receive(:reopen)
+
+                  manager.spawn_worker(queue)
+               end
+
+               it 'should close all related IO objects' do
+                  manager = QueueManager.new(config)
+
+                  allow(manager).to receive(:fork).and_return(nil)
+                  allow(manager).to receive(:srand)
+
+                  first_io = double('io1')
+                  next_io  = double('io2')
+
+                  expect(first_io).to receive(:close)
+                  expect(next_io).to receive(:close)
+
+                  expect(ObjectSpace).to receive(:each_object).with(IO)
+                                               .and_yield(first_io)
+                                               .and_yield(next_io)
+
+                  allow(STDIN).to receive(:reopen)
+                  allow(STDOUT).to receive(:reopen)
+                  allow(STDERR).to receive(:reopen)
+
+                  manager.spawn_worker(queue)
+               end
+
+               it 'should ignore IOErrors when closing' do
+                  manager = QueueManager.new(config)
+
+                  allow(manager).to receive(:fork).and_return(nil)
+                  allow(manager).to receive(:srand)
+
+                  first_io = double('io1')
+                  next_io  = double('io2')
+
+                  allow(first_io).to receive(:close).and_raise IOError
+                  expect(next_io).to receive(:close)
+
+                  allow(ObjectSpace).to receive(:each_object)
+                                              .and_yield(first_io)
+                                              .and_yield(next_io)
+
+                  allow(STDIN).to receive(:reopen)
+                  allow(STDOUT).to receive(:reopen)
+                  allow(STDERR).to receive(:reopen)
+
+                  manager.spawn_worker(queue)
+               end
+
+               it 'should NOT close standard connections' do
+                  manager = QueueManager.new(config)
+
+                  allow(manager).to receive(:fork).and_return(nil)
+                  allow(manager).to receive(:srand)
+
+                  expect(STDIN).to_not receive(:close)
+                  expect(STDOUT).to_not receive(:close)
+                  expect(STDERR).to_not receive(:close)
+
+                  allow(ObjectSpace).to receive(:each_object)
+                                              .and_yield(STDIN)
+                                              .and_yield(STDOUT)
+                                              .and_yield(STDERR)
+
+                  allow(STDIN).to receive(:reopen)
+                  allow(STDOUT).to receive(:reopen)
+                  allow(STDERR).to receive(:reopen)
+
+                  manager.spawn_worker(queue)
+               end
+
                it 'should run the each_process hook before running work' do
-                  worker               = double('worker', long_name: 'test-queue-worker')
-                  subprocess_persister = Test::Persister.new
-
-                  config.each_process do
-                     config.load_with(subprocess_persister)
-                  end
-
-                  config.define_queue(:test, test_task)
+                  worker = double('worker', long_name: 'test-queue-worker')
 
                   allow(QueueWorker).to receive(:new).and_return(worker)
 
@@ -620,14 +680,6 @@ module Procrastinator
                end
 
                it 'should pass the worker the config instance' do
-                  subprocess_persister = double('child persister', read: nil, create: nil, update: nil, delete: nil)
-
-                  config.each_process do
-                     config.load_with(subprocess_persister)
-                  end
-
-                  config.define_queue(:test, test_task)
-
                   expect(QueueWorker).to receive(:new)
                                                .with(hash_including(config: config))
                                                .and_call_original
@@ -677,12 +729,51 @@ module Procrastinator
                   manager.spawn_worker(queue)
                end
 
-               it 'should NOT store any pids' do
+               it 'should write a PID file in the pid directory' do
+                  config.each_process prefix: 'myapp'
+
+                  queue = Procrastinator::Queue.new(name: :reminder, task_class: test_task)
+
+                  worker = double('worker')
+
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
                   manager.spawn_worker(queue)
 
-                  expect(manager.workers).to be_empty
+                  expect(File).to exist('pid/myapp-reminder-queue-worker.pid')
+               end
+
+               it 'should write PID files in the given directory' do
+                  %w[/var/pid
+                     some/pid/place].each do |dir|
+
+                     config.each_process pid_dir: dir
+
+                     config.define_queue(:test1, test_task)
+
+                     allow_any_instance_of(QueueWorker).to receive(:work)
+
+                     manager.spawn_worker(queue)
+
+                     expect(File).to exist("#{dir}/test_queue-queue-worker.pid")
+                  end
+               end
+
+               it 'should store the child PID in that queue pid file' do
+                  config.define_queue(:test1, test_task)
+                  config.define_queue(:test2, test_task)
+
+                  allow_any_instance_of(QueueWorker).to receive(:work)
+
+                  pid = 4251
+
+                  allow(Process).to receive(:pid).and_return(pid)
+
+                  manager.spawn_worker(queue)
+
+                  queue_file = File.read('pid/test_queue-queue-worker.pid')
+
+                  expect(queue_file).to eq pid.to_s
                end
 
                it 'should use a default log directory if not provided in setup' do

@@ -14,10 +14,8 @@ module Procrastinator
 
       def initialize(config)
          @workers = {}
-
-         @config = config
-
-         @logger = start_log
+         @config  = config
+         @logger  = start_log
       end
 
       # Shuts down any remaining old queue workers and spawns a new one for each queue defined in the config
@@ -53,9 +51,7 @@ module Procrastinator
          if @config.test_mode?
             @workers[worker] = Process.pid
          else
-            worker_name = worker.long_name
-
-            check_for_name(worker_name)
+            check_for_name(worker.long_name)
 
             pid = fork
 
@@ -63,12 +59,8 @@ module Procrastinator
                # === PARENT PROCESS ===
                Process.detach(pid)
                @workers[worker] = pid
-               write_pid_file(pid, worker_name)
             else
-               # === CHILD PROCESS ===
-               Process.setproctitle(worker_name)
-
-               @config.run_process_block
+               deamonize(worker.long_name)
 
                worker.work
                shutdown_worker
@@ -97,40 +89,6 @@ module Procrastinator
 
       private
 
-      # Wrapping #exit to allow for tests to easily stub out this behaviour.
-      # If #exit isn't prevented, the test framework will break,
-      # but #exit can't be directly stubbed either (because it's a required Kernel method)
-      def shutdown_worker
-         exit
-      end
-
-      def kill_old_workers
-         @config.pid_dir.mkpath
-
-         @config.pid_dir.each_child do |file|
-            pid = file.read.to_i
-
-            begin
-               Process.kill('KILL', pid)
-               @logger.info("Killing old worker process pid: #{ pid }")
-            rescue Errno::ESRCH
-               @logger.info("Expected old worker process pid=#{ pid }, but none was found")
-            end
-
-            file.delete
-         end
-      end
-
-      def write_pid_file(pid, filename)
-         @config.pid_dir.mkpath
-
-         pid_file = @config.pid_dir + "#{ filename }.pid"
-
-         File.open(pid_file.to_path, 'w') do |f|
-            f.print(pid)
-         end
-      end
-
       def start_log
          directory = @config.log_dir
 
@@ -154,12 +112,90 @@ module Procrastinator
          logger
       end
 
-      def check_for_name(name)
-         # better to use backticks so we can get the info and not spam user's stdout
-         warn <<~WARNING unless `pgrep -f #{ name }`.empty?
-            Warning: there is another process named "#{ name }". Use #each_process(prefix: '') in
-                     Procrastinator setup if you want to help yourself distinguish them.
-         WARNING
+      # Methods exclusive to the child process
+      module ChildMethods
+         def deamonize(name)
+            Process.daemon(true)
+            Process.setsid
+            srand
+            Process.setproctitle(name)
+            close_io
+
+            write_pid_file(Process.pid, name)
+
+            @config.run_process_block
+         end
+
+         # Make sure all input/output streams are closed
+         def close_io
+            stds = [$stdin, $stdout, $stderr]
+
+            # Part 1: close all IO objects (except for $stdin/$stdout/$stderr)
+            ObjectSpace.each_object(IO) do |io|
+               next if stds.include?(io)
+
+               begin
+                  io.close
+               rescue IOError
+                  next
+               end
+            end
+
+            # Part 2: redirect STD connections
+            stds.each do |io|
+               io.reopen '/dev/null'
+            end
+
+            # TODO: redirect OUT or ERR to logger?
+         end
+
+         # Wrapping #exit to allow for tests to easily stub out this behaviour.
+         # If #exit isn't prevented, the test framework will break,
+         # but #exit can't be directly stubbed either (because it's a required Kernel method)
+         def shutdown_worker
+            exit
+         end
       end
+
+      # Methods exclusive to the main/parent process
+      module ParentMethods
+         def kill_old_workers
+            @config.pid_dir.mkpath
+
+            @config.pid_dir.each_child do |file|
+               pid = file.read.to_i
+
+               begin
+                  Process.kill('KILL', pid)
+                  @logger.info("Killing old worker process pid: #{ pid }")
+               rescue Errno::ESRCH
+                  @logger.info("Expected old worker process pid=#{ pid }, but none was found")
+               end
+
+               file.delete
+            end
+         end
+
+         def write_pid_file(pid, filename)
+            @config.pid_dir.mkpath
+
+            pid_file = @config.pid_dir + "#{ filename }.pid"
+
+            File.open(pid_file.to_path, 'w') do |f|
+               f.print(pid)
+            end
+         end
+
+         def check_for_name(name)
+            # better to use backticks so we can get the info and not spam user's stdout
+            warn <<~WARNING unless `pgrep -f #{ name }`.empty?
+               Warning: there is another process named "#{ name }". Use #each_process(prefix: '') in
+                        Procrastinator setup if you want to help yourself distinguish them.
+            WARNING
+         end
+      end
+
+      include ChildMethods
+      include ParentMethods
    end
 end
