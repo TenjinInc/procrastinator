@@ -110,7 +110,6 @@ module Procrastinator
       end
 
       describe '#work' do
-
          context 'run hook' do
             it 'should call task #run' do
                task = double('task')
@@ -202,7 +201,7 @@ module Procrastinator
             end
 
             it 'should blank the error message' do
-               worker = TaskWorker.new(metadata: TaskMetaData.new(last_error: 'derp'), queue: queue,)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(last_error: 'derp'), queue: queue)
 
                worker.work
 
@@ -388,7 +387,7 @@ module Procrastinator
 
                   worker.work
 
-                  expected_time = previous_time + (30 + (i ** 4))
+                  expected_time = previous_time + (30 + (i**4))
 
                   actual_time = worker.run_at
 

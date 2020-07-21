@@ -386,7 +386,7 @@ module Procrastinator
                               Procrastinator setup if you want to help yourself distinguish them.
                   WARNING
 
-                  expect(manager).to receive(:`).with("pgrep -f #{ name }").and_return("13412")
+                  expect(manager).to receive(:`).with("pgrep -f #{ name }").and_return('13412')
 
                   expect do
                      manager.spawn_worker(queue)

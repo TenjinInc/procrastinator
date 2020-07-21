@@ -5,3 +5,12 @@ AllCops:
     - 'bin/*'
 
   TargetRubyVersion: 2.4
+
+Layout/LineLength:
+  Exclude:
+    - 'spec/*'
+
+# rspec blocks are huge by design
+Metrics/BlockLength:
+  Exclude:
+    - 'spec/*'

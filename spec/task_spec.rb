@@ -76,7 +76,7 @@ module Procrastinator
                end
             end
 
-            task_class.task_attr *all_attrs
+            task_class.task_attr(*all_attrs)
             task = task_class.new
 
             logger    = double('log')
@@ -127,7 +127,7 @@ module Procrastinator
             end
          end
 
-         it "should should NOT raise errors if they are expected" do
+         it 'should should NOT raise errors if they are expected' do
             task_class = Class.new do
                include Procrastinator::Task
             end
