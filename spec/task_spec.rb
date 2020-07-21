@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 module Procrastinator
@@ -14,7 +16,6 @@ module Procrastinator
             end
          end
 
-
          it 'should create accessors for a provided attribute' do
             task_class.task_attr(:logger)
 
@@ -25,7 +26,7 @@ module Procrastinator
          end
 
          it 'should create accessors for all provided attributes' do
-            task_class.task_attr *all_attrs
+            task_class.task_attr(*all_attrs)
 
             task = task_class.new
 
@@ -120,8 +121,7 @@ module Procrastinator
 
                task = task_class.new
 
-               err = "To access Procrastinator::Task attribute :#{ attr }, " +
-                     "call task_attr(:#{ attr }) in your class definition."
+               err = "To access Procrastinator::Task attribute :#{ attr }, call task_attr(:#{ attr }) in your class definition."
 
                expect { task.send(attr) }.to raise_error(NameError, err)
             end

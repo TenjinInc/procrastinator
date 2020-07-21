@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Procrastinator
    require 'spec_helper'
 

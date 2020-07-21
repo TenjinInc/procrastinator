@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 module Procrastinator
@@ -87,7 +89,7 @@ module Procrastinator
       end
 
       describe '#expired?' do
-         let(:now) { now = Time.now }
+         let(:now) { Time.now }
 
          it 'should return true when the expiry date has passed' do
             task = TaskMetaData.new(expire_at: now.to_i - 1)
