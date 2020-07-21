@@ -39,7 +39,7 @@ module Procrastinator
             it 'should complain if the loader does not respond to #read' do
                bad_loader = double('block', create: nil, update: nil, delete: nil)
 
-               err = "task loader #{bad_loader.class} must respond to #read"
+               err = "task loader #{ bad_loader.class } must respond to #read"
 
                expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
             end
@@ -47,7 +47,7 @@ module Procrastinator
             it 'should complain if the loader does not respond to #create' do
                bad_loader = double('block', read: nil, update: nil, delete: nil)
 
-               err = "task loader #{bad_loader.class} must respond to #create"
+               err = "task loader #{ bad_loader.class } must respond to #create"
 
                expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
             end
@@ -55,7 +55,7 @@ module Procrastinator
             it 'should complain if the loader does not respond to #update' do
                bad_loader = double('block', read: nil, create: nil, delete: nil)
 
-               err = "task loader #{bad_loader.class} must respond to #update"
+               err = "task loader #{ bad_loader.class } must respond to #update"
 
                expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
             end
@@ -63,7 +63,7 @@ module Procrastinator
             it 'should complain if the loader does not respond to #delete' do
                bad_loader = double('block', read: nil, create: nil, update: nil,)
 
-               err = "task loader #{bad_loader.class} must respond to #delete"
+               err = "task loader #{ bad_loader.class } must respond to #delete"
 
                expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
             end
@@ -125,13 +125,13 @@ module Procrastinator
                   end
 
                   config.define_queue(:test_queue, klass)
-               end.to raise_error(MalformedTaskError, "task #{klass} does not support #run method")
+               end.to raise_error(MalformedTaskError, "task #{ klass } does not support #run method")
             end
 
             it 'should complain if task #run expects parameters' do
                klass = Procrastinator::Test::Task::MissingParam::ArgRun
 
-               err = "task #{klass} cannot require parameters to its #run method"
+               err = "task #{ klass } cannot require parameters to its #run method"
 
                expect do
                   config.define_queue(:test_queue, klass)
@@ -141,7 +141,7 @@ module Procrastinator
             it 'should complain if task does NOT accept 1 parameter to #success' do
                [Procrastinator::Test::Task::MissingParam::NoArgSuccess,
                 Procrastinator::Test::Task::MissingParam::MultiArgSuccess].each do |klass|
-                  err = "task #{klass} must accept 1 parameter to its #success method"
+                  err = "task #{ klass } must accept 1 parameter to its #success method"
 
                   expect do
                      config.define_queue(:test_queue, klass)
@@ -152,7 +152,7 @@ module Procrastinator
             it 'should complain if task does NOT accept 1 parameter in #fail' do
                [Procrastinator::Test::Task::MissingParam::NoArgFail,
                 Procrastinator::Test::Task::MissingParam::MultiArgFail].each do |klass|
-                  err = "task #{klass} must accept 1 parameter to its #fail method"
+                  err = "task #{ klass } must accept 1 parameter to its #fail method"
 
                   expect do
                      config.define_queue(:test_queue, klass)
@@ -164,7 +164,7 @@ module Procrastinator
                [Procrastinator::Test::Task::MissingParam::NoArgFinalFail,
                 Procrastinator::Test::Task::MissingParam::MultiArgFinalFail].each do |klass|
 
-                  err = "task #{klass} must accept 1 parameter to its #final_fail method"
+                  err = "task #{ klass } must accept 1 parameter to its #final_fail method"
 
                   expect do
                      config.define_queue(:test_queue, klass)

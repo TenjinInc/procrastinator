@@ -30,7 +30,7 @@ module Procrastinator
 
                CSVLoader.new(slash_end_path).write([])
 
-               expect(File).to exist("#{slash_end_path}/#{CSVLoader::DEFAULT_FILE}")
+               expect(File).to exist("#{ slash_end_path }/#{ CSVLoader::DEFAULT_FILE }")
             end
 
             it 'should add a default filename if the provided path is an existing directory' do
@@ -38,7 +38,7 @@ module Procrastinator
                FileUtils.mkdir existing_dir
                CSVLoader.new(existing_dir).write([])
 
-               expect(File).to exist("#{existing_dir}/#{CSVLoader::DEFAULT_FILE}")
+               expect(File).to exist("#{ existing_dir }/#{ CSVLoader::DEFAULT_FILE }")
             end
          end
 
@@ -89,9 +89,9 @@ module Procrastinator
 
                contents = <<~CONTENTS
                   id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","","2","3","4","5","6","problem","#{first_data}"
-                  "1","","2","3","4","5","6","problem","#{second_data}"
-                  "1","","2","3","4","5","6","problem","#{third_data}"
+                  "1","","2","3","4","5","6","problem","#{ first_data }"
+                  "1","","2","3","4","5","6","problem","#{ second_data }"
+                  "1","","2","3","4","5","6","problem","#{ third_data }"
                CONTENTS
 
                File.open(path.to_s, 'w') do |f|
@@ -110,7 +110,7 @@ module Procrastinator
 
                contents = <<~CONTENTS
                   id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","","2","3","4","5","6","problem","#{data.gsub('"', '"""')}"
+                  "1","","2","3","4","5","6","problem","#{ data.gsub('"', '"""') }"
                CONTENTS
 
                File.open(path.to_s, 'w') do |f|
@@ -279,7 +279,7 @@ module Procrastinator
 
                file_lines = File.new(path).readlines
 
-               line = %["#{id}","reminders","#{run}","#{initial}","#{expire}","#{attempts}","#{error_at}","#{error}","#{data}"\n]
+               line = %["#{ id }","reminders","#{ run }","#{ initial }","#{ expire }","#{ attempts }","#{ error_at }","#{ error }","#{ data }"\n]
 
                expect(file_lines[2]).to eq line
             end
@@ -397,7 +397,7 @@ module Procrastinator
 
                file_content = File.new(path).readlines
 
-               new_row = task_info.values.collect { |x| %["#{x}"] }.join(',')
+               new_row = task_info.values.collect { |x| %["#{ x }"] }.join(',')
 
                expect(file_content.last.strip).to eq new_row
             end

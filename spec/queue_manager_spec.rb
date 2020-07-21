@@ -27,7 +27,7 @@ module Procrastinator
                QueueManager.new(config)
 
                expect(File).to exist(dir)
-               expect(File).to exist("#{dir}/queue-manager.log")
+               expect(File).to exist("#{ dir }/queue-manager.log")
             end
          end
 
@@ -37,7 +37,7 @@ module Procrastinator
             QueueManager.new(config)
 
             expect(File).to_not exist(Config::DEFAULT_LOG_DIRECTORY)
-            expect(File).to_not exist("#{Config::DEFAULT_LOG_DIRECTORY}/queue-manager.log")
+            expect(File).to_not exist("#{ Config::DEFAULT_LOG_DIRECTORY }/queue-manager.log")
          end
 
          it 'should log at the given level' do
@@ -201,8 +201,8 @@ module Procrastinator
 
             log = File.read('log/queue-manager.log')
 
-            expect(log).to include("Killing old worker process pid: #{pid1}")
-            expect(log).to include("Killing old worker process pid: #{pid2}")
+            expect(log).to include("Killing old worker process pid: #{ pid1 }")
+            expect(log).to include("Killing old worker process pid: #{ pid2 }")
          end
 
          it 'should ignore missing PIDs' do
@@ -240,7 +240,7 @@ module Procrastinator
 
             log = File.read('log/queue-manager.log')
 
-            expect(log).to include("Expected old worker process pid=#{pid}, but none was found")
+            expect(log).to include("Expected old worker process pid=#{ pid }, but none was found")
          end
       end
 
@@ -343,7 +343,7 @@ module Procrastinator
                FakeFS do
                   manager.spawn_worker(queue)
 
-                  expect(File.file?("log/#{queue_name}-queue-worker.log")).to be false
+                  expect(File.file?("log/#{ queue_name }-queue-worker.log")).to be false
                end
             end
 
@@ -382,11 +382,11 @@ module Procrastinator
                   queue = Procrastinator::Queue.new(name: :reminders, task_class: test_task)
 
                   err = <<~WARNING
-                     Warning: there is another process named "#{name}". Use #each_process(prefix: '') in
+                     Warning: there is another process named "#{ name }". Use #each_process(prefix: '') in
                               Procrastinator setup if you want to help yourself distinguish them.
                   WARNING
 
-                  expect(manager).to receive(:`).with("pgrep -f #{name}").and_return("13412")
+                  expect(manager).to receive(:`).with("pgrep -f #{ name }").and_return("13412")
 
                   expect do
                      manager.spawn_worker(queue)
@@ -694,7 +694,7 @@ module Procrastinator
 
                      allow_any_instance_of(QueueWorker).to receive(:work)
 
-                     expect(Process).to receive(:setproctitle).with("#{name}-queue-worker")
+                     expect(Process).to receive(:setproctitle).with("#{ name }-queue-worker")
 
                      queue = Procrastinator::Queue.new(name: name, task_class: test_task)
 
@@ -709,7 +709,7 @@ module Procrastinator
 
                      allow_any_instance_of(QueueWorker).to receive(:work)
 
-                     expect(Process).to receive(:setproctitle).with("#{prefix}-test_queue-queue-worker")
+                     expect(Process).to receive(:setproctitle).with("#{ prefix }-test_queue-queue-worker")
 
                      manager.spawn_worker(queue)
                   end
@@ -755,7 +755,7 @@ module Procrastinator
 
                      manager.spawn_worker(queue)
 
-                     expect(File).to exist("#{dir}/test_queue-queue-worker.pid")
+                     expect(File).to exist("#{ dir }/test_queue-queue-worker.pid")
                   end
                end
 

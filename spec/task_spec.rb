@@ -31,7 +31,7 @@ module Procrastinator
 
             all_attrs.each do |attr|
                expect(task).to respond_to(attr)
-               expect(task).to respond_to("#{attr}=".to_sym)
+               expect(task).to respond_to("#{ attr }=".to_sym)
             end
          end
 
@@ -101,10 +101,10 @@ module Procrastinator
          end
 
          it 'should complain if provided an unknown attribute' do
-            known_attrs = all_attrs.collect { |a| ":#{a}" }.join(', ')
+            known_attrs = all_attrs.collect { |a| ":#{ a }" }.join(', ')
 
             [:bogus, :typo].each do |attr|
-               err = "Unknown Procrastinator::Task attribute :#{attr}. Importable attributes are: #{known_attrs}"
+               err = "Unknown Procrastinator::Task attribute :#{ attr }. Importable attributes are: #{ known_attrs }"
 
                expect { task_class.task_attr(attr) }.to raise_error(ArgumentError, err)
             end
@@ -113,15 +113,15 @@ module Procrastinator
 
       describe '#method_missing' do
          Procrastinator::Task::KNOWN_ATTRIBUTES.each do |attr|
-            it "should suggest using task_attr if #{attr} is not expected" do
+            it "should suggest using task_attr if #{ attr } is not expected" do
                task_class = Class.new do
                   include Procrastinator::Task
                end
 
                task = task_class.new
 
-               err = "To access Procrastinator::Task attribute :#{attr}, " +
-                     "call task_attr(:#{attr}) in your class definition."
+               err = "To access Procrastinator::Task attribute :#{ attr }, " +
+                     "call task_attr(:#{ attr }) in your class definition."
 
                expect { task.send(attr) }.to raise_error(NameError, err)
             end
@@ -152,7 +152,7 @@ module Procrastinator
 
             task = task_class.new
 
-            err = "undefined method `some_other_method' for #{task}"
+            err = "undefined method `some_other_method' for #{ task }"
 
             expect { task.run }.to raise_error(NameError, err)
          end

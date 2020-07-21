@@ -144,7 +144,7 @@ module Procrastinator
             config.define_queue(:another_queue, test_task)
 
             [:bogus, :other_bogus].each do |name|
-               err = %[there is no :#{name} queue registered. Defined queues are: :test_queue, :another_queue]
+               err = %[there is no :#{ name } queue registered. Defined queues are: :test_queue, :another_queue]
 
                expect { scheduler.delay(name) }.to raise_error(ArgumentError, err)
             end
@@ -155,7 +155,7 @@ module Procrastinator
 
             [5, double('trouble')].each do |arg|
                expect { scheduler.delay(arg) }.to raise_error ArgumentError, <<~ERR
-                  must provide a queue name as the first argument. Received: #{arg}
+                  must provide a queue name as the first argument. Received: #{ arg }
                ERR
             end
          end
@@ -172,7 +172,7 @@ module Procrastinator
 
             config.define_queue(:data_queue, test_task)
 
-            err = %[task #{test_task} expects to receive :data. Provide :data to #delay.]
+            err = %[task #{ test_task } expects to receive :data. Provide :data to #delay.]
 
             expect { scheduler.delay(:data_queue) }.to raise_error(ArgumentError, err)
          end
@@ -188,7 +188,7 @@ module Procrastinator
             config.define_queue(:data_queue, test_task)
 
             err = <<~ERROR
-               task #{test_task} does not import :data. Add this in your class definition:
+               task #{ test_task } does not import :data. Add this in your class definition:
                      task_attr :data
             ERROR
 
@@ -279,7 +279,7 @@ module Procrastinator
 
                expect do
                   scheduler.cancel(:greeting, identifier)
-               end.to raise_error(RuntimeError, "no task matches search: #{identifier}")
+               end.to raise_error(RuntimeError, "no task matches search: #{ identifier }")
             end
          end
 
@@ -293,7 +293,7 @@ module Procrastinator
              {queue: :reminder}].each do |identifier|
                expect do
                   scheduler.cancel(:greeting, identifier)
-               end.to raise_error(RuntimeError, "multiple tasks match search: #{identifier}")
+               end.to raise_error(RuntimeError, "multiple tasks match search: #{ identifier }")
             end
          end
       end
@@ -360,19 +360,19 @@ module Procrastinator
 
                expect do
                   update_proxy.to(run_at: 0)
-               end.to raise_error(RuntimeError, "no task found matching #{identifier}")
+               end.to raise_error(RuntimeError, "no task found matching #{ identifier }")
             end
          end
 
          it 'should complain if multiple tasks match the given information' do
             (3..5).each do |n|
-               tasks = Array.new(n) { |i| double("task#{i}") }
+               tasks = Array.new(n) { |i| double("task#{ i }") }
 
                allow(persister).to receive(:read).and_return(tasks)
 
                expect do
                   update_proxy.to(run_at: 0)
-               end.to raise_error(RuntimeError, "too many (#{n}) tasks match #{identifier}. Found: #{tasks}")
+               end.to raise_error(RuntimeError, "too many (#{ n }) tasks match #{ identifier }. Found: #{ tasks }")
             end
          end
 
@@ -382,7 +382,7 @@ module Procrastinator
 
             expect do
                update_proxy.to(run_at: time, expire_at: expire_at)
-            end.to raise_error(RuntimeError, "given run_at (#{time}) is later than given expire_at (#{expire_at})")
+            end.to raise_error(RuntimeError, "given run_at (#{ time }) is later than given expire_at (#{ expire_at })")
          end
 
          it 'should complain if the given run_at would be after original expire_at' do
@@ -394,7 +394,7 @@ module Procrastinator
             expect do
                update_proxy.to(run_at: time)
             end.to raise_error(RuntimeError,
-                               "given run_at (#{time}) is later than saved expire_at (#{expire_at.to_i})")
+                               "given run_at (#{ time }) is later than saved expire_at (#{ expire_at.to_i })")
          end
 
          it 'should update the found task' do

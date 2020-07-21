@@ -633,13 +633,13 @@ module Procrastinator
 
                      worker.start_log
 
-                     log_path = "some_dir/#{worker.long_name}.log"
+                     log_path = "some_dir/#{ worker.long_name }.log"
 
                      log_contents = File.read(log_path)
 
                      msgs = ['===================================',
-                             "Started worker process, #{queue_name}-queue-worker, to work off queue #{queue_name}.",
-                             "Worker pid=#{child_pid}; parent pid=#{parent_pid}.",
+                             "Started worker process, #{ queue_name }-queue-worker, to work off queue #{ queue_name }.",
+                             "Worker pid=#{ child_pid }; parent pid=#{ parent_pid }.",
                              '===================================']
 
                      expect(log_contents).to include(msgs.join("\n"))
@@ -653,7 +653,7 @@ module Procrastinator
 
                   worker = QueueWorker.new(queue: queue, config: config)
 
-                  log_path = "#{log_dir}/#{worker.long_name}.log"
+                  log_path = "#{ log_dir }/#{ worker.long_name }.log"
 
                   existing_data = 'abcdef'
 

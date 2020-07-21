@@ -26,7 +26,7 @@ module Procrastinator
 
             expect do
                TaskWorker.new(metadata: meta, queue: queue)
-            end.to raise_error(MalformedTaskError, "task #{task.class} does not support #run method")
+            end.to raise_error(MalformedTaskError, "task #{ task.class } does not support #run method")
          end
 
          it 'should build a new task instance using the queue settings' do
@@ -239,7 +239,7 @@ module Procrastinator
                                        metadata: TaskMetaData.new(last_fail_at: double('failtime'),
                                                                   data:         data_yaml))
 
-               expect(logger).to receive(:debug).with("Task completed: #{Test::Task::AllHooks} [#{data_yaml}]")
+               expect(logger).to receive(:debug).with("Task completed: #{ Test::Task::AllHooks } [#{ data_yaml }]")
 
                worker.work
             end
@@ -335,7 +335,7 @@ module Procrastinator
 
                worker = TaskWorker.new(metadata: meta, queue: fail_queue)
 
-               expect { worker.work }.to output("Fail hook error: #{err}\n").to_stderr
+               expect { worker.work }.to output("Fail hook error: #{ err }\n").to_stderr
             end
 
             it 'should do nothing if the task does not include #fail' do
@@ -410,7 +410,7 @@ module Procrastinator
 
                expect(worker.last_error).to start_with 'Task failed: '
                expect(worker.last_error).to include 'derp' # message from the FailTask
-               expect(worker.last_error).to match /(.*\n)+/ # poor version of checking for backtrace, but it works for now
+               expect(worker.last_error).to match(/(.*\n)+/) # poor version of checking for backtrace, but it works for now
             end
 
             it 'should pass in the error to #fail' do
@@ -441,7 +441,7 @@ module Procrastinator
                                        logger:   logger,
                                        queue:    queue)
 
-               expect(logger).to receive(:debug).with("Task failed: #{queue.name} with #{YAML.dump(data)}")
+               expect(logger).to receive(:debug).with("Task failed: #{ queue.name } with #{ YAML.dump(data) }")
 
                worker.work
             end
@@ -473,7 +473,7 @@ module Procrastinator
                   allow(Test::Task::Fail).to receive(:new).and_return(task)
 
                   expect(task).to receive(:final_fail).with(satisfy do |arg|
-                     arg.is_a?(TaskExpiredError) && arg.message == "task is over its expiry time of #{i}"
+                     arg.is_a?(TaskExpiredError) && arg.message == "task is over its expiry time of #{ i }"
                   end)
 
                   worker = TaskWorker.new(queue:    fail_queue,
@@ -509,7 +509,7 @@ module Procrastinator
 
                expect do
                   worker.work
-               end.to output("Final_fail hook error: #{err}\n").to_stderr
+               end.to output("Final_fail hook error: #{ err }\n").to_stderr
             end
 
             it 'should do nothing if the task does not include #final_fail' do
@@ -589,7 +589,7 @@ module Procrastinator
                                        logger:   logger,
                                        queue:    final_fail_queue)
 
-               expect(logger).to receive(:debug).with("Task failed permanently: #{YAML.dump(task)}")
+               expect(logger).to receive(:debug).with("Task failed permanently: #{ YAML.dump(task) }")
 
                worker.work
             end

@@ -18,8 +18,8 @@ namespace :procrastinator do
          pid = file.read.to_i
 
          begin
-            name = `ps -p #{pid} -o command`
-            print "Halting worker process #{name} (pid: #{ pid })... "
+            name = `ps -p #{ pid } -o command`
+            print "Halting worker process #{ name } (pid: #{ pid })... "
             Process.kill('KILL', pid)
             puts 'halted'
          rescue Errno::ESRCH
