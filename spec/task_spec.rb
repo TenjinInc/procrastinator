@@ -49,7 +49,7 @@ module Procrastinator
                   }
                end
 
-               def success(result)
+               def success(_result)
                   {
                         logger:    logger,
                         data:      data,
@@ -58,7 +58,7 @@ module Procrastinator
                   }
                end
 
-               def fail(err)
+               def fail(_err)
                   {
                         logger:    logger,
                         data:      data,
@@ -67,7 +67,7 @@ module Procrastinator
                   }
                end
 
-               def final_fail(err)
+               def final_fail(_err)
                   {
                         logger:    logger,
                         data:      data,

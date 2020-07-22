@@ -213,7 +213,6 @@ module Procrastinator
                                                  run_at:         run_at,
                                                  expire_at:      expire_at))
 
-
             expect(task.to_h).to eq(basics.merge(initial_run_at: initial_run_at.to_i,
                                                  run_at:         run_at.to_i,
                                                  expire_at:      expire_at.to_i))

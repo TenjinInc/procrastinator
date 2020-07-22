@@ -32,7 +32,7 @@ module Procrastinator
             allow(QueueManager).to receive(:new).and_return(double('qm', spawn_workers: nil))
 
             expect do |block|
-               Procrastinator.setup &block
+               Procrastinator.setup(&block)
             end.to yield_with_args(config)
          end
 
@@ -46,8 +46,8 @@ module Procrastinator
             expect(Config).to receive(:new).and_return(config)
             expect(Scheduler).to receive(:new).with(config, anything).and_return(scheduler)
 
-            returned = Procrastinator.setup do |config|
-               expect(config).to be config
+            returned = Procrastinator.setup do |c|
+               expect(c).to be config
             end
 
             expect(returned).to be scheduler
@@ -62,7 +62,7 @@ module Procrastinator
             expect(Config).to receive(:new).and_return(config)
             expect(QueueManager).to receive(:new).with(config).and_call_original
 
-            expect { |b| Procrastinator.setup &b }.to yield_with_args(config)
+            expect { |b| Procrastinator.setup(&b) }.to yield_with_args(config)
          end
 
          it 'should call #spawn_workers on the manager' do
@@ -79,9 +79,11 @@ module Procrastinator
          end
 
          it 'should require at least one queue is defined' do
-            expect { Procrastinator.setup do |config|
-               config.load_with(persister)
-            end }.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
+            expect do
+               Procrastinator.setup do |config|
+                  config.load_with(persister)
+               end
+            end.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
          end
 
          it 'should complain if provide_context was called but no queues import context' do
@@ -100,11 +102,13 @@ module Procrastinator
                   task_attr :context
             ERROR
 
-            expect { Procrastinator.setup do |config|
-               config.define_queue(:setup_test, task_class)
-               config.load_with(persister)
-               config.provide_context(double('some context'))
-            end }.to raise_error(RuntimeError, err)
+            expect do
+               Procrastinator.setup do |config|
+                  config.define_queue(:setup_test, task_class)
+                  config.load_with(persister)
+                  config.provide_context(double('some context'))
+               end
+            end.to raise_error(RuntimeError, err)
          end
 
          it 'should NOT complain if provide_context was NOT called and no queues import context' do
@@ -140,24 +144,24 @@ module Procrastinator
             end
 
             it 'should create every subsequent environment in test mode' do
-               config_1 = nil
-               config_2 = nil
+               config1 = nil
+               config2 = nil
 
                Procrastinator.setup do |config|
-                  config_1 = config
+                  config1 = config
 
                   config.load_with(persister)
                   config.define_queue(:setup_test, test_task)
                end
                Procrastinator.setup do |config|
-                  config_2 = config
+                  config2 = config
 
                   config.load_with(persister)
                   config.define_queue(:setup_test, test_task)
                end
 
-               expect(config_1.test_mode?).to be true
-               expect(config_2.test_mode?).to be true
+               expect(config1.test_mode?).to be true
+               expect(config2.test_mode?).to be true
             end
          end
 
@@ -180,46 +184,46 @@ module Procrastinator
             end
 
             it 'should create every environment without test mode' do
-               config_1 = nil
-               config_2 = nil
+               config1 = nil
+               config2 = nil
 
                Procrastinator.setup do |config|
-                  config_1 = config
+                  config1 = config
 
                   config.load_with(persister)
                   config.define_queue(:first_setup_queue, test_task)
                end
                Procrastinator.setup do |config|
-                  config_2 = config
+                  config2 = config
 
                   config.load_with(persister)
                   config.define_queue(:second_setup_queue, test_task)
                end
 
-               expect(config_1.test_mode?).to be false
-               expect(config_2.test_mode?).to be false
+               expect(config1.test_mode?).to be false
+               expect(config2.test_mode?).to be false
             end
 
             it 'should override the global if enabled in the environment' do
-               config_1 = nil
-               config_2 = nil
+               config1 = nil
+               config2 = nil
 
                Procrastinator.setup do |config|
-                  config_1 = config
+                  config1 = config
 
                   config.enable_test_mode
                   config.load_with(persister)
                   config.define_queue(:override_setup_queue1, test_task)
                end
                Procrastinator.setup do |config|
-                  config_2 = config
+                  config2 = config
 
                   config.load_with(persister)
                   config.define_queue(:override_setup_queue2, test_task)
                end
 
-               expect(config_1.test_mode?).to be true
-               expect(config_2.test_mode?).to be false
+               expect(config1.test_mode?).to be true
+               expect(config2.test_mode?).to be false
             end
          end
       end

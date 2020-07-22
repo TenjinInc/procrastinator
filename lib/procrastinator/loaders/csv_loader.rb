@@ -41,10 +41,10 @@ module Procrastinator
 
          def create(queue:, run_at:, initial_run_at:, expire_at:, data: '')
             existing_data = begin
-               read
-            rescue Errno::ENOENT
-               []
-            end
+                               read
+                            rescue Errno::ENOENT
+                               []
+                            end
 
             max_id = existing_data.collect { |task| task[:id] }.max || 0
 
@@ -63,10 +63,10 @@ module Procrastinator
 
          def update(id, data)
             existing_data = begin
-               read
-            rescue Errno::ENOENT
-               []
-            end
+                               read
+                            rescue Errno::ENOENT
+                               []
+                            end
 
             task_data = existing_data.find do |task|
                task[:id] == id
@@ -79,10 +79,10 @@ module Procrastinator
 
          def delete(id)
             existing_data = begin
-               read
-            rescue Errno::ENOENT
-               []
-            end
+                               read
+                            rescue Errno::ENOENT
+                               []
+                            end
 
             existing_data.delete_if do |task|
                task[:id] == id

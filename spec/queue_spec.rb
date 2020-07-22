@@ -21,8 +21,7 @@ module Procrastinator
                   space_after:   'space_after ',
                   space_inside:  'space inside',
                   double_space:  'double  space',
-                  special_chars: 'special:[]!@#$%^&*()-=+<>\'",./?`~chars',
-
+                  special_chars: 'special:[]!@#$%^&*()-=+<>\'",./?`~chars'
             }.each do |expected, input|
                queue = Procrastinator::Queue.new(name:       input,
                                                  task_class: test_task)

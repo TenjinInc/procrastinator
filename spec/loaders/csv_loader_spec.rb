@@ -178,8 +178,8 @@ module Procrastinator
                         run_at:         arguments[:run_at],
                         initial_run_at: arguments[:initial_run_at],
                         expire_at:      arguments[:expire_at],
-                        data:           arguments[:data],
-                  }.values.each do |expected_value|
+                        data:           arguments[:data]
+                  }.each_value do |expected_value|
                      expect(data_line).to include expected_value.to_s
                   end
                end
@@ -194,8 +194,8 @@ module Procrastinator
                {
                      attempts:     '0',
                      last_fail_at: '',
-                     last_error:   '',
-               }.values.each do |expected_value|
+                     last_error:   ''
+               }.each_value do |expected_value|
                   expect(data_line).to include expected_value
                end
             end
@@ -216,7 +216,7 @@ module Procrastinator
 
                file_content = File.new(path).readlines
 
-               expect(file_content.last.strip).to start_with(%q["38",])
+               expect(file_content.last.strip).to start_with('"38"')
             end
 
             it 'should keep existing content' do
@@ -299,14 +299,10 @@ module Procrastinator
 
                file_lines = File.new(path).readlines
 
-               starts = %w[id,
-                           "1",
-                           "2",
-                           "37",]
-
-               file_lines.each_with_index do |line, i|
-                  expect(line).to start_with starts[i]
-               end
+               expect(file_lines[0]).to start_with('id,')
+               expect(file_lines[1]).to start_with('"1",')
+               expect(file_lines[2]).to start_with('"2",')
+               expect(file_lines[3]).to start_with('"37",')
             end
          end
 
@@ -379,7 +375,7 @@ module Procrastinator
 
                file_content = File.new(path).readlines
 
-               expect(file_content.last.strip).to end_with %q[,"this has ""quotes"" in it"]
+               expect(file_content.last.strip).to end_with(',"this has ""quotes"" in it"')
             end
 
             it 'should force quote every field' do

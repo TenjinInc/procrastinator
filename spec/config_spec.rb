@@ -63,7 +63,7 @@ module Procrastinator
             end
 
             it 'should complain if the loader does not respond to #delete' do
-               bad_loader = double('block', read: nil, create: nil, update: nil,)
+               bad_loader = double('block', read: nil, create: nil, update: nil)
 
                err = "task loader #{ bad_loader.class } must respond to #delete"
 
@@ -165,7 +165,6 @@ module Procrastinator
             it 'should complain if task does NOT accept 1 parameter in #final_fail' do
                [Procrastinator::Test::Task::MissingParam::NoArgFinalFail,
                 Procrastinator::Test::Task::MissingParam::MultiArgFinalFail].each do |klass|
-
                   err = "task #{ klass } must accept 1 parameter to its #final_fail method"
 
                   expect do
@@ -243,7 +242,7 @@ module Procrastinator
          it 'should yield itself' do
             config.define_queue(:test_queue, test_task)
 
-            expect { |b| config.setup &b }.to yield_with_args(config)
+            expect { |b| config.setup(&b) }.to yield_with_args(config)
          end
 
          it 'should use the given test mode' do
@@ -282,9 +281,9 @@ module Procrastinator
 
       describe '#run_process_block' do
          it 'should run the stored block' do
-            block = Proc.new { true }
+            block = proc { true }
 
-            config.each_process &block
+            config.each_process(&block)
 
             expect(config.run_process_block).to be true
          end

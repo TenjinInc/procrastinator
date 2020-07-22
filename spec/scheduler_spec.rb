@@ -71,7 +71,7 @@ module Procrastinator
             Timecop.freeze(now) do
                expect(persister).to receive(:create).with(include(run_at: now.to_i))
 
-               scheduler.delay()
+               scheduler.delay
             end
          end
 
@@ -267,7 +267,7 @@ module Procrastinator
             expect(persister).to receive(:delete).with(2)
             scheduler.cancel(:greeting, data: {user_id: 5})
 
-            #second search
+            # second search
             expect(persister).to receive(:delete).with(1)
             scheduler.cancel(:reminder, data: {user_id: 5})
          end
@@ -315,7 +315,6 @@ module Procrastinator
    end
 
    describe Scheduler::UpdateProxy do
-
       let(:test_task) { Test::Task::AllHooks }
       let(:persister) { Test::Persister.new }
       let(:config) do

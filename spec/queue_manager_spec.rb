@@ -218,12 +218,9 @@ module Procrastinator
             expect(manager).to_not receive(:fork) # sanity/protection
             raised = false
             expect(Process).to receive(:kill).twice do
-               if raised
-                  old_pid
-               else
-                  raise Errno::ESRCH
-                  raised = true
-               end
+               raise Errno::ESRCH if raised
+
+               old_pid
             end
 
             manager.spawn_workers
@@ -408,7 +405,7 @@ module Procrastinator
                it 'should NOT wait for the QueueWorker' do
                   queue = Procrastinator::Queue.new(name: :waiting_queue, task_class: test_task)
 
-                  Timeout::timeout(1) do
+                  Timeout.timeout(1) do
                      pid = double('pid')
 
                      allow(manager).to receive(:fork).and_return(pid)
@@ -448,11 +445,12 @@ module Procrastinator
 
             context 'subprocess' do
                let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: test_task) }
-
-               let(:worker) { double('worker',
-                                     work:      nil,
-                                     start_log: nil,
-                                     long_name: 'test-worker') }
+               let(:worker) do
+                  double('worker',
+                         work:      nil,
+                         start_log: nil,
+                         long_name: 'test-worker')
+               end
 
                before(:each) do
                   allow(Process).to receive(:setproctitle)
@@ -736,7 +734,7 @@ module Procrastinator
 
                   queue = Procrastinator::Queue.new(name: :reminder, task_class: test_task)
 
-                  worker = double('worker')
+                  # worker = double('worker')
 
                   allow_any_instance_of(QueueWorker).to receive(:work)
 
@@ -746,9 +744,9 @@ module Procrastinator
                end
 
                it 'should write PID files in the given directory' do
-                  %w[/var/pid
-                     some/pid/place].each do |dir|
+                  dirs = %w[/var/pid some/pid/place]
 
+                  dirs.each do |dir|
                      config.each_process pid_dir: dir
 
                      config.define_queue(:test1, test_task)
@@ -835,7 +833,7 @@ module Procrastinator
          it 'should call QueueWorker#act on every queue worker' do
             expect(manager.workers.size).to eq 3
 
-            manager.workers.keys.each do |worker|
+            manager.workers.each_key do |worker|
                expect(worker).to receive(:act)
             end
 

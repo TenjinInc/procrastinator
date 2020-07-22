@@ -4,7 +4,7 @@ require 'simplecov'
 
 SimpleCov.start
 
-$LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
 
 require 'rspec'
 require 'timecop'
@@ -15,27 +15,25 @@ require 'fakefs/spec_helpers'
 require 'procrastinator'
 
 module Procrastinator
-
    module Test
       class Persister
-         def read(attributes)
+         def read(_attributes)
          end
 
-         def create(data)
+         def create(_data)
          end
 
-         def update(identifier, data)
+         def update(_identifier, _data)
          end
 
-         def delete(identifier)
+         def delete(_identifier)
          end
       end
-
 
       module Task
          module MissingParam
             class ArgRun
-               def run(params)
+               def run(_params)
                end
             end
 
@@ -51,7 +49,7 @@ module Procrastinator
                def run
                end
 
-               def success(a, b)
+               def success(_arg1, _arg2)
                end
             end
 
@@ -67,7 +65,7 @@ module Procrastinator
                def run
                end
 
-               def fail(a, b)
+               def fail(_arg1, _arg2)
                end
             end
 
@@ -83,7 +81,7 @@ module Procrastinator
                def run
                end
 
-               def final_fail(a, b)
+               def final_fail(_arg1, _arg2)
                end
             end
          end
@@ -92,13 +90,13 @@ module Procrastinator
             def run
             end
 
-            def success(result)
+            def success(_result)
             end
 
-            def fail(error)
+            def fail(_error)
             end
 
-            def final_fail(error)
+            def final_fail(_error)
             end
          end
 

@@ -8,13 +8,19 @@ AllCops:
 
 Layout/LineLength:
   Exclude:
-    - 'spec/*'
+    - 'spec/**/*.rb'
+
+# setting to 6 to match RubyMine autoformat
+Layout/FirstArrayElementIndentation:
+  IndentationWidth: 6
+
 
 # rspec blocks are huge by design
 Metrics/BlockLength:
   Exclude:
-    - 'spec/*'
+    - 'spec/**/*.rb'
 
 Metrics/ModuleLength:
   Exclude:
-    - 'spec/*'
+    - 'spec/**/*.rb'
+

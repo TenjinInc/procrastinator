@@ -292,14 +292,16 @@ module Procrastinator
             end
 
             it 'should populate the data into a Task' do
-               task_data = {id:             double('id'),
-                            run_at:         double('run_at', to_i: 1),
-                            initial_run_at: double('initial', to_i: 1),
-                            expire_at:      double('expiry', to_i: 1),
-                            attempts:       0,
-                            last_error:     double('last error'),
-                            last_fail_at:   double('last fail at'),
-                            data:           YAML.dump(['some', 'data'])}
+               task_data = {
+                     id:             double('id'),
+                     run_at:         double('run_at', to_i: 1),
+                     initial_run_at: double('initial', to_i: 1),
+                     expire_at:      double('expiry', to_i: 1),
+                     attempts:       0,
+                     last_error:     double('last error'),
+                     last_fail_at:   double('last fail at'),
+                     data:           YAML.dump(%w[some data])
+               }
 
                expect(TaskMetaData).to receive(:new).with(task_data).and_call_original
 
@@ -311,14 +313,17 @@ module Procrastinator
             end
 
             it 'should convert the read results to hash' do
-               task_data = double('data struct', to_h: {id:             double('id'),
-                                                        run_at:         double('run_at', to_i: 1),
-                                                        initial_run_at: double('initial', to_i: 1),
-                                                        expire_at:      double('expiry', to_i: 1),
-                                                        attempts:       0,
-                                                        last_error:     double('last error'),
-                                                        last_fail_at:   double('last fail at'),
-                                                        data:           YAML.dump(['some', 'data'])})
+               task_data = double('data struct',
+                                  to_h: {
+                                        id:             double('id'),
+                                        run_at:         double('run_at', to_i: 1),
+                                        initial_run_at: double('initial', to_i: 1),
+                                        expire_at:      double('expiry', to_i: 1),
+                                        attempts:       0,
+                                        last_error:     double('last error'),
+                                        last_fail_at:   double('last fail at'),
+                                        data:           YAML.dump(%w[some data])
+                                  })
 
                expect(TaskMetaData).to receive(:new).with(task_data.to_h).and_call_original
 
@@ -510,10 +515,9 @@ module Procrastinator
             it 'should update the task' do
                {queueA: 0, queueB: 1}.each do |name, max_attempts|
                   id        = double('id')
-                  task_data = {id:     id,
-                               run_at: 0
-                               # last_error:    'err',
-                               # last_error_at: 5
+                  task_data = {
+                        id:     id,
+                        run_at: 0
                   }
 
                   persister = fake_persister([task_data])
@@ -543,9 +547,7 @@ module Procrastinator
          include FakeFS::SpecHelpers
 
          before(:each) do
-            if FakeFS.activated?
-               FileUtils.rm_rf('/*')
-            end
+            FileUtils.rm_rf('/*') if FakeFS.activated?
          end
 
          # falsey is the default for workers

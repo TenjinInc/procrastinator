@@ -553,7 +553,7 @@ module Procrastinator
                worker.work
 
                expect(worker.last_error).to start_with 'Task expired: '
-               expect(worker.last_error).to match /(.*\n)+/ # poor version of checking for backtrace, but it works for now
+               expect(worker.last_error).to match(/(.*\n)+/) # poor version of checking for backtrace, but it works for now
             end
 
             it 'should record the error and trace in last_error' do
@@ -561,7 +561,7 @@ module Procrastinator
                worker.work
 
                expect(worker.last_error).to start_with 'Task failed too many times: '
-               expect(worker.last_error).to match /(.*\n)+/ # poor version of checking for backtrace, but it works for now
+               expect(worker.last_error).to match(/(.*\n)+/) # poor version of checking for backtrace, but it works for now
             end
 
             it 'should pass in the error to #final_fail' do
@@ -613,7 +613,6 @@ module Procrastinator
                                     expire_at:      expire_at)
 
             worker = TaskWorker.new(metadata: task, queue: queue)
-
 
             expect(worker.to_h).to eq(task.to_h)
          end

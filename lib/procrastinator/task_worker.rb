@@ -57,11 +57,11 @@ module Procrastinator
             @metadata.clear_fails
 
             try_hook(:success, result)
-         rescue StandardError => error
+         rescue StandardError => e
             if @metadata.final_fail?(@queue)
-               handle_final_failure(error)
+               handle_final_failure(e)
             else
-               handle_failure(error)
+               handle_failure(e)
             end
          end
       end
