@@ -24,8 +24,8 @@ Gem::Specification.new do |spec|
 
    spec.add_development_dependency 'bundler', '~> 2.1'
    spec.add_development_dependency 'fakefs', '~> 0.10'
-   spec.add_development_dependency 'rake', '~> 12.3'
-   spec.add_development_dependency 'rspec', '~> 3.0'
+   spec.add_development_dependency 'rake', '~> 13.0'
+   spec.add_development_dependency 'rspec', '~> 3.9'
    spec.add_development_dependency 'rubocop', '~> 0.88'
    spec.add_development_dependency 'rubocop-performance', '~> 1.7.1'
    spec.add_development_dependency 'simplecov', '~> 0.16.1'
