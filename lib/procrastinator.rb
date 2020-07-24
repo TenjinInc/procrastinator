@@ -16,38 +16,25 @@ require 'pathname'
 
 # Top-level module for the Procrastinator Gem.
 #
-# Call Procrastinator.setup with a block to initialize and run independent worker sub processes to complete tasks
-# asynchronously from your main application.
+# Call Procrastinator.setup with a block to configure task queues.
 #
-# Read the README for details.
+# See README for details.
 #
 # @author Robin Miller
 #
 # @see https://github.com/TenjinInc/procrastinator
 module Procrastinator
-   # rubocop:disable Style/ClassVars
-   @@test_mode = false
-
-   def self.test_mode=(value)
-      @@test_mode = value
-   end
-
-   def self.test_mode
-      @@test_mode
-   end
-
-   # rubocop:enable Style/ClassVars
-
    # Creates a configuration object and passes it into the given block.
    #
    # @yield the created configuration object
+   # @return [Scheduler] a scheduler object that can be used to interact with the queues
    def self.setup(&block)
       raise ArgumentError, 'Procrastinator.setup must be given a block' unless block_given?
 
       config = Config.new
 
-      config.setup(@@test_mode, &block)
+      config.setup(&block)
 
-      QueueManager.new(config).spawn_workers
+      Scheduler.new(config)
    end
 end

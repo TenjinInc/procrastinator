@@ -174,14 +174,6 @@ module Procrastinator
             end
          end
 
-         describe '#enable_test_mode' do
-            it 'should enable test mode' do
-               config.enable_test_mode
-
-               expect(config.test_mode?).to be true
-            end
-         end
-
          describe '#log_with' do
             let(:config) { Config.new }
 
@@ -242,38 +234,6 @@ module Procrastinator
                expect(config.log_shift_size).to eq Config::DEFAULT_LOG_SHIFT_SIZE
             end
          end
-
-         describe '#each_process' do
-            it 'should set the process prefix' do
-               prefix = double('lvl')
-
-               config.each_process(prefix: prefix)
-
-               expect(config.prefix).to be prefix
-            end
-
-            it 'should default to a nil process prefix' do
-               config.each_process
-
-               expect(config.prefix).to be_nil
-            end
-
-            it 'should set the pid directory' do
-               config = Config.new
-               dir    = '/some/dir'
-
-               config.each_process pid_dir: dir
-
-               expect(config.pid_dir).to be_a Pathname
-               expect(config.pid_dir.to_s).to eq dir
-            end
-
-            it 'should default to a known default directory' do
-               config.each_process
-
-               expect(config.pid_dir.to_s).to eq Config::DEFAULT_PID_DIRECTORY
-            end
-         end
       end
 
       describe '#setup' do
@@ -281,19 +241,6 @@ module Procrastinator
             config.define_queue(:test_queue, test_task)
 
             expect { |b| config.setup(&b) }.to yield_with_args(config)
-         end
-
-         it 'should use the given test mode' do
-            [true, false].each do |value|
-               config = Config.new
-
-               config.setup(value) do |c|
-                  c.define_queue(:test, test_task)
-                  c.load_with(Test::Persister.new)
-               end
-
-               expect(config.test_mode?).to be value
-            end
          end
 
          it 'should default to the basic CSV task loader if none is provided' do
@@ -314,16 +261,6 @@ module Procrastinator
                   c.load_with(Test::Persister.new)
                end
             end.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
-         end
-      end
-
-      describe '#run_process_block' do
-         it 'should run the stored block' do
-            block = proc { true }
-
-            config.each_process(&block)
-
-            expect(config.run_process_block).to be true
          end
       end
 

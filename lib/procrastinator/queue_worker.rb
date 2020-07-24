@@ -31,7 +31,7 @@ module Procrastinator
                act
             end
          rescue StandardError => e
-            raise if @config.test_mode? || !@logger
+            raise unless @logger
 
             @logger.fatal(e)
          end
@@ -56,11 +56,7 @@ module Procrastinator
       end
 
       def long_name
-         name = "#{ @queue.name }-queue-worker"
-
-         name = "#{ @config.prefix }-#{ name }" if @config.prefix
-
-         name
+         "#{ @queue.name }-queue-worker"
       end
 
       # Starts a log file and stores the logger within this queue worker.
@@ -73,14 +69,7 @@ module Procrastinator
                               level:    @config.log_level,
                               progname: long_name)
 
-         msg = <<~MSG
-            ======================================================================
-            Started worker process, #{ long_name }, to work off queue #{ @queue.name }.
-            Worker pid=#{ Process.pid }; parent pid=#{ Process.ppid }.
-            ======================================================================
-         MSG
-
-         @logger.info("\n#{ msg }")
+         @logger.info("Started worker thread to consume queue: #{ @queue.name }")
       end
 
       private
@@ -96,8 +85,6 @@ module Procrastinator
       end
 
       def log_target
-         return $stdout if @config.test_mode?
-
          log_path = @config.log_dir + "#{ long_name }.log"
 
          write_log_file(log_path)

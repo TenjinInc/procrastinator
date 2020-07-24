@@ -17,7 +17,7 @@ module Procrastinator
             config
          end
 
-         let(:scheduler) { Scheduler.new(config, double('qmanager')) }
+         let(:scheduler) { Scheduler.new(config) }
 
          it 'should record a task on the given queue' do
             [:queue1, :queue2].each do |queue_name|
@@ -125,7 +125,7 @@ module Procrastinator
             config.load_with(persister)
             config.define_queue(:queue_name, test_task)
 
-            scheduler = Scheduler.new(config, double('qmanager'))
+            scheduler = Scheduler.new(config)
 
             expect { scheduler.delay }.to_not raise_error
          end
@@ -135,7 +135,7 @@ module Procrastinator
             config.load_with(persister)
             config.define_queue(:some_queue, test_task)
 
-            scheduler = Scheduler.new(config, double('qmanager'))
+            scheduler = Scheduler.new(config)
 
             expect(persister).to receive(:create).with(hash_including(queue: :some_queue.to_s))
 
@@ -206,7 +206,7 @@ module Procrastinator
             config.define_queue(:test_queue, test_task)
             config
          end
-         let(:scheduler) { Scheduler.new(config, double('qmanager')) }
+         let(:scheduler) { Scheduler.new(config) }
 
          it 'should create a proxy for the given search parameters' do
             queue      = double('q', to_s: 'q')
@@ -236,7 +236,7 @@ module Procrastinator
             config.define_queue(:reminder, test_task)
             config
          end
-         let(:scheduler) { Scheduler.new(config, double('qmanager')) }
+         let(:scheduler) { Scheduler.new(config) }
 
          it 'should delete the task matching the given search data' do
             tasks = [{id: 1, queue: :reminder, data: 'user_id: 5'},
@@ -305,11 +305,25 @@ module Procrastinator
             manager = double('qmanager')
             queues  = double('queues')
 
-            scheduler = Scheduler.new(double('config'), manager)
+            expect(QueueManager).to receive(:new).and_return(manager)
+            scheduler = Scheduler.new(double('config'))
 
             expect(manager).to receive(:act).with(queues)
 
             scheduler.act(queues)
+         end
+      end
+
+      describe '#spawn_workers' do
+         it 'should forward calls to spawn_workers to its queue manager' do
+            manager = double('qmanager')
+
+            expect(QueueManager).to receive(:new).and_return(manager)
+            scheduler = Scheduler.new(double('config'))
+
+            expect(manager).to receive(:spawn_workers)
+
+            scheduler.spawn_workers
          end
       end
    end

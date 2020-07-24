@@ -8,8 +8,6 @@ module Procrastinator
    #
    # @author Robin Miller
    #
-   # @!attribute [r] :test_mode?
-   #    @return [Boolean] Whether test mode is enabled
    # @!attribute [r] :queues
    #    @return [Array] List of defined queues
    # @!attribute [r] :context
@@ -24,32 +22,25 @@ module Procrastinator
    #    @return [Integer] Number of previous files to keep (see Ruby Logger for details)
    # @!attribute [r] :log_shift_size
    #    @return [Integer] Filesize before rotating to a new logfile (see Ruby Logger for details)
-   # @!attribute [r] :prefix
-   #    @return [String] The prefix to prepend to process names
-   # @!attribute [r] :pid_dir
-   #    @return [Pathname] Directory to write process ID records in
    class Config
-      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size,
-                  :prefix, :test_mode, :context, :loader, :pid_dir
-      alias test_mode? test_mode
+      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :context, :loader
 
-      DEFAULT_LOG_DIRECTORY  = Pathname.new('log/').freeze
-      DEFAULT_LOG_SHIFT_AGE  = 0
+      DEFAULT_LOG_DIRECTORY = Pathname.new('log/').freeze
+      DEFAULT_LOG_SHIFT_AGE = 0
+
+      # TODO: This cop for ** is currently incorrect. This disable can be removed once they fix it.
+      # rubocop:disable Layout/SpaceAroundOperators
       DEFAULT_LOG_SHIFT_SIZE = 2 ** 20 # 1 MB
-
-      DEFAULT_PID_DIRECTORY = 'pid/'
+      # rubocop:enable Layout/SpaceAroundOperators
 
       def initialize
-         @test_mode        = false
-         @queues           = []
-         @loader           = nil
-         @context          = nil
-         @subprocess_block = nil
-         @log_dir          = DEFAULT_LOG_DIRECTORY
-         @log_level        = Logger::INFO
-         @log_shift_age    = DEFAULT_LOG_SHIFT_AGE
-         @log_shift_size   = DEFAULT_LOG_SHIFT_SIZE
-         @pid_dir          = Pathname.new(DEFAULT_PID_DIRECTORY)
+         @queues         = []
+         @loader         = nil
+         @context        = nil
+         @log_dir        = DEFAULT_LOG_DIRECTORY
+         @log_level      = Logger::INFO
+         @log_shift_age  = DEFAULT_LOG_SHIFT_AGE
+         @log_shift_size = DEFAULT_LOG_SHIFT_SIZE
       end
 
       # Collection of all of the methods intended for use within Procrastinator.setup
@@ -57,8 +48,6 @@ module Procrastinator
       # @see Procrastinator
       module DSL
          # Assigns a task loader
-         # It should be called in an each_process block as well so that they get
-         # distinct resources (eg. DB connections) from the parent process.
          def load_with(loader)
             if loader.is_a? Hash
                unless loader.key? :location
@@ -83,13 +72,6 @@ module Procrastinator
             @context = context
          end
 
-         # Accepts a block that will be executed on the queue sub-processes. Use it to control resource allocations.
-         def each_process(prefix: nil, pid_dir: DEFAULT_PID_DIRECTORY, &block)
-            @prefix           = prefix
-            @subprocess_block = block
-            @pid_dir          = Pathname.new(pid_dir)
-         end
-
          def define_queue(name, task_class, properties = {})
             raise ArgumentError, 'queue name cannot be nil' if name.nil?
             raise ArgumentError, 'queue task class cannot be nil' if task_class.nil?
@@ -97,10 +79,6 @@ module Procrastinator
             verify_task_class(task_class)
 
             @queues << Queue.new(properties.merge(name: name, task_class: task_class))
-         end
-
-         def enable_test_mode
-            @test_mode = true
          end
 
          # Sets details of logging behaviour
@@ -119,10 +97,8 @@ module Procrastinator
 
       include DSL
 
-      def setup(test_mode = false)
+      def setup
          yield(self)
-
-         enable_test_mode if test_mode
 
          load_with(Loader::CSVLoader.new) unless @loader
 
@@ -152,10 +128,6 @@ module Procrastinator
          @queues.size == 1
       end
 
-      def run_process_block
-         @subprocess_block&.call
-      end
-
       def queue(name: nil)
          if name
             @queues.find do |q|
@@ -173,9 +145,9 @@ module Procrastinator
             raise MalformedTaskError, "task #{ task_class } does not support #run method"
          end
 
-         # We're checking the interface compliance on init because it's one of those extremely rare cases where
-         # you'd want to know early because the sub-processes would crash async, which is harder to debug.
-         # It's a bit belt-and suspenders, but UX is important for devs, too. - robinetmiller
+         # Checking the interface compliance on init because it's one of those rare cases where you'd want to know early
+         # Otherwise, you wouldn't know until task execution, which could be far in the future.
+         # Always nice to catch errors when you can predict them because UX is important for devs, too. - retm
          if task_class.method_defined?(:run) && task_class.instance_method(:run).arity.positive?
             err = "task #{ task_class } cannot require parameters to its #run method"
 

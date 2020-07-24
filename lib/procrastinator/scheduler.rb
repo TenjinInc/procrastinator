@@ -9,11 +9,11 @@ module Procrastinator
    class Scheduler
       extend Forwardable
 
-      def_delegators :@queue_manager, :act
+      def_delegators :@queue_manager, :act, :spawn_workers
 
-      def initialize(config, queue_manager)
+      def initialize(config)
          @config        = config
-         @queue_manager = queue_manager
+         @queue_manager = QueueManager.new(config)
       end
 
       # Records a new task to be executed at the given time.
@@ -133,7 +133,7 @@ module Procrastinator
       private
 
       # Scheduler must always get the loader indirectly. If it saves the loader to an instance variable,
-      # then that could hold a reference to a bad (ie. gone) connection on the previous process
+      # then that might hold a stale object reference. Better to fetch each time.
       def loader
          @config.loader
       end

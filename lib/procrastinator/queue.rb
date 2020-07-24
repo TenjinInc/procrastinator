@@ -16,7 +16,7 @@ module Procrastinator
    # @!attribute [r] :update_period
    #    @return [Pathname] Delay (seconds) between reloads of tasks from the task loader.
    # @!attribute [r] :max_tasks
-   #    @return [Pathname] The maximum number of tasks to run concurrently within a queue worker process.
+   #    @return [Pathname] The maximum number of tasks to run concurrently within a queue worker thread.
    class Queue
       DEFAULT_TIMEOUT       = 3600 # in seconds; one hour total
       DEFAULT_MAX_ATTEMPTS  = 20
