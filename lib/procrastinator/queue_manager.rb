@@ -90,9 +90,9 @@ module Procrastinator
       private
 
       def start_log
-         directory = @config.log_dir
+         return unless @config.log_level
 
-         return unless directory
+         directory = @config.log_dir
 
          log_path = directory + 'queue-manager.log'
 

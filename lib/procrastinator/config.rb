@@ -93,12 +93,13 @@ module Procrastinator
             @test_mode = true
          end
 
-         def log_inside(path)
-            @log_dir = path ? Pathname.new(path) : path
-         end
-
-         def log_at_level(lvl)
-            @log_level = lvl
+         # Sets details of logging behaviour
+         #
+         # @param directory [Pathname,String] the directory to save logs within.
+         # @param level [Logger::UNKNOWN,Logger::FATAL,Logger::ERROR,Logger::WARN,Logger::INFO,Logger::DEBUG,Integer,Boolean] the Ruby Logger level to use. If falsey, no logging is performed.
+         def log_with(directory: @log_dir, level: @log_level)
+            @log_dir   = directory ? Pathname.new(directory) : directory
+            @log_level = level
          end
       end
 

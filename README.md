@@ -541,25 +541,20 @@ scheduler.act(:cleanup, :email)
 Errors that trigger #fail or #final_fail are saved in the task persistence (database, file, etc) under `last_error` and 
 `last_error_at`.
 
-Each queue worker also writes its own log using the Ruby 
-[Logger class](https://ruby-doc.org/stdlib-2.5.1/libdoc/logger/rdoc/Logger.html).
-The log files are named after its queue process name (eg. `log/welcome-queue-worker.log`) and
-they are saved in the log directory defined in setup. 
+Each queue worker also keeps a logfile log using the Ruby 
+[Logger class](https://ruby-doc.org/stdlib-2.7.1/libdoc/logger/rdoc/Logger.html).
+Log files are named after the queue (eg. `log/welcome-queue-worker.log`). 
 
 ```ruby
 scheduler = Procrastinator.setup do |env|
-   # ... other setup stuff ... 
-
-   # you can set custom log directory and level:
-   env.log_inside '/var/log/myapp/'
-   env.log_at_level Logger::DEBUG
+   # you can set custom log settings:
+   env.log_with(directory: '/var/log/myapp/', level: Logger::DEBUG)
    
    # these are the defaults:
-   env.log_inside 'log/' # relative to the running directory
-   env.log_at_level Logger::INFO
+   env.log_with(directory: 'log/', level: Logger::INFO)
    
-   # use nil to disable logging entirely:
-   env.log_inside nil
+   # use a falsey log level to disable logging entirely:
+   env.log_with level: nil
 end
 ```
 

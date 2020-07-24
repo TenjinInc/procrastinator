@@ -81,7 +81,7 @@ module Procrastinator
                                                  update_period: 0.1)
 
                config = Config.new
-               config.log_inside 'log/'
+               config.log_with directory: 'log/'
 
                worker = QueueWorker.new(queue: queue, config: config)
 
@@ -111,7 +111,7 @@ module Procrastinator
                                               update_period: 0.1)
 
             config = Config.new
-            config.log_inside false
+            config.log_with level: nil
 
             worker = QueueWorker.new(queue: queue, config: config)
             worker.start_log
@@ -410,7 +410,7 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).with(hash_including(logger: logger)).and_call_original
 
                config.load_with fake_persister([{run_at: 1}])
-               config.log_inside '/log'
+               config.log_with directory: '/log'
 
                FakeFS do
                   worker = QueueWorker.new(queue: instant_queue, config: config)
@@ -428,7 +428,7 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).with(hash_including(logger: logger)).and_call_original
 
                config.load_with fake_persister([{run_at: 1}])
-               config.log_inside 'dir'
+               config.log_with directory: 'dir'
                config.enable_test_mode
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
@@ -547,13 +547,12 @@ module Procrastinator
          include FakeFS::SpecHelpers
 
          before(:each) do
-            FileUtils.rm_rf('/*') if FakeFS.activated?
+            FakeFS.clear! if FakeFS.activated?
          end
 
-         # falsey is the default for workers
-         context 'logging directory falsey' do
+         context 'no_log' do
             before(:each) do
-               config.log_inside false
+               config.log_with level: nil
             end
 
             it 'should NOT create the log directory' do
@@ -586,7 +585,7 @@ module Procrastinator
 
          context 'logging directory provided' do
             before(:each) do
-               config.log_inside 'some_dir/'
+               config.log_with directory: 'some_dir/'
             end
 
             context 'test mode' do
@@ -653,7 +652,7 @@ module Procrastinator
                it 'should append to the log file if it already exists' do
                   log_dir = 'a/log/directory'
 
-                  config.log_inside log_dir
+                  config.log_with directory: log_dir
 
                   worker = QueueWorker.new(queue: queue, config: config)
 
@@ -677,7 +676,7 @@ module Procrastinator
                   Logger::Severity.constants.each do |level|
                      worker = QueueWorker.new(queue: queue, config: config)
 
-                     config.log_at_level level
+                     config.log_with level: level
 
                      expect(Logger).to receive(:new).with(anything, hash_including(level: level)).and_return logger
 

@@ -24,7 +24,7 @@ module Procrastinator
          it 'should put the log file in the log directory' do
             %w[/var/log/myapp
                another/log/place].each do |dir|
-               config.log_inside dir
+               config.log_with directory: dir
 
                QueueManager.new(config)
 
@@ -34,7 +34,7 @@ module Procrastinator
          end
 
          it 'should NOT start a log file if logging is disabled' do
-            config.log_inside false
+            config.log_with level: false
 
             QueueManager.new(config)
 
@@ -47,7 +47,7 @@ module Procrastinator
 
             allow(Logger).to receive(:new).and_return(logger)
 
-            config.log_at_level Logger::FATAL
+            config.log_with level: Logger::FATAL
 
             expect(logger).to receive(:level=).with(Logger::FATAL)
 

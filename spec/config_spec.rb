@@ -182,26 +182,39 @@ module Procrastinator
             end
          end
 
-         describe '#log_inside' do
-            it 'should set the log directory' do
-               config = Config.new
-               dir    = '/a/logging/directory'
+         describe '#log_with' do
+            let(:config) { Config.new }
 
-               config.log_inside(dir)
+            it 'should set the log directory' do
+               dir = '/a/logging/directory'
+
+               config.log_with(directory: dir)
 
                expect(config.log_dir.to_s).to eq dir
             end
-         end
-
-         describe '#log_at_level' do
-            let(:config) { Config.new }
 
             it 'should set the log level' do
-               lvl = double('lvl')
+               lvl = Logger::FATAL
 
-               config.log_at_level(lvl)
+               config.log_with(level: lvl)
 
                expect(config.log_level).to be lvl
+            end
+
+            it 'should use default directory if omitted' do
+               expected_dir = config.log_dir
+
+               config.log_with(level: Logger::DEBUG)
+
+               expect(config.log_dir).to eq expected_dir
+            end
+
+            it 'should use default level if omitted' do
+               expected_lvl = config.log_level
+
+               config.log_with(directory: '/test/log')
+
+               expect(config.log_level).to eq expected_lvl
             end
          end
 
@@ -309,7 +322,7 @@ module Procrastinator
          it 'should return the log direcory' do
             dir = '/logging/path'
 
-            config.log_inside dir
+            config.log_with directory: dir
 
             expect(config.log_dir.to_s).to eq dir
          end

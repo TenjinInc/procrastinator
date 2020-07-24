@@ -67,7 +67,7 @@ module Procrastinator
       #
       # Separate from init because logging is context-dependent
       def start_log
-         return if @logger || !@config.log_dir
+         return if @logger || !@config.log_level
 
          @logger = Logger.new(log_target, level: @config.log_level)
 
