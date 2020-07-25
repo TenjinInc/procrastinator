@@ -693,6 +693,30 @@ module Procrastinator
 
                   worker.start_log
                end
+
+               it 'should include the queue name in the log output' do
+                  worker = QueueWorker.new(queue: queue, config: config)
+
+                  worker.start_log
+
+                  queue_name = :test_queue
+
+                  queue = Procrastinator::Queue.new(name:       queue_name,
+                                                    task_class: Test::Task::AllHooks)
+
+                  worker = QueueWorker.new(queue: queue, config: config)
+
+                  allow(Process).to receive(:ppid).and_return(1)
+                  allow(Process).to receive(:pid).and_return(2)
+
+                  worker.start_log
+
+                  log_path = "some_dir/#{ worker.long_name }.log"
+
+                  log_contents = File.read(log_path)
+
+                  expect(log_contents).to include("-- #{ worker.long_name }:")
+               end
             end
          end
       end

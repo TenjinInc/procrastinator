@@ -11,6 +11,7 @@
 ### Minor Changes
    * Started release notes file.
    * Updated development gems
+   * Logs now include the queue name in log lines
 
 ### Bugfixes
    * none 
