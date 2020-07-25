@@ -20,15 +20,23 @@ module Procrastinator
    #    @return [Pathname] Directory to write log files in
    # @!attribute [r] :log_level
    #    @return [Integer] Logging level to use
+   # @!attribute [r] :log_shift_age
+   #    @return [Integer] Number of previous files to keep (see Ruby Logger for details)
+   # @!attribute [r] :log_shift_size
+   #    @return [Integer] Filesize before rotating to a new logfile (see Ruby Logger for details)
    # @!attribute [r] :prefix
    #    @return [String] The prefix to prepend to process names
    # @!attribute [r] :pid_dir
    #    @return [Pathname] Directory to write process ID records in
    class Config
-      attr_reader :queues, :log_dir, :log_level, :prefix, :test_mode, :context, :loader, :pid_dir
+      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size,
+                  :prefix, :test_mode, :context, :loader, :pid_dir
       alias test_mode? test_mode
 
-      DEFAULT_LOG_DIRECTORY = 'log/'
+      DEFAULT_LOG_DIRECTORY  = Pathname.new('log/').freeze
+      DEFAULT_LOG_SHIFT_AGE  = 0
+      DEFAULT_LOG_SHIFT_SIZE = 2 ** 20 # 1 MB
+
       DEFAULT_PID_DIRECTORY = 'pid/'
 
       def initialize
@@ -37,8 +45,10 @@ module Procrastinator
          @loader           = nil
          @context          = nil
          @subprocess_block = nil
-         @log_dir          = Pathname.new(DEFAULT_LOG_DIRECTORY)
+         @log_dir          = DEFAULT_LOG_DIRECTORY
          @log_level        = Logger::INFO
+         @log_shift_age    = DEFAULT_LOG_SHIFT_AGE
+         @log_shift_size   = DEFAULT_LOG_SHIFT_SIZE
          @pid_dir          = Pathname.new(DEFAULT_PID_DIRECTORY)
       end
 
@@ -97,9 +107,13 @@ module Procrastinator
          #
          # @param directory [Pathname,String] the directory to save logs within.
          # @param level [Logger::UNKNOWN,Logger::FATAL,Logger::ERROR,Logger::WARN,Logger::INFO,Logger::DEBUG,Integer,Boolean] the Ruby Logger level to use. If falsey, no logging is performed.
-         def log_with(directory: @log_dir, level: @log_level)
-            @log_dir   = directory ? Pathname.new(directory) : directory
-            @log_level = level
+         # @param shift_age [Integer] number of old log files to keep (see Ruby Logger for details)
+         # @param shift_size [Integer] filesize before log is rotated to a fresh file (see Ruby Logger for details)
+         def log_with(directory: @log_dir, level: @log_level, shift_age: @log_shift_age, shift_size: @log_shift_size)
+            @log_dir        = directory ? Pathname.new(directory) : directory
+            @log_level      = level
+            @log_shift_age  = shift_age
+            @log_shift_size = shift_size
          end
       end
 

@@ -201,20 +201,45 @@ module Procrastinator
                expect(config.log_level).to be lvl
             end
 
-            it 'should use default directory if omitted' do
-               expected_dir = config.log_dir
+            it 'should set the shift_age' do
+               age = 123
 
+               config.log_with(shift_age: age)
+
+               expect(config.log_shift_age).to be age
+            end
+
+            it 'should set the shift_size' do
+               size = 456
+
+               config.log_with(shift_size: size)
+
+               expect(config.log_shift_size).to be size
+            end
+
+            it 'should use default directory if omitted' do
                config.log_with(level: Logger::DEBUG)
 
-               expect(config.log_dir).to eq expected_dir
+               expect(config.log_dir).to eq Config::DEFAULT_LOG_DIRECTORY
             end
 
             it 'should use default level if omitted' do
-               expected_lvl = config.log_level
-
                config.log_with(directory: '/test/log')
 
-               expect(config.log_level).to eq expected_lvl
+               expect(config.log_level).to eq Logger::INFO
+            end
+
+            it 'should use default shift age if omitted' do
+               config.log_with(directory: '/test/log')
+
+               expect(config.log_shift_age).to eq Config::DEFAULT_LOG_SHIFT_AGE
+            end
+
+            it 'should use default shift size if omitted' do
+               config.log_with(directory: '/test/log')
+
+               # 2**20 = 1 MB
+               expect(config.log_shift_size).to eq Config::DEFAULT_LOG_SHIFT_SIZE
             end
          end
 

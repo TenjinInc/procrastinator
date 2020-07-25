@@ -423,7 +423,7 @@ module Procrastinator
             it 'should pass the TaskWorker a stdout logger if logging disabled' do
                logger = Logger.new(StringIO.new)
 
-               expect(Logger).to receive(:new).with($stdout, anything).and_return(logger)
+               expect(Logger).to receive(:new).with($stdout, anything, anything, anything).and_return(logger)
 
                expect(TaskWorker).to receive(:new).with(hash_including(logger: logger)).and_call_original
 
@@ -596,7 +596,7 @@ module Procrastinator
                it 'should create a logger for stdout' do
                   worker = QueueWorker.new(queue: queue, config: config)
 
-                  expect(Logger).to receive(:new).with($stdout, anything).and_call_original
+                  expect(Logger).to receive(:new).with($stdout, anything, anything, anything).and_call_original
 
                   worker.start_log
                end
@@ -678,7 +678,8 @@ module Procrastinator
 
                      config.log_with level: level
 
-                     expect(Logger).to receive(:new).with(anything, hash_including(level: level)).and_return logger
+                     expect(Logger).to receive(:new).with(anything, anything, anything, hash_including(level: level))
+                                             .and_return logger
 
                      worker.start_log
                   end
@@ -716,6 +717,20 @@ module Procrastinator
                   log_contents = File.read(log_path)
 
                   expect(log_contents).to include("-- #{ worker.long_name }:")
+               end
+
+               it 'should use the provided shift age and size' do
+                  logger = Logger.new(StringIO.new)
+
+                  size = double('size')
+                  age  = double('age')
+                  config.log_with(shift_size: size, shift_age: age)
+
+                  worker = QueueWorker.new(queue: queue, config: config)
+
+                  expect(Logger).to receive(:new).with(anything, age, size, anything).and_return(logger)
+
+                  worker.start_log
                end
             end
          end

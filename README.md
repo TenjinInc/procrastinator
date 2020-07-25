@@ -547,11 +547,11 @@ Log files are named after the queue (eg. `log/welcome-queue-worker.log`).
 
 ```ruby
 scheduler = Procrastinator.setup do |env|
-   # you can set custom log settings:
+   # you can set custom log location and level:
    env.log_with(directory: '/var/log/myapp/', level: Logger::DEBUG)
    
-   # these are the defaults:
-   env.log_with(directory: 'log/', level: Logger::INFO)
+   # you can also set the log rotation age or size (see Logger docs for details)
+   env.log_with(shift: 1024, age: 5)
    
    # use a falsey log level to disable logging entirely:
    env.log_with level: nil

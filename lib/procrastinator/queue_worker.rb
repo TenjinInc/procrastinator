@@ -69,7 +69,9 @@ module Procrastinator
       def start_log
          return if @logger || !@config.log_level
 
-         @logger = Logger.new(log_target, level: @config.log_level, progname: long_name)
+         @logger = Logger.new(log_target, @config.log_shift_age, @config.log_shift_size,
+                              level:    @config.log_level,
+                              progname: long_name)
 
          msg = <<~MSG
             ======================================================================

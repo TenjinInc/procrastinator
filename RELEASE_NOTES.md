@@ -9,9 +9,10 @@
    
 
 ### Minor Changes
-   * Started release notes file.
+   * Started release notes file
    * Updated development gems
    * Logs now include the queue name in log lines
+   * Logs can now set the shift size or age (like Ruby's Logger)
 
 ### Bugfixes
    * none 
