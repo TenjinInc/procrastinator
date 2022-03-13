@@ -20,6 +20,7 @@
       * Removed use of envvar `PROCRASTINATOR_STOP`
       * `Procrastinator::QueueManager` is merged into `Procrastinator::Scheduler`
       * Removed rake task to halt queue processes
+      * You must now call `Scheduler#work` on the result of `Procrastinator.config`
       
 ### Minor Changes
    * Started release notes file

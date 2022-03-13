@@ -9,7 +9,7 @@ module Procrastinator
    class Scheduler
       extend Forwardable
 
-      def_delegators :@queue_manager, :act, :spawn_workers
+      def_delegators :@queue_manager, :work
 
       def initialize(config)
          @config        = config

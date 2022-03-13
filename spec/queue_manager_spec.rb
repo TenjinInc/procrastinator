@@ -6,89 +6,131 @@ module Procrastinator
    describe QueueManager do
       let(:test_task) { Test::Task::AllHooks }
 
-      describe '#spawn_workers' do
-         include FakeFS::SpecHelpers
+      let(:thread_double) { double('thread', join: nil) }
 
-         let(:persister) { Test::Persister.new }
-         let(:config) do
-            config = Config.new
-            config.load_with(persister)
-            config
-         end
+      before(:each) do
+         FakeFS.clear! if FakeFS.activated?
 
-         let(:manager) { QueueManager.new(config) }
+         # prevent actual threading during any testing
+         allow(Thread).to receive(:new).and_return(thread_double)
+      end
 
-         before(:each) do
-            FakeFS.clear! if FakeFS.activated?
-         end
+      let(:queue_names) { [:first, :second, :third] }
 
-         context 'main thread' do
-            before(:each) do
-               allow(Thread).to receive(:new)
+      let(:persister) { Test::Persister.new }
+      let(:config) do
+         config = Config.new
+         config.load_with(persister)
+         config
+      end
+
+      let(:manager) { QueueManager.new(config) }
+
+      describe '#work' do
+         it 'should create a worker for only specified queues' do
+            queue_names.each do |name|
+               config.define_queue(name, test_task)
             end
 
-            it 'should start a worker thread for each queue' do
-               n = 5
+            specified = [:first, :third]
 
-               n.times do |i|
-                  config.define_queue("queue#{ i }", test_task)
-               end
-
-               expect(Thread).to receive(:new).exactly(n).times
-
-               manager.spawn_workers
+            specified.each do |queue|
+               expect(QueueWorker).to receive(:new).and_return(double("queue worker #{ queue }", act: nil))
             end
 
-            it 'should create a worker for each queue definition' do
-               queue_defs = [:test2a, :test2b, :test2c]
-               queue_defs.each do |name|
+            manager.work(*specified)
+         end
+
+         it 'should create a worker for every queue definition by default' do
+            queue_names.each do |name|
+               config.define_queue(name, test_task)
+            end
+
+            queue_names.each do |queue|
+               expect(QueueWorker).to receive(:new).and_return(double("queue worker #{ queue }", act: nil))
+            end
+
+            manager.work
+         end
+
+      end
+
+      context 'QueueWorkerProxy' do
+         # acts on each queue in series.
+         # (useful for TDD)
+         context '#stepwise' do
+            it 'should call QueueWorker#act on only specified queue workers' do
+               queue_names.each do |name|
                   config.define_queue(name, test_task)
                end
 
-               expect(QueueWorker).to receive(:new).with(hash_including(queue: config.queues[0]))
-               expect(QueueWorker).to receive(:new).with(hash_including(queue: config.queues[1]))
-               expect(QueueWorker).to receive(:new).with(hash_including(queue: config.queues[2]))
+               workers = queue_names.collect do |queue_name|
+                  double("queue worker #{ queue_name }")
+               end
 
-               manager.spawn_workers
+               allow(QueueWorker).to receive(:new).and_return(workers[1], workers[2])
+
+               expect(workers[0]).to_not receive(:act)
+               expect(workers[1]).to receive(:act)
+               expect(workers[2]).to receive(:act)
+
+               manager.work(:second, :third).stepwise
             end
 
-            it 'should pass config to the workers' do
-               config.define_queue(:test_queue, test_task)
+            it 'should call QueueWorker#act on every queue worker by default' do
+               queue_names.each do |name|
+                  config.define_queue(name, test_task)
+               end
 
-               expect(QueueWorker).to receive(:new)
-                                            .with(hash_including(config: config))
-                                            .and_return(double('worker'))
-               manager.spawn_workers
+               workers = queue_names.collect do |queue_name|
+                  worker = double("queue worker #{ queue_name }")
+                  expect(worker).to receive(:act)
+                  worker
+               end
+
+               allow(QueueWorker).to receive(:new).and_return(*workers)
+
+               manager.work.stepwise
             end
 
-            # TODO: use this if threads end up being useful to store refs to
-            # it 'should store the worker threads in the manager' do
-            #    worker = double('queue worker 3', long_name: 'work3')
-            #
-            #    thr = double('some thread')
-            #
-            #    config.define_queue(:test_queue, test_task)
-            #
-            #    allow(Thread).to receive(:new).and_return(thr)
-            #
-            #    manager.spawn_workers
-            #
-            #    expect(manager.workers).to eq(worker => thr)
-            # end
+            it 'should call QueueWorker#act the specified number of times' do
+               queue_names.each do |name|
+                  config.define_queue(name, test_task)
+               end
+
+               workers = queue_names.collect do |queue_name|
+                  double("queue worker #{ queue_name }")
+               end
+
+               allow(QueueWorker).to receive(:new).and_return(*workers)
+
+               workers.each do |worker|
+                  expect(worker).to receive(:act).exactly(2).times
+               end
+
+               manager.work.stepwise(2)
+            end
          end
 
-         context 'worker thread' do
-            include FakeFS::SpecHelpers
+         # spawns a thread per queue and calls act on each queue worker
+         # (useful for same-process one-offs like a manual intervention)
+         context '#threaded' do
+            it 'should spawn a new thread for each specified queue' do
+               queue_names.each do |name|
+                  config.define_queue(name, test_task)
+               end
 
-            before(:each) do
-               allow(Thread).to receive(:new).and_yield
+               [queue_names, [:second, :third]].each do |queues|
+                  expect(Thread).to receive(:new).exactly(queues.size).times
 
-               allow_any_instance_of(QueueWorker).to receive(:work)
-
-               allow_any_instance_of(QueueManager).to receive(:shutdown_worker)
+                  manager.work(*queues).threaded
+               end
             end
 
-            it 'should tell the worker process to work' do
+            # ie. testing inside the child thread
+            it 'should tell the queue worker to work on the thread' do
+               allow(Thread).to receive(:new).and_yield.and_return(thread_double)
+
                config.define_queue(:test_queue, test_task)
 
                worker = double('worker')
@@ -97,54 +139,32 @@ module Procrastinator
 
                expect(worker).to receive(:work)
 
-               manager.spawn_workers
-            end
-         end
-      end
-
-      describe '#act' do
-         include FakeFS::SpecHelpers
-
-         let(:persister) { double('persister', read: [], create: nil, update: nil, delete: nil) }
-
-         let(:config) do
-            config = Config.new
-            config.load_with(persister)
-            config.define_queue(:test1, test_task)
-            config.define_queue(:test2, test_task)
-            config.define_queue(:test3, test_task)
-            config
-         end
-
-         let(:manager) { QueueManager.new(config) }
-
-         before(:each) do
-            allow(Thread).to receive(:new)
-            manager.spawn_workers
-         end
-
-         it 'should call QueueWorker#act on every queue worker' do
-            expect(manager.workers.size).to eq 3
-
-            manager.workers.each do |worker|
-               expect(worker).to receive(:act)
+               manager.work.threaded
             end
 
-            manager.act
+            it 'should wait for the threads to complete' do
+               config.define_queue(:first, test_task)
+               config.define_queue(:second, test_task)
+
+               expect(thread_double).to receive(:join).exactly(2).times
+
+               manager.work.threaded
+            end
+
+            it 'should wait respect the given timeout' do
+               config.define_queue(:test_queue, test_task)
+
+               n = 5
+               expect(thread_double).to receive(:join).with(n)
+
+               manager.work.threaded(timeout: n)
+            end
          end
 
-         it 'should call QueueWorker#act on queue worker for given queues only' do
-            workers = manager.workers
-
-            worker1 = workers.find { |w| w.name == :test1 }
-            worker2 = workers.find { |w| w.name == :test2 }
-            worker3 = workers.find { |w| w.name == :test3 }
-
-            expect(worker1).to_not receive(:act)
-            expect(worker2).to receive(:act)
-            expect(worker3).to receive(:act)
-
-            manager.act(:test2, :test3)
+         # takes over the current process and daemonizes itself.
+         # (useful for normal background operations in production)
+         context '#daemonize' do
+            pending 'this'
          end
       end
    end

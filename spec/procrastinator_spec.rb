@@ -20,7 +20,6 @@ module Procrastinator
             config.define_queue(:setup_test_queue, test_task)
 
             allow(Config).to receive(:new).and_return(config)
-            allow(QueueManager).to receive(:new).and_return(double('qm', spawn_workers: nil))
 
             expect do |block|
                Procrastinator.setup(&block)
@@ -42,18 +41,6 @@ module Procrastinator
             end
 
             expect(returned).to be scheduler
-         end
-
-         it 'should create a queue manager configured with config' do
-            config = Config.new
-
-            config.load_with(persister)
-            config.define_queue(:configured_queue, test_task)
-
-            expect(Config).to receive(:new).and_return(config)
-            expect(QueueManager).to receive(:new).with(config).and_call_original
-
-            expect { |b| Procrastinator.setup(&b) }.to yield_with_args(config)
          end
 
          it 'should require that a block is provided' do

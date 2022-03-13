@@ -300,30 +300,19 @@ module Procrastinator
          end
       end
 
-      describe '#act' do
-         it 'should forward calls to act to the queue manager' do
+      describe '#work' do
+         it 'should forward calls to work to its queue manager' do
             manager = double('qmanager')
             queues  = double('queues')
 
             expect(QueueManager).to receive(:new).and_return(manager)
             scheduler = Scheduler.new(double('config'))
 
-            expect(manager).to receive(:act).with(queues)
+            [:step, :threads].each do |type|
+               expect(manager).to receive(:work).with(type, queues)
 
-            scheduler.act(queues)
-         end
-      end
-
-      describe '#spawn_workers' do
-         it 'should forward calls to spawn_workers to its queue manager' do
-            manager = double('qmanager')
-
-            expect(QueueManager).to receive(:new).and_return(manager)
-            scheduler = Scheduler.new(double('config'))
-
-            expect(manager).to receive(:spawn_workers)
-
-            scheduler.spawn_workers
+               scheduler.work(type, queues)
+            end
          end
       end
    end
