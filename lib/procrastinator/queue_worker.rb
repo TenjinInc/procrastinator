@@ -13,10 +13,10 @@ module Procrastinator
       # expected methods for all persistence strategies
       PERSISTER_METHODS = [:read, :update, :delete].freeze
 
-      def initialize(queue:, config:, scheduler: nil)
+      def initialize(queue:, config:)
          @queue     = queue
          @config    = config
-         @scheduler = scheduler
+         @scheduler = Scheduler.new(config)
 
          @logger = nil
       end

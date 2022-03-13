@@ -21,9 +21,7 @@ module Procrastinator
       def spawn_workers
          # TODO: does it need to remember these workers? at all? or can they just be initted in the thread itself?
          @workers = @config.queues.collect do |queue|
-            QueueWorker.new(queue:     queue,
-                            config:    @config,
-                            scheduler: Scheduler.new(@config))
+            QueueWorker.new(queue: queue, config: @config)
          end
 
          @workers.each do |worker|

@@ -61,15 +61,6 @@ module Procrastinator
                manager.spawn_workers
             end
 
-            it 'should pass scheduler to the workers' do
-               config.define_queue(:test_queue, test_task)
-
-               expect(QueueWorker).to receive(:new)
-                                            .with(hash_including(:scheduler))
-                                            .and_return(double('worker'))
-               manager.spawn_workers
-            end
-
             # TODO: use this if threads end up being useful to store refs to
             # it 'should store the worker threads in the manager' do
             #    worker = double('queue worker 3', long_name: 'work3')

@@ -365,13 +365,11 @@ module Procrastinator
             end
 
             it 'should pass the TaskWorker the scheduler' do
-               scheduler = double('scheduler')
-
-               expect(TaskWorker).to receive(:new).with(hash_including(scheduler: scheduler)).and_call_original
+               expect(TaskWorker).to receive(:new).with(hash_including(scheduler: an_instance_of(Scheduler))).and_call_original
 
                config.load_with fake_persister([{run_at: 1}])
 
-               worker = QueueWorker.new(queue: instant_queue, scheduler: scheduler, config: config)
+               worker = QueueWorker.new(queue: instant_queue, config: config)
 
                worker.act
             end
