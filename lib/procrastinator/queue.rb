@@ -15,23 +15,19 @@ module Procrastinator
    #    @return [Object] Maximum number of attempts for tasks in this queue.
    # @!attribute [r] :update_period
    #    @return [Pathname] Delay (seconds) between reloads of tasks from the task loader.
-   # @!attribute [r] :max_tasks
-   #    @return [Pathname] The maximum number of tasks to run concurrently within a queue worker thread.
    class Queue
       DEFAULT_TIMEOUT       = 3600 # in seconds; one hour total
       DEFAULT_MAX_ATTEMPTS  = 20
       DEFAULT_UPDATE_PERIOD = 10 # seconds
-      DEFAULT_MAX_TASKS     = 10
 
-      attr_reader :name, :task_class, :max_attempts, :timeout, :update_period, :max_tasks
+      attr_reader :name, :task_class, :max_attempts, :timeout, :update_period
 
       # Timeout is in seconds
       def initialize(name:,
                      task_class:,
                      max_attempts: DEFAULT_MAX_ATTEMPTS,
                      timeout: DEFAULT_TIMEOUT,
-                     update_period: DEFAULT_UPDATE_PERIOD,
-                     max_tasks: DEFAULT_MAX_TASKS)
+                     update_period: DEFAULT_UPDATE_PERIOD)
          raise ArgumentError, ':name may not be nil' unless name
          raise ArgumentError, ':task_class may not be nil' unless task_class
 
@@ -44,7 +40,6 @@ module Procrastinator
          @max_attempts  = max_attempts
          @timeout       = timeout
          @update_period = update_period
-         @max_tasks     = max_tasks
       end
    end
 end

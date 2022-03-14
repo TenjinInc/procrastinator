@@ -21,6 +21,7 @@ module Procrastinator
          @logger = nil
       end
 
+      # Works on jobs forever
       def work
          start_log
 
@@ -37,7 +38,10 @@ module Procrastinator
          end
       end
 
-      def act
+      # Performs the given number of jobs.
+      #
+      # @param count [Integer] the number of jobs. Default 1.
+      def act(count = 1)
          persister = @config.loader
 
          tasks = fetch_tasks(persister)
@@ -116,7 +120,7 @@ module Procrastinator
          # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
          # results
          # Ideally, we'd use a better algo than qsort for this, but this will do for now
-         tasks.shuffle.sort_by { |t| t[:run_at] }.first(@queue.max_tasks)
+         tasks.shuffle.sort_by { |t| t[:run_at] }
       end
    end
 

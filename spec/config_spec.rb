@@ -90,15 +90,13 @@ module Procrastinator
                expect { config.define_queue(:queue_name, nil) }.to raise_error(ArgumentError, 'queue task class cannot be nil')
             end
 
-            it 'should add a queue with its timeout, max_tasks, max_attempts, update_period' do
+            it 'should add a queue with its timeout, max_attempts, update_period' do
                config.define_queue(:test1, test_task,
                                    timeout:       1,
-                                   max_tasks:     2,
                                    max_attempts:  3,
                                    update_period: 4)
                config.define_queue(:test2, test_task,
                                    timeout:       5,
-                                   max_tasks:     6,
                                    max_attempts:  7,
                                    update_period: 8)
 
@@ -106,13 +104,11 @@ module Procrastinator
                queue2 = config.queues.last
 
                expect(queue1.timeout).to eq 1
-               expect(queue1.max_tasks).to eq 2
                expect(queue1.max_attempts).to eq 3
                expect(queue1.update_period).to eq 4
                expect(queue1.task_class).to eq test_task
 
                expect(queue2.timeout).to eq 5
-               expect(queue2.max_tasks).to eq 6
                expect(queue2.max_attempts).to eq 7
                expect(queue2.update_period).to eq 8
                expect(queue2.task_class).to eq test_task

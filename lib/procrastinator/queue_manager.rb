@@ -19,8 +19,7 @@ module Procrastinator
 
       # Spawns a new worker thread for each queue defined in the config
       #
-      # @param :mode [Symbol] One of: `:step`, `:threads`, `:daemon`
-      # @param :queue_names [Array<String,Symbol>] Names of specific queues to act upon. Omit or leave empty to act on all queues.
+      # @param queue_names [Array<String,Symbol>] Names of specific queues to act upon. Omit or leave empty to act on all queues.
       def work(*queue_names)
          QueueWorkerProxy.new(filter_queues(queue_names).collect do |queue|
             QueueWorker.new(queue: queue, config: @config)

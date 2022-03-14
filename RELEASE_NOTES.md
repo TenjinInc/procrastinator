@@ -21,6 +21,7 @@
       * `Procrastinator::QueueManager` is merged into `Procrastinator::Scheduler`
       * Removed rake task to halt queue processes
       * You must now call `Scheduler#work` on the result of `Procrastinator.config`
+   * `max_tasks` is removed as it only added concurrency complexity
       
 ### Minor Changes
    * Started release notes file

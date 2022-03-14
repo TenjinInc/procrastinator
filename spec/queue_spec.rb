@@ -107,23 +107,6 @@ module Procrastinator
 
             expect(queue.update_period).to eq Queue::DEFAULT_UPDATE_PERIOD
          end
-
-         it 'should accept a max_tasks' do
-            (1..3).each do |i|
-               queue = Procrastinator::Queue.new(name:       :queues,
-                                                 task_class: test_task,
-                                                 max_tasks:  i)
-
-               expect(queue.max_tasks).to eq i
-            end
-         end
-
-         it 'should provide a default max_tasks' do
-            queue = Procrastinator::Queue.new(name:       :queues,
-                                              task_class: test_task)
-
-            expect(queue.max_tasks).to eq Queue::DEFAULT_MAX_TASKS
-         end
       end
    end
 end

@@ -201,7 +201,7 @@ module Procrastinator
                expect(handler2).to receive(:run).ordered
                expect(handler3).to receive(:run).ordered
 
-               worker.act
+               worker.act(3)
             end
 
             it 'should ignore tasks with nil run_at' do
@@ -421,26 +421,6 @@ module Procrastinator
                Timecop.freeze(now) do
                   worker.act
                end
-            end
-
-            it 'should not start more TaskWorkers than max_tasks' do
-               task_data1 = {run_at: 1}
-               task_data2 = {run_at: 2}
-
-               expect(TaskWorker).to receive(:new).once.and_call_original
-
-               persister = fake_persister([task_data1, task_data2])
-
-               queue = Procrastinator::Queue.new(name:          :short_queue,
-                                                 task_class:    test_task,
-                                                 update_period: 0,
-                                                 max_tasks:     1)
-
-               config.load_with persister
-
-               worker = QueueWorker.new(queue: queue, config: config)
-
-               worker.act
             end
          end
 
