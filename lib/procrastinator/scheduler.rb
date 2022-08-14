@@ -9,11 +9,8 @@ module Procrastinator
    class Scheduler
       extend Forwardable
 
-      def_delegators :@queue_manager, :work
-
       def initialize(config)
-         @config        = config
-         @queue_manager = QueueManager.new(config)
+         @config = config
       end
 
       # Records a new task to be executed at the given time.
@@ -69,6 +66,18 @@ module Procrastinator
          raise "multiple tasks match search: #{ identifier }" if tasks.size > 1
 
          loader.delete(tasks.first[:id])
+      end
+
+      # Spawns a new worker thread for each queue defined in the config
+      #
+      # @param queue_names [Array<String,Symbol>] Names of specific queues to act upon.
+      #                                           Omit or leave empty to act on all queues.
+      def work(*queue_names)
+         workers = filter_queues(queue_names).collect do |queue|
+            QueueWorker.new(queue: queue, config: @config)
+         end
+
+         WorkProxy.new(workers)
       end
 
       # Provides a more natural syntax for rescheduling tasks
@@ -130,6 +139,96 @@ module Procrastinator
          end
       end
 
+      # Provides a more natural chained syntax for kicking off the queue working process
+      #
+      # @see Scheduler#work
+      class WorkProxy
+         PID_EXT          = '.pid'
+         DEFAULT_PID_DIR  = Pathname.new('pid/').freeze
+         DEFAULT_PID_FILE = Pathname.new("procrastinator#{ PID_EXT }").freeze
+
+         # 15 chars is linux limit
+         MAX_PROC_LEN = 15
+
+         def initialize(workers)
+            @workers = workers
+         end
+
+         # Work off the given number of tasks for each queue and return
+         # @param steps [integer] The number of tasks to complete.
+         def serially(steps: 1)
+            steps.times do
+               @workers.each(&:work_one)
+            end
+         end
+
+         # Work off jobs per queue, each in its own thread.
+         def threaded(timeout: nil)
+            threads = @workers.collect do |worker|
+               Thread.new do
+                  worker.work
+               end
+            end
+
+            threads.each { |thread| thread.join(timeout) }
+         end
+
+         # Consumes the current process and turns it into a background daemon.
+         #
+         # @param name [String] The process name to request from the OS.
+         #                      Not guaranteed to be set, depending on OS support.
+         # @param pid_path [Pathname|File|String] Path to where the process ID file is to be kept.
+         #                                        Assumed to be a directory unless ends with '.pid'.
+         def daemonized!(name: nil, pid_path: nil)
+            summon_demon(pid_path)
+
+            unless name.nil?
+               warn "Warning: process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
+               name = name[0, MAX_PROC_LEN]
+
+               warn "Warning: a process is already named \"#{ name }\". Consider the \"name:\" argument to distinguish."
+               Process.setproctitle(name)
+            end
+
+            threaded
+
+            warn("Procrastinator running. Process ID: #{ Process.pid }")
+         end
+
+         private
+
+         # And his name is *Shawn*?
+         def summon_demon(pid_path)
+            # double fork to guarantee no terminal can be attached.
+            exit if fork
+            Process.setsid
+            exit if fork
+            Dir.chdir '/' # allows process to continue even if the pwd of its running terminal disappears (eg deleted)
+
+            warn('Starting Procrastinator...')
+
+            manage_pid(pid_path)
+         end
+
+         def manage_pid(pid_path)
+            pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
+
+            if pid_path.extname == PID_EXT
+               pid_path.dirname.mkpath
+            else
+               pid_path.mkpath
+               pid_path /= DEFAULT_PID_FILE
+            end
+
+            pid_path.write(Process.pid.to_s)
+
+            at_exit do
+               pid_path.delete if pid_path.exist?
+               warn("Procrastinator (pid #{ Process.pid }) halted.")
+            end
+         end
+      end
+
       private
 
       # Scheduler must always get the loader indirectly. If it saves the loader to an instance variable,
@@ -165,6 +264,16 @@ module Procrastinator
                task #{ queue.task_class } does not import :data. Add this in your class definition:
                      task_attr :data
             ERROR
+         end
+      end
+
+      # Find Queues that match the given queue names, or all queues if no names provided.
+      # @param :queue_names [Array<String,Symbol>] List of queue names to match. If empty, will return all queues.
+      def filter_queues(queue_names)
+         queue_names ||= []
+
+         @config.queues.select do |queue|
+            queue_names.empty? || queue_names.include?(queue.name)
          end
       end
    end
