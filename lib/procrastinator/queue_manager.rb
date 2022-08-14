@@ -30,7 +30,12 @@ module Procrastinator
       #
       # @see QueueManager#work
       class QueueWorkerProxy
-         DEFAULT_PID_DIR = Pathname.new('pid/').freeze
+         PID_EXT          = '.pid'
+         DEFAULT_PID_DIR  = Pathname.new('pid/').freeze
+         DEFAULT_PID_FILE = Pathname.new("procrastinator#{ PID_EXT }").freeze
+
+         # 15 chars is linux limit
+         MAX_PROC_LEN = 15
 
          def initialize(workers)
             @workers = workers
@@ -55,12 +60,51 @@ module Procrastinator
          end
 
          # Consumes the current process and turns it into a background daemon.
-         def deamonize
-            raise 'not implemented yet'
+         #
+         # @param name [String] The process name to request from the OS. Not guaranteed to be set, depending on OS support.
+         # @param pid_path [Pathname|File|String] Path to where the process ID file is to be kept. Assumed to be a directory unless ends with '.pid'.
+         def daemonize(name: nil, pid_path: nil)
+            # double fork to guarantee no terminal can be attached.
+            exit if fork
+            Process.setsid
+            exit if fork
+            Dir.chdir '/' # allows process to continue even if the pwd of its running terminal disappears (eg deleted)
 
-            # TODO: it should write its pid file
-            # TODO: it should clean up the pid file on clean exit
-            # TODO: it should respond to SIGTERM to exit cleanly
+            warn('Starting Procrastinator...')
+
+            manage_pid(pid_path)
+
+            unless name.nil?
+               warn "Warning: process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
+               name = name[0, MAX_PROC_LEN]
+
+               warn "Warning: a process is already named \"#{ name }\". Consider the \"name:\" argument to distinguish."
+               Process.setproctitle(name)
+            end
+
+            threaded
+
+            warn("Procrastinator running. Process ID: #{ Process.pid }")
+         end
+
+         private
+
+         def manage_pid(pid_path)
+            pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
+
+            if pid_path.extname == PID_EXT
+               pid_path.dirname.mkpath
+            else
+               pid_path.mkpath
+               pid_path /= DEFAULT_PID_FILE
+            end
+
+            pid_path.write(Process.pid.to_s)
+
+            at_exit do
+               pid_path.delete if pid_path.exist?
+               warn("Procrastinator (pid #{ Process.pid }) halted.")
+            end
          end
       end
 
