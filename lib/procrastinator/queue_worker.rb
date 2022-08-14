@@ -43,18 +43,20 @@ module Procrastinator
          metadata = fetch_task
          return unless metadata
 
-         tw = TaskWorker.new(metadata:  metadata,
-                             queue:     @queue,
-                             scheduler: @scheduler,
-                             context:   @config.context,
-                             logger:    @logger)
+         worker = TaskWorker.new(metadata:  metadata,
+                                 queue:     @queue,
+                                 scheduler: @scheduler,
+                                 context:   @config.context,
+                                 logger:    @logger)
 
-         tw.work
+         worker.work
 
-         if tw.successful?
-            @config.loader.delete(tw.id)
+         if worker.successful?
+            @config.loader.delete(worker.id)
          else
-            @config.loader.update(tw.id, tw.to_h.merge(queue: @queue.name.to_s))
+            worker_info = worker.to_h
+            id          = worker_info.delete(:id)
+            @config.loader.update(id, **worker_info)
          end
       end
 

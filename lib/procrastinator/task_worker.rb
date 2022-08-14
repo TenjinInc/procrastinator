@@ -18,8 +18,7 @@ module Procrastinator
       def_delegators :@metadata,
                      :id, :run_at, :initial_run_at, :expire_at,
                      :attempts, :last_fail_at, :last_error,
-                     :data,
-                     :to_h, :successful?
+                     :data, :successful?
 
       def initialize(metadata:,
                      queue:,
@@ -64,6 +63,10 @@ module Procrastinator
                handle_failure(e)
             end
          end
+      end
+
+      def to_h
+         @metadata.to_h.merge(queue: @queue.name.to_sym)
       end
 
       private

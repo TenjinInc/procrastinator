@@ -389,7 +389,7 @@ module Procrastinator
 
                   worker.work
 
-                  expected_time = previous_time + (30 + (i**4))
+                  expected_time = previous_time + (30 + (i ** 4))
 
                   actual_time = worker.run_at
 
@@ -598,23 +598,35 @@ module Procrastinator
       end
 
       describe '#to_h' do
-         it 'should return the task hash' do
-            run_at         = double('run_at', to_i: double('run_at_i'))
-            initial_run_at = double('initial_run_at', to_i: double('initial_run_at_i'))
-            expire_at      = double('expire_at', to_i: double('expire_at_i'))
+         it 'should return the task hash and queue name' do
+            queue          = double(name: :some_queue, task_class: Test::Task::AllHooks)
+            run_at         = double('run_at_i')
+            initial_run_at = double('initial_run_at_i')
+            expire_at      = double('expire_at_i')
+            attempts       = double('attempts')
+            last_fail_at   = double('last_fail_at')
+            last_error     = double('last_error')
+            data           = YAML.dump('one data, please')
 
             task = TaskMetaData.new(id:             double('id'),
-                                    attempts:       double('attempts'),
-                                    last_fail_at:   double('last_fail_at'),
-                                    last_error:     double('last_error'),
-                                    data:           YAML.dump('one data, please'),
-                                    initial_run_at: initial_run_at,
-                                    run_at:         run_at,
-                                    expire_at:      expire_at)
+                                    attempts:       attempts,
+                                    last_fail_at:   last_fail_at,
+                                    last_error:     last_error,
+                                    data:           data,
+                                    initial_run_at: double('initial_run_at', to_i: initial_run_at),
+                                    run_at:         double('run_at', to_i: run_at),
+                                    expire_at:      double('expire_at', to_i: expire_at))
 
             worker = TaskWorker.new(metadata: task, queue: queue)
 
-            expect(worker.to_h).to eq(task.to_h)
+            expect(worker.to_h).to include(attempts:       attempts,
+                                           run_at:         run_at,
+                                           last_fail_at:   last_fail_at,
+                                           last_error:     last_error,
+                                           initial_run_at: initial_run_at,
+                                           expire_at:      expire_at,
+                                           queue:          :some_queue,
+                                           data:           data)
          end
       end
    end
