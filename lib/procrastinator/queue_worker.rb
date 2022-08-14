@@ -29,7 +29,7 @@ module Procrastinator
             loop do
                sleep(@queue.update_period)
 
-               act
+               work_one
             end
          rescue StandardError => e
             raise unless @logger
@@ -38,24 +38,23 @@ module Procrastinator
          end
       end
 
-      # Performs the given number of jobs.
-      #
-      # @param count [Integer] the number of jobs. Default 1.
-      def act(count = 1)
-         persister = @config.loader
+      # Performs exactly one task on the queue
+      def work_one
+         metadata = fetch_task
+         return unless metadata
 
-         tasks = fetch_tasks(persister)
+         tw = TaskWorker.new(metadata:  metadata,
+                             queue:     @queue,
+                             scheduler: @scheduler,
+                             context:   @config.context,
+                             logger:    @logger)
 
-         tasks.each do |metadata|
-            tw = build_worker(metadata)
+         tw.work
 
-            tw.work
-
-            if tw.successful?
-               persister.delete(metadata.id)
-            else
-               persister.update(metadata.id, tw.to_h.merge(queue: @queue.name.to_s))
-            end
+         if tw.successful?
+            @config.loader.delete(tw.id)
+         else
+            @config.loader.update(tw.id, tw.to_h.merge(queue: @queue.name.to_s))
          end
       end
 
@@ -78,16 +77,6 @@ module Procrastinator
 
       private
 
-      def build_worker(metadata)
-         start_log
-
-         TaskWorker.new(metadata:  metadata,
-                        queue:     @queue,
-                        scheduler: @scheduler,
-                        context:   @config.context,
-                        logger:    @logger)
-      end
-
       def log_target
          log_path = @config.log_dir + "#{ long_name }.log"
 
@@ -103,16 +92,14 @@ module Procrastinator
          end
       end
 
-      def fetch_tasks(persister)
-         tasks = persister.read(queue: @queue.name).map(&:to_h).reject { |t| t[:run_at].nil? }
+      def fetch_task
+         tasks = @config.loader.read(queue: @queue.name).map(&:to_h).reject { |t| t[:run_at].nil? }
 
-         tasks = sort_tasks(tasks)
-
-         metas = tasks.collect do |t|
+         metas = sort_tasks(tasks).collect do |t|
             TaskMetaData.new(t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) })
          end
 
-         metas.select(&:runnable?)
+         metas.find(&:runnable?)
       end
 
       def sort_tasks(tasks)

@@ -42,13 +42,14 @@ module Procrastinator
          end
 
          # Work off the given number of tasks for each queue and return
-         def stepwise(steps = 1)
+         # @param steps [integer] The number of tasks to complete.
+         def serially(steps: 1)
             steps.times do
-               @workers.each(&:act)
+               @workers.each(&:work_one)
             end
          end
 
-         # Work off jobs per queue until they are complete, with each queue on its own thread
+         # Work off jobs per queue, each in its own thread.
          def threaded(timeout: nil)
             threads = @workers.collect do |worker|
                Thread.new do
@@ -56,14 +57,14 @@ module Procrastinator
                end
             end
 
-            threads.each { |t| t.join(timeout) }
+            threads.each { |thread| thread.join(timeout) }
          end
 
          # Consumes the current process and turns it into a background daemon.
          #
          # @param name [String] The process name to request from the OS. Not guaranteed to be set, depending on OS support.
          # @param pid_path [Pathname|File|String] Path to where the process ID file is to be kept. Assumed to be a directory unless ends with '.pid'.
-         def daemonize(name: nil, pid_path: nil)
+         def daemonized!(name: nil, pid_path: nil)
             # double fork to guarantee no terminal can be attached.
             exit if fork
             Process.setsid

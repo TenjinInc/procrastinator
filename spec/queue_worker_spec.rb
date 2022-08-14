@@ -69,7 +69,7 @@ module Procrastinator
                n_loops.times { block.call }
             end
 
-            expect(worker).to receive(:act).exactly(n_loops).times
+            expect(worker).to receive(:work_one).exactly(n_loops).times
 
             worker.work
          end
@@ -94,7 +94,7 @@ module Procrastinator
                   block.call
                end
 
-               allow(worker).to receive(:act).and_raise(err)
+               allow(worker).to receive(:work_one).and_raise(err)
 
                worker.work
 
@@ -125,7 +125,7 @@ module Procrastinator
                block.call
             end
 
-            allow(worker).to receive(:act).and_raise(RuntimeError, err)
+            allow(worker).to receive(:work_one).and_raise(RuntimeError, err)
 
             expect do
                worker.work
@@ -133,7 +133,7 @@ module Procrastinator
          end
       end
 
-      describe '#act' do
+      describe '#work_one' do
          include FakeFS::SpecHelpers
 
          context 'loading and running tasks' do
@@ -150,7 +150,7 @@ module Procrastinator
 
                   expect(persister).to receive(:read).with(queue: name)
 
-                  worker.act
+                  worker.work_one
                end
             end
 
@@ -172,11 +172,11 @@ module Procrastinator
                expect(correct_loader).to receive(:read)
                expect(wrong_loader).to_not receive(:read)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should sort tasks by run_at' do
-               job1 = {id: 4, run_at: 1, initial_run_at: 0} # consider nil = 0
+               job1 = {id: 4, run_at: 1, initial_run_at: 0}
                job2 = {id: 5, run_at: 2, initial_run_at: 0}
                job3 = {id: 6, run_at: 3, initial_run_at: 0}
 
@@ -187,7 +187,7 @@ module Procrastinator
                allow(Test::Task::AllHooks).to receive(:new).and_return(handler1, handler2, handler3)
 
                persister = double('disorganized persister',
-                                  read:   [job2, job3, job1],
+                                  read:   [job2, job1, job3],
                                   create: nil,
                                   update: nil,
                                   delete: nil)
@@ -197,11 +197,9 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
-               expect(handler1).to receive(:run).ordered
-               expect(handler2).to receive(:run).ordered
-               expect(handler3).to receive(:run).ordered
+               expect(handler1).to receive(:run)
 
-               worker.act(3)
+               worker.work_one
             end
 
             it 'should ignore tasks with nil run_at' do
@@ -226,7 +224,7 @@ module Procrastinator
                expect(task1).to_not receive(:run)
                expect(task2).to receive(:run)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should reload tasks every cycle' do
@@ -257,8 +255,8 @@ module Procrastinator
                Timecop.freeze(start_time) do
                   worker = QueueWorker.new(queue: instant_queue, config: config)
 
-                  worker.act
-                  worker.act
+                  worker.work_one
+                  worker.work_one
 
                   expect(Time.now.to_i).to eq start_time.to_i + task1_duration + task2_duration
                end
@@ -282,7 +280,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should convert the read results to hash' do
@@ -304,7 +302,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should ignore any unused or unknown data' do
@@ -322,7 +320,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should run a TaskWorker with the task metadata' do
@@ -337,7 +335,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should pass the TaskWorker the task context' do
@@ -351,7 +349,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should pass the TaskWorker the queue settings' do
@@ -361,7 +359,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should pass the TaskWorker the scheduler' do
@@ -371,7 +369,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should pass the TaskWorker the logger if log directory given' do
@@ -387,22 +385,22 @@ module Procrastinator
                   worker = QueueWorker.new(queue: instant_queue, config: config)
                   worker.start_log
 
-                  worker.act
+                  worker.work_one
                end
             end
 
-            it 'should run a TaskWorker for each ready task' do
+            it 'should run a TaskWorker for the first ready task' do
                task_data1 = {run_at: 1}
                task_data2 = {run_at: 1}
                task_data3 = {run_at: 1}
 
-               expect(TaskWorker).to receive(:new).exactly(3).times.and_call_original
+               expect(TaskWorker).to receive(:new).once.and_call_original
 
                config.load_with fake_persister([task_data1, task_data2, task_data3])
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
-               worker.act
+               worker.work_one
             end
 
             it 'should not start any TaskWorkers for unready tasks' do
@@ -419,7 +417,7 @@ module Procrastinator
                worker = QueueWorker.new(queue: instant_queue, config: config)
 
                Timecop.freeze(now) do
-                  worker.act
+                  worker.work_one
                end
             end
          end
@@ -439,7 +437,7 @@ module Procrastinator
 
                expect(persister).to receive(:delete).with(task_data[:id])
 
-               worker.act
+               worker.work_one
             end
          end
 
@@ -472,7 +470,7 @@ module Procrastinator
                                                                                 run_at: nil,
                                                                                 queue:  name.to_s))
 
-                  worker.act
+                  worker.work_one
                end
             end
          end
@@ -586,7 +584,7 @@ module Procrastinator
                   config.log_with level: level
 
                   expect(Logger).to receive(:new).with(anything, anything, anything, hash_including(level: level))
-                                          .and_return logger
+                                                 .and_return logger
 
                   worker.start_log
                end

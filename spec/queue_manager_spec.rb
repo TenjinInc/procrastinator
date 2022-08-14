@@ -35,7 +35,7 @@ module Procrastinator
             specified = [:first, :third]
 
             specified.each do |queue|
-               expect(QueueWorker).to receive(:new).and_return(double("queue worker #{ queue }", act: nil))
+               expect(QueueWorker).to receive(:new).and_return(double("queue worker #{ queue }", work_one: nil))
             end
 
             manager.work(*specified)
@@ -47,7 +47,7 @@ module Procrastinator
             end
 
             queue_names.each do |queue|
-               expect(QueueWorker).to receive(:new).and_return(double("queue worker #{ queue }", act: nil))
+               expect(QueueWorker).to receive(:new).and_return(double("queue worker #{ queue }", work_one: nil))
             end
 
             manager.work
@@ -58,7 +58,7 @@ module Procrastinator
       context 'QueueWorkerProxy' do
          # acts on each queue in series.
          # (useful for TDD)
-         context '#stepwise' do
+         context '#serially' do
             it 'should call QueueWorker#act on only specified queue workers' do
                queue_names.each do |name|
                   config.define_queue(name, test_task)
@@ -70,11 +70,11 @@ module Procrastinator
 
                allow(QueueWorker).to receive(:new).and_return(workers[1], workers[2])
 
-               expect(workers[0]).to_not receive(:act)
-               expect(workers[1]).to receive(:act)
-               expect(workers[2]).to receive(:act)
+               expect(workers[0]).to_not receive(:work_one)
+               expect(workers[1]).to receive(:work_one)
+               expect(workers[2]).to receive(:work_one)
 
-               manager.work(:second, :third).stepwise
+               manager.work(:second, :third).serially
             end
 
             it 'should call QueueWorker#act on every queue worker by default' do
@@ -84,13 +84,13 @@ module Procrastinator
 
                workers = queue_names.collect do |queue_name|
                   worker = double("queue worker #{ queue_name }")
-                  expect(worker).to receive(:act)
+                  expect(worker).to receive(:work_one)
                   worker
                end
 
                allow(QueueWorker).to receive(:new).and_return(*workers)
 
-               manager.work.stepwise
+               manager.work.serially
             end
 
             it 'should call QueueWorker#act the specified number of times' do
@@ -105,10 +105,10 @@ module Procrastinator
                allow(QueueWorker).to receive(:new).and_return(*workers)
 
                workers.each do |worker|
-                  expect(worker).to receive(:act).exactly(2).times
+                  expect(worker).to receive(:work_one).exactly(2).times
                end
 
-               manager.work.stepwise(2)
+               manager.work.serially(steps: 2)
             end
          end
 
@@ -163,7 +163,7 @@ module Procrastinator
 
          # takes over the current process and daemonizes itself.
          # (useful for normal background operations in production)
-         context '#daemonize' do
+         context '#daemonized!' do
             let(:worker_proxy) { manager.work }
 
             before(:each) do
@@ -178,7 +178,7 @@ module Procrastinator
                it 'should exit cleanly' do
                   allow(worker_proxy).to receive(:fork).and_return(1234)
 
-                  expect { worker_proxy.daemonize }.to raise_error(SystemExit) do |error|
+                  expect { worker_proxy.daemonized! }.to raise_error(SystemExit) do |error|
                      expect(error.status).to eq(0)
                   end
                end
@@ -187,7 +187,7 @@ module Procrastinator
                   allow(worker_proxy).to receive(:fork).and_return(nil, 5678)
 
                   expect(Process).to receive(:setsid)
-                  expect { worker_proxy.daemonize }.to raise_error(SystemExit) do |error|
+                  expect { worker_proxy.daemonized! }.to raise_error(SystemExit) do |error|
                      expect(error.status).to eq(0)
                   end
                end
@@ -202,13 +202,13 @@ module Procrastinator
                # prevents pointing to a pwd inherited from a manual terminal run
                it 'should chdir to root' do
                   expect(Dir).to receive(:chdir).with('/')
-                  worker_proxy.daemonize
+                  worker_proxy.daemonized!
                end
 
                it 'should spawn queues workers in threaded mode' do
                   expect(worker_proxy).to receive(:threaded)
 
-                  worker_proxy.daemonize
+                  worker_proxy.daemonized!
                end
 
                # not sure this is actually necessary to test, so leaving just as a note:
@@ -220,7 +220,7 @@ module Procrastinator
 
                      expect(Process).to receive(:setproctitle).with(procname)
 
-                     worker_proxy.daemonize(name: procname)
+                     worker_proxy.daemonized!(name: procname)
                   end
 
                   it 'should warn if the process name is too long' do
@@ -229,7 +229,7 @@ module Procrastinator
 
                      msg = /^Warning: process name is longer than max length \(#{ maxlen }\). Trimming to fit.$/
 
-                     expect { worker_proxy.daemonize(name: max_procname + 'b') }.to output(msg).to_stderr
+                     expect { worker_proxy.daemonized!(name: max_procname + 'b') }.to output(msg).to_stderr
                   end
 
                   it 'should warn trim long process names to fit' do
@@ -238,7 +238,7 @@ module Procrastinator
 
                      expect(Process).to receive(:setproctitle).with(max_procname)
 
-                     worker_proxy.daemonize(name: max_procname + 'more')
+                     worker_proxy.daemonized!(name: max_procname + 'more')
                   end
 
                   it 'should warn when an existing process has the same name' do
@@ -246,9 +246,9 @@ module Procrastinator
 
                      msg = /^Warning: a process is already named "#{ procname }". Consider the "name:" argument to distinguish.$/
 
-                     expect { worker_proxy.daemonize(name: procname) }.to output(msg).to_stderr
+                     expect { worker_proxy.daemonized!(name: procname) }.to output(msg).to_stderr
 
-                     worker_proxy.daemonize(name: procname)
+                     worker_proxy.daemonized!(name: procname)
                   end
                end
 
@@ -257,7 +257,7 @@ module Procrastinator
 
                   it 'should create pid file at the provided filename' do
                      pid_file = Pathname.new('/tmp/atomic-coffee/beans.pid')
-                     worker_proxy.daemonize(pid_path: pid_file)
+                     worker_proxy.daemonized!(pid_path: pid_file)
 
                      expect(pid_file).to exist
                      expect(pid_file).to be_file
@@ -265,7 +265,7 @@ module Procrastinator
 
                   it 'should use the provided pid directory' do
                      pid_dir = Pathname.new('/tmp/atomic-coffee')
-                     worker_proxy.daemonize(pid_path: pid_dir)
+                     worker_proxy.daemonized!(pid_path: pid_dir)
 
                      expect(pid_dir).to exist
                      expect(pid_dir).to be_directory
@@ -273,7 +273,7 @@ module Procrastinator
                   end
 
                   it 'should use a default pid dir' do
-                     worker_proxy.daemonize
+                     worker_proxy.daemonized!
                      pid_path = QueueManager::QueueWorkerProxy::DEFAULT_PID_DIR / QueueManager::QueueWorkerProxy::DEFAULT_PID_FILE
                      expect(pid_path).to exist
                   end
@@ -281,7 +281,7 @@ module Procrastinator
                   it 'should write its pid file' do
                      pid = 12345
                      allow(Process).to receive(:pid).and_return(pid)
-                     worker_proxy.daemonize(pid_path: pid_file)
+                     worker_proxy.daemonized!(pid_path: pid_file)
 
                      file_content = File.read(pid_file)
                      expect(file_content).to eq(pid.to_s)
@@ -291,7 +291,7 @@ module Procrastinator
                      # stub out at_exit to force it to run immediately
                      expect(worker_proxy).to receive(:at_exit).and_yield
 
-                     worker_proxy.daemonize
+                     worker_proxy.daemonized!
 
                      expect(pid_file).to_not exist
                   end
@@ -303,20 +303,20 @@ module Procrastinator
                         block.call
                      end
 
-                     worker_proxy.daemonize(pid_path: pid_file)
+                     worker_proxy.daemonized!(pid_path: pid_file)
                   end
                end
 
                context 'status output' do
                   it 'should print starting the daemon' do
-                     expect { worker_proxy.daemonize }.to output(/^Starting Procrastinator...$/).to_stderr
+                     expect { worker_proxy.daemonized! }.to output(/^Starting Procrastinator...$/).to_stderr
                   end
 
                   it 'should print the daemon pid' do
                      [1234, 5678].each do |pid|
                         allow(Process).to receive(:pid).and_return(pid)
 
-                        expect { worker_proxy.daemonize }.to output(/^Procrastinator running. Process ID: #{ pid }$/).to_stderr
+                        expect { worker_proxy.daemonized! }.to output(/^Procrastinator running. Process ID: #{ pid }$/).to_stderr
                      end
                   end
 
@@ -327,7 +327,7 @@ module Procrastinator
                         # stub out at_exit to force it to run immediately
                         expect(worker_proxy).to receive(:at_exit).and_yield
 
-                        expect { worker_proxy.daemonize }.to output(/^Procrastinator \(pid #{ pid }\) halted.$/).to_stderr
+                        expect { worker_proxy.daemonized! }.to output(/^Procrastinator \(pid #{ pid }\) halted.$/).to_stderr
                      end
                   end
                end
