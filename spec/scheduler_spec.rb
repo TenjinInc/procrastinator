@@ -494,9 +494,11 @@ module Procrastinator
 
       before(:each) do
          FakeFS.clear! if FakeFS.activated?
-
          # prevent actual threading during any testing
          allow(Thread).to receive(:new).and_raise('Must override Thread spawning in test')
+
+         # prevent the global at_exit handlers by default in testing
+         allow_any_instance_of(Scheduler::WorkProxy).to receive(:at_exit)
       end
 
       # acts on each queue in series.
@@ -590,10 +592,15 @@ module Procrastinator
 
          before(:each) do
             FakeFS.activate!
+            FakeFS.clear!
             # keeping a fallback here; real forks break the rspec runner
             allow(worker_proxy).to receive(:fork).and_raise('Testing error: test must stub :fork')
             allow(Dir).to receive(:chdir)
             allow(Process).to receive(:setsid)
+         end
+
+         after(:each) do
+            FakeFS.deactivate!
          end
 
          context 'parent process' do
