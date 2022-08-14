@@ -31,7 +31,7 @@ module Procrastinator
             headers = data.shift
 
             data.collect do |d|
-               hash = Hash[headers.zip(d)]
+               hash = headers&.zip(d).to_h
 
                hash[:data] = hash[:data].gsub('""', '"')
 
@@ -72,7 +72,7 @@ module Procrastinator
                task[:id] == id
             end
 
-            task_data.merge!(data)
+            task_data&.merge!(data)
 
             write(existing_data)
          end

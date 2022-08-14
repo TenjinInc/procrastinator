@@ -58,9 +58,7 @@ module Procrastinator
                   15, thumbs   , 16    , 17            ,  18      , 19      , 20          , boom      , north means left
                CONTENTS
 
-               File.open(path.to_s, 'w') do |f|
-                  f.write(contents)
-               end
+               File.write(path, contents)
             end
 
             it 'should read from a specific csv file' do
@@ -96,9 +94,7 @@ module Procrastinator
                   "1","","2","3","4","5","6","problem","#{ third_data }"
                CONTENTS
 
-               File.open(path.to_s, 'w') do |f|
-                  f.write(contents)
-               end
+               File.write(path, contents)
 
                db = loader.read
 
@@ -115,9 +111,7 @@ module Procrastinator
                   "1","","2","3","4","5","6","problem","#{ data.gsub('"', '"""') }"
                CONTENTS
 
-               File.open(path.to_s, 'w') do |f|
-                  f.write(contents)
-               end
+               File.write(path, contents)
 
                db = loader.read
 
@@ -150,7 +144,7 @@ module Procrastinator
 
                expected_header = 'id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data'
 
-               expect(file_content.first.strip).to eq expected_header
+               expect(file_content.first&.strip).to eq expected_header
             end
 
             it 'should write a new data line' do
@@ -171,7 +165,7 @@ module Procrastinator
                   loader.create(arguments)
 
                   file_content = File.new(path).readlines
-                  data_line    = file_content.last.strip
+                  data_line    = file_content.last&.strip
 
                   {
                         queue:          arguments[:queue],
@@ -189,7 +183,7 @@ module Procrastinator
                loader.create(required_args)
 
                file_content = File.new(path).readlines
-               data_line    = file_content.last.strip
+               data_line    = file_content.last&.strip
 
                {
                      attempts:     '0',
@@ -208,15 +202,13 @@ module Procrastinator
                   "37","","2","3","4","5","6","err",""
                CONTENTS
 
-               File.open(path.to_s, 'w') do |f|
-                  f.write(contents)
-               end
+               File.write(path, contents)
 
                loader.create(required_args)
 
                file_content = File.new(path).readlines
 
-               expect(file_content.last.strip).to start_with('"38"')
+               expect(file_content.last&.strip).to start_with('"38"')
             end
 
             it 'should keep existing content' do
@@ -227,15 +219,13 @@ module Procrastinator
                   "37","","2","3","4","5","6","err",""
                CONTENTS
 
-               File.open(path.to_s, 'w') do |f|
-                  f.write(contents)
-               end
+               File.write(path, contents)
 
                loader.create(required_args)
 
                file_content = File.new(path).read
 
-               expect(file_content.split("\n").size).to eq 5 # header + 3 existing + new record
+               expect(file_content&.split("\n").size).to eq 5 # header + 3 existing + new record
                expect(file_content).to start_with(contents)
             end
          end
@@ -254,9 +244,7 @@ module Procrastinator
                   "37","thumbnails","12","13","14","15","16","err","size: 500"
                CONTENTS
 
-               File.open(path.to_s, 'w') do |f|
-                  f.write(contents)
-               end
+               File.write(path, contents)
             end
 
             it 'should write the changed data to a file' do
@@ -320,9 +308,7 @@ module Procrastinator
                   "37","thumbnails","12","13","14","15","16","err","size: 500"
                CONTENTS
 
-               File.open(path.to_s, 'w') do |f|
-                  f.write(contents)
-               end
+               File.write(path, contents)
             end
 
             it 'should remove a line' do
@@ -375,7 +361,7 @@ module Procrastinator
 
                file_content = File.new(path).readlines
 
-               expect(file_content.last.strip).to end_with(',"this has ""quotes"" in it"')
+               expect(file_content.last&.strip).to end_with(',"this has ""quotes"" in it"')
             end
 
             it 'should force quote every field' do
@@ -397,7 +383,7 @@ module Procrastinator
 
                new_row = task_info.values.collect { |x| %["#{ x }"] }.join(',')
 
-               expect(file_content.last.strip).to eq new_row
+               expect(file_content.last&.strip).to eq new_row
             end
          end
       end

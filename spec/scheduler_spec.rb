@@ -651,7 +651,7 @@ module Procrastinator
 
                   msg = /^Warning: process name is longer than max length \(#{ maxlen }\). Trimming to fit.$/
 
-                  expect { worker_proxy.daemonized!(name: max_procname + 'b') }.to output(msg).to_stderr
+                  expect { worker_proxy.daemonized!(name: "#{ max_procname }b") }.to output(msg).to_stderr
                end
 
                it 'should warn trim long process names to fit' do
@@ -660,7 +660,7 @@ module Procrastinator
 
                   expect(Process).to receive(:setproctitle).with(max_procname)
 
-                  worker_proxy.daemonized!(name: max_procname + 'more')
+                  worker_proxy.daemonized!(name: "#{ max_procname }more")
                end
 
                it 'should warn when an existing process has the same name' do

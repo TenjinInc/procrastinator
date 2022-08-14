@@ -28,7 +28,7 @@ module Procrastinator
    # @yield the created configuration object
    # @return [Scheduler] a scheduler object that can be used to interact with the queues
    def self.setup(&block)
-      raise ArgumentError, 'Procrastinator.setup must be given a block' unless block_given?
+      raise ArgumentError, 'Procrastinator.setup must be given a block' unless block
 
       config = Config.new
 

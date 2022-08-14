@@ -31,7 +31,7 @@ module Procrastinator
       # Module that provides the task_attr class method for task definitions to declare their expected information.
       module TaskClassMethods
          def task_attr(*fields)
-            attr_list = KNOWN_ATTRIBUTES.collect { |a| ':' + a.to_s }.join(', ')
+            attr_list = KNOWN_ATTRIBUTES.collect { |a| ":#{ a }" }.join(', ')
 
             fields.each do |field|
                err = "Unknown Procrastinator::Task attribute :#{ field }. " \
