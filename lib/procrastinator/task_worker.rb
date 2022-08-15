@@ -3,6 +3,7 @@
 require 'yaml'
 require 'ostruct'
 require 'timeout'
+require 'forwardable'
 
 module Procrastinator
    # Works on a given task by creating a new instance of the queue's task class and running the appropriate hooks.
