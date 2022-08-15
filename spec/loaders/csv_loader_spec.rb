@@ -125,6 +125,40 @@ module Procrastinator
                   expect(d).to be_a Hash
                end
             end
+
+            it 'should filter data by queue' do
+               contents = <<~CONTENTS
+                  id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+                  "1","thumbnail","2","3","4","5","6","problem",""
+                  "2","greetings","2","3","4","5","6","problem",""
+                  "3","reminders","2","3","4","5","6","problem",""
+                  "4","greetings","2","3","4","5","6","problem",""
+               CONTENTS
+
+               File.write(path, contents)
+
+               data = loader.read(queue: :greetings)
+
+               expect(data.length).to eq 2
+               expect(data.first).to include(queue: :greetings, id: 2)
+               expect(data.last).to include(queue: :greetings, id: 4)
+            end
+
+            it 'should filter data by id' do
+               contents = <<~CONTENTS
+                  id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+                  "1","","2","3","4","5","6","problem",""
+                  "2","","2","3","4","5","6","problem",""
+                  "3","","2","3","4","5","6","problem",""
+               CONTENTS
+
+               File.write(path, contents)
+
+               data = loader.read(id: 2)
+
+               expect(data.length).to eq 1
+               expect(data.first).to include(id: 2)
+            end
          end
 
          describe 'create' do

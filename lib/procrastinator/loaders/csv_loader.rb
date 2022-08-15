@@ -25,17 +25,24 @@ module Procrastinator
             end
          end
 
-         def read
+         def read(filter = {})
             data = CSV.table(@path.to_s, force_quotes: false).to_a
 
             headers = data.shift
 
-            data.collect do |d|
+            data = data.collect do |d|
                hash = headers&.zip(d).to_h
 
-               hash[:data] = hash[:data].gsub('""', '"')
+               hash[:data]  = hash[:data].gsub('""', '"')
+               hash[:queue] = hash[:queue].to_sym
 
                hash
+            end
+
+            data.select do |row|
+               filter.keys.all? do |key|
+                  row[key] == filter[key]
+               end
             end
          end
 
