@@ -8,6 +8,8 @@ module Procrastinator
    class QueueWorker
       extend Forwardable
 
+      include Loggable
+
       def_delegators :@queue, :name
 
       # expected methods for all persistence strategies
@@ -17,13 +19,13 @@ module Procrastinator
          @queue     = queue
          @config    = config
          @scheduler = Scheduler.new(config)
-
-         @logger = nil
       end
 
       # Works on jobs forever
       def work
-         start_log
+         @logger = open_log!("#{ @queue.name }-queue-worker", @config)
+
+         @logger&.info("Started worker thread to consume queue: #{ @queue.name }")
 
          begin
             loop do
@@ -60,39 +62,7 @@ module Procrastinator
          end
       end
 
-      def long_name
-         "#{ @queue.name }-queue-worker"
-      end
-
-      # Starts a log file and stores the logger within this queue worker.
-      #
-      # Separate from init because logging is context-dependent
-      def start_log
-         return if @logger || !@config.log_level
-
-         @logger = Logger.new(log_target, @config.log_shift_age, @config.log_shift_size,
-                              level:    @config.log_level,
-                              progname: long_name)
-
-         @logger.info("Started worker thread to consume queue: #{ @queue.name }")
-      end
-
       private
-
-      def log_target
-         log_path = @config.log_dir + "#{ long_name }.log"
-
-         write_log_file(log_path)
-
-         log_path.to_path
-      end
-
-      def write_log_file(log_path)
-         @config.log_dir.mkpath
-         File.open(log_path.to_path, 'a+') do |f|
-            f.write ''
-         end
-      end
 
       def fetch_task
          tasks = @config.loader.read(queue: @queue.name).map(&:to_h).reject { |t| t[:run_at].nil? }

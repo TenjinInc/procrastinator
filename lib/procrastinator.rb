@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'procrastinator/version'
+require 'procrastinator/loggable'
 require 'procrastinator/task_meta_data'
 require 'procrastinator/task_worker'
 require 'procrastinator/queue'

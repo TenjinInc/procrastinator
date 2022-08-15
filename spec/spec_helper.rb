@@ -17,24 +17,19 @@ require 'procrastinator'
 module Procrastinator
    module Test
       class Persister
-         def read(_attributes)
-         end
+         def read(_attributes) end
 
-         def create(_data)
-         end
+         def create(_data) end
 
-         def update(_identifier, _data)
-         end
+         def update(_identifier, _data) end
 
-         def delete(_identifier)
-         end
+         def delete(_identifier) end
       end
 
       module Task
          module MissingParam
             class ArgRun
-               def run(_params)
-               end
+               def run(_params) end
             end
 
             class NoArgSuccess
@@ -49,8 +44,7 @@ module Procrastinator
                def run
                end
 
-               def success(_arg1, _arg2)
-               end
+               def success(_arg1, _arg2) end
             end
 
             class NoArgFail
@@ -65,8 +59,7 @@ module Procrastinator
                def run
                end
 
-               def fail(_arg1, _arg2)
-               end
+               def fail(_arg1, _arg2) end
             end
 
             class NoArgFinalFail
@@ -81,8 +74,7 @@ module Procrastinator
                def run
                end
 
-               def final_fail(_arg1, _arg2)
-               end
+               def final_fail(_arg1, _arg2) end
             end
          end
 
@@ -90,14 +82,11 @@ module Procrastinator
             def run
             end
 
-            def success(_result)
-            end
+            def success(_result) end
 
-            def fail(_error)
-            end
+            def fail(_error) end
 
-            def final_fail(_error)
-            end
+            def final_fail(_error) end
          end
 
          class ExpectingTask
@@ -117,9 +106,12 @@ module Procrastinator
                raise('derp')
             end
 
-            def fail(error)
-            end
+            def fail(error) end
          end
+      end
+
+      class TestLoggable
+         include Loggable
       end
    end
 end
