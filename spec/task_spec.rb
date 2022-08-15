@@ -45,7 +45,7 @@ module Procrastinator
                         logger:    logger,
                         data:      data,
                         scheduler: scheduler,
-                        context:   context
+                        container: container
                   }
                end
 
@@ -54,7 +54,7 @@ module Procrastinator
                         logger:    logger,
                         data:      data,
                         scheduler: scheduler,
-                        context:   context
+                        container: container
                   }
                end
 
@@ -63,7 +63,7 @@ module Procrastinator
                         logger:    logger,
                         data:      data,
                         scheduler: scheduler,
-                        context:   context
+                        container: container
                   }
                end
 
@@ -72,7 +72,7 @@ module Procrastinator
                         logger:    logger,
                         data:      data,
                         scheduler: scheduler,
-                        context:   context
+                        container: container
                   }
                end
             end
@@ -81,19 +81,19 @@ module Procrastinator
             task = task_class.new
 
             logger    = double('log')
-            data      = double('log')
-            scheduler = double('log')
-            context   = double('log')
+            data      = double('data')
+            scheduler = double('scheduler')
+            container = double('container')
 
             task.logger    = logger
             task.data      = data
             task.scheduler = scheduler
-            task.context   = context
+            task.container = container
 
             expected = {logger:    logger,
                         data:      data,
                         scheduler: scheduler,
-                        context:   context}
+                        container: container}
 
             expect(task.run).to eq(expected)
             expect(task.success(nil)).to eq(expected)

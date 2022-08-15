@@ -9,7 +9,7 @@ module Procrastinator
    #
    # @author Robin Miller
    module Task
-      KNOWN_ATTRIBUTES = [:logger, :context, :data, :scheduler].freeze
+      KNOWN_ATTRIBUTES = [:logger, :container, :data, :scheduler].freeze
 
       def self.included(base)
          base.extend(TaskClassMethods)

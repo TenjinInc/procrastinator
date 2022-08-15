@@ -71,13 +71,13 @@ module Procrastinator
             end
          end
 
-         describe '#provide_context' do
-            it 'should store the context' do
-               context = double('block')
+         describe '#provide_container' do
+            it 'should store the container' do
+               container = double('block')
 
-               config.provide_context(context)
+               config.provide_container(container)
 
-               expect(config.context).to be context
+               expect(config.container).to be container
             end
          end
 
@@ -256,7 +256,7 @@ module Procrastinator
                config.setup do |c|
                   c.load_with(Test::Persister.new)
                end
-            end.to raise_error(RuntimeError, 'setup block must call #define_queue on the environment')
+            end.to raise_error(SetupError, SetupError::ERR_NO_QUEUE)
          end
       end
 

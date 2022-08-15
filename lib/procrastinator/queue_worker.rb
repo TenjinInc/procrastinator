@@ -48,7 +48,7 @@ module Procrastinator
          worker = TaskWorker.new(metadata:  metadata,
                                  queue:     @queue,
                                  scheduler: @scheduler,
-                                 context:   @config.context,
+                                 container: @config.container,
                                  logger:    @logger)
 
          worker.work

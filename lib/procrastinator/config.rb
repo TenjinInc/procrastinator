@@ -10,8 +10,8 @@ module Procrastinator
    #
    # @!attribute [r] :queues
    #    @return [Array] List of defined queues
-   # @!attribute [r] :context
-   #    @return [Object] Provided context object that will be forwarded to tasks
+   # @!attribute [r] :container
+   #    @return [Object] Provided container object that will be forwarded to tasks
    # @!attribute [r] :loader
    #    @return [Object] Provided persistence strategy object to use for task I/O
    # @!attribute [r] :log_dir
@@ -23,7 +23,7 @@ module Procrastinator
    # @!attribute [r] :log_shift_size
    #    @return [Integer] Filesize before rotating to a new logfile (see Ruby Logger for details)
    class Config
-      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :context, :loader
+      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container, :loader
 
       DEFAULT_LOG_DIRECTORY = Pathname.new('log/').freeze
       DEFAULT_LOG_SHIFT_AGE = 0
@@ -36,7 +36,7 @@ module Procrastinator
       def initialize
          @queues         = []
          @loader         = nil
-         @context        = nil
+         @container      = nil
          @log_dir        = DEFAULT_LOG_DIRECTORY
          @log_level      = Logger::INFO
          @log_shift_age  = DEFAULT_LOG_SHIFT_AGE
@@ -68,8 +68,8 @@ module Procrastinator
             @loader = loader
          end
 
-         def provide_context(context)
-            @context = context
+         def provide_container(container)
+            @container = container
          end
 
          def define_queue(name, task_class, properties = {})
@@ -102,18 +102,10 @@ module Procrastinator
 
          load_with(Loader::CSVLoader.new) unless @loader
 
-         raise 'setup block must call #define_queue on the environment' if @queues.empty?
+         raise SetupError, SetupError::ERR_NO_QUEUE if @queues.empty?
 
-         if @context && @queues.none? { |queue| queue.task_class.method_defined?(:context=) }
-            raise <<~ERROR
-               setup block called #provide_context, but no queue task classes import :context.
-
-               Add this to your Task classes that expect to receive the context:
-
-                  include Procrastinator::Task
-
-                  task_attr :context
-            ERROR
+         if @container && @queues.none? { |queue| queue.task_class.method_defined?(:container=) }
+            raise SetupError, SetupError::ERR_UNUSED_CONTAINER
          end
 
          self
@@ -167,6 +159,19 @@ module Procrastinator
       end
    end
 
-   class MalformedTaskLoaderError < StandardError
+   class SetupError < RuntimeError
+      ERR_NO_QUEUE         = 'setup block must call #define_queue on the environment'
+      ERR_UNUSED_CONTAINER = <<~ERROR
+         setup block called #provide_container, but no queue task classes import :container.
+
+         Either remove the call to #provide_container or add this to relevant Task class definitions:
+
+            include Procrastinator::Task
+
+            task_attr :container
+      ERROR
+   end
+
+   class MalformedTaskLoaderError < RuntimeError
    end
 end

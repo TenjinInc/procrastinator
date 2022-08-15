@@ -23,7 +23,7 @@ module Procrastinator
       def initialize(metadata:,
                      queue:,
                      logger: Logger.new(StringIO.new),
-                     context: nil,
+                     container: nil,
                      scheduler: nil)
          @queue = queue
 
@@ -31,12 +31,12 @@ module Procrastinator
          @task           = queue.task_class.new
 
          @task.data      = @metadata.data if @task.respond_to?(:data=)
-         @task.context   = context if @task.respond_to?(:context=)
+         @task.container = container if @task.respond_to?(:container=)
          @task.logger    = logger if @task.respond_to?(:logger=)
          @task.scheduler = scheduler if @task.respond_to?(:scheduler=)
 
-         @logger  = logger
-         @context = context
+         @logger    = logger
+         @container = container
 
          raise MalformedTaskError, "task #{ @task.class } does not support #run method" unless @task.respond_to? :run
       end

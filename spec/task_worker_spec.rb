@@ -69,17 +69,17 @@ module Procrastinator
                TaskWorker.new(metadata: meta, queue: queue)
             end
 
-            it 'should provide the context to the new task instance if requested' do
-               task_class.task_attr :context
+            it 'should provide the container to the new task instance if requested' do
+               task_class.task_attr :container
 
-               context = double('context')
+               container = double('container')
 
                queue = Procrastinator::Queue.new(name:       :test_queue,
                                                  task_class: task_class)
 
-               expect(task).to receive(:context=).with(context)
+               expect(task).to receive(:container=).with(container)
 
-               TaskWorker.new(metadata: meta, queue: queue, context: context)
+               TaskWorker.new(metadata: meta, queue: queue, container: container)
             end
 
             it 'should provide the logger to the new task instance if requested' do

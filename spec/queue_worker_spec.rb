@@ -382,14 +382,14 @@ module Procrastinator
                worker.work_one
             end
 
-            it 'should pass the TaskWorker the task context' do
+            it 'should pass the TaskWorker the task container' do
                task_data = {run_at: 1}
-               context   = double('context object')
+               container = double('container object')
 
-               expect(TaskWorker).to receive(:new).with(hash_including(context: context)).and_call_original
+               expect(TaskWorker).to receive(:new).with(hash_including(container: container)).and_call_original
 
                config.load_with fake_persister([task_data])
-               config.provide_context context
+               config.provide_container container
 
                worker = QueueWorker.new(queue: instant_queue, config: config)
 

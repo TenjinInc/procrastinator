@@ -222,7 +222,7 @@ class MyTask
    include Procrastinator::Task
 
    # Give any of these symbols to task_attr and they will become available as methods
-   # task_attr :data, :logger, :context, :scheduler
+   # task_attr :data, :logger, :container, :scheduler
 
    # Performs the core work of the task. 
    def run
@@ -274,7 +274,7 @@ class MyTask
 
    # declare the task attributes you care about by calling task_attr. 
    # You can use any of these symbols: 
-   #             :data, :logger, :context, :scheduler
+   #             :data, :logger, :container, :scheduler
    task_attr :data, :logger
 
    def run
@@ -428,13 +428,13 @@ scheduler.reschedule(:reminder, data: 'bob@example.com').to(run_at:    Time.pars
 ```
 
 Rescheduling sets the task's:
-   * `:run_at` and `:initial_run_at` to a new value, if provided 
-   * `:expire_at` to a new value if provided.
-   * `:attempts` to `0` 
-   * `:last_error` and `:last_error_at` to `nil`.
 
-Rescheduling will not change `:id`, `:queue` or `:data`.
-A `RuntimeError` is raised if the runtime is after the expiry.
+* `:run_at` and `:initial_run_at` to a new value, if provided
+* `:expire_at` to a new value if provided.
+* `:attempts` to `0`
+* `:last_error` and `:last_error_at` to `nil`.
+
+Rescheduling will not change `:id`, `:queue` or `:data`. A `RuntimeError` is raised if the runtime is after the expiry.
 
 ### Retries
 

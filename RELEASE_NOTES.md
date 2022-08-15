@@ -22,6 +22,7 @@
     * Removed use of envvar `PROCRASTINATOR_STOP`
     * `Procrastinator::QueueManager` is merged into `Procrastinator::Scheduler`
     * Removed rake task to halt queue processes
+    * Renamed `Procrastinator::Config#provide_context` to `provide_container`
     * You must now call `Scheduler#work` on the result of `Procrastinator.config`
     * Use a dedicated process monitor (like `monit`) instead in production environments
 * `max_tasks` is removed as it only added concurrency complexity
