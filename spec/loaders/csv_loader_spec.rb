@@ -47,7 +47,7 @@ module Procrastinator
          describe 'read' do
             include FakeFS::SpecHelpers
 
-            let(:path) { 'procrastinator-data.csv' }
+            let(:path) { Pathname.new 'procrastinator-data.csv' }
             let(:loader) { CSVLoader.new(path) }
 
             before(:each) do
@@ -58,7 +58,7 @@ module Procrastinator
                   15, thumbs   , 16    , 17            ,  18      , 19      , 20          , boom      , north means left
                CONTENTS
 
-               File.write(path, contents)
+               path.write(contents)
             end
 
             it 'should read from a specific csv file' do
@@ -82,6 +82,16 @@ module Procrastinator
                expect(loader.read.length).to eq 3
             end
 
+            it 'should handle a file with no tasks' do
+               contents = <<~CONTENTS
+                  id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+               CONTENTS
+
+               path.write(contents)
+
+               expect(loader.read.length).to eq 0
+            end
+
             it 'should account for YAML syntax' do
                first_data  = YAML.dump(user: 7, hash: true)
                second_data = YAML.dump('string data')
@@ -94,7 +104,7 @@ module Procrastinator
                   "1","","2","3","4","5","6","problem","#{ third_data }"
                CONTENTS
 
-               File.write(path, contents)
+               path.write(contents)
 
                db = loader.read
 
@@ -111,7 +121,7 @@ module Procrastinator
                   "1","","2","3","4","5","6","problem","#{ data.gsub('"', '"""') }"
                CONTENTS
 
-               File.write(path, contents)
+               path.write(contents)
 
                db = loader.read
 
@@ -135,7 +145,7 @@ module Procrastinator
                   "4","greetings","2","3","4","5","6","problem",""
                CONTENTS
 
-               File.write(path, contents)
+               path.write(contents)
 
                data = loader.read(queue: :greetings)
 
@@ -145,19 +155,44 @@ module Procrastinator
             end
 
             it 'should filter data by id' do
-               contents = <<~CONTENTS
-                  id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","","2","3","4","5","6","problem",""
-                  "2","","2","3","4","5","6","problem",""
-                  "3","","2","3","4","5","6","problem",""
-               CONTENTS
-
-               File.write(path, contents)
-
-               data = loader.read(id: 2)
+               data = loader.read(id: 8)
 
                expect(data.length).to eq 1
-               expect(data.first).to include(id: 2)
+               expect(data.first).to include(id: 8)
+            end
+
+            it 'should return all when filter is empty' do
+               data = loader.read
+
+               expect(data.length).to eq 3
+            end
+
+            it 'should convert types' do
+               contents = <<~CONTENTS
+                  id, queue,   run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+                  "1","emails","1","1","4","0","","",""
+                  "2","emails","2","2","4","","","",""
+                  "3","emails","","3","","2","2","problem",""
+               CONTENTS
+
+               path.write(contents)
+
+               data = loader.read
+
+               data.each do |row|
+                  [:run_at, :expire_at, :last_fail_at].each do |key|
+                     expect(row[key]).to satisfy do |value|
+                        value.is_a?(Integer) || value.nil?
+                     end
+                  end
+                  [:id, :initial_run_at, :attempts].each do |key|
+                     value = row[key]
+                     expect(value).to be_an(Integer)
+                  end
+                  expect(row[:queue]).to be_a Symbol
+                  expect(row[:last_error]).to be_a String
+                  expect(row[:data]).to be_a String
+               end
             end
          end
 

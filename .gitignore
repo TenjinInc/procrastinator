@@ -1,4 +1,4 @@
-/.bundle/
+.bundle/
 /.yardoc
 /Gemfile.lock
 /_yardoc/
@@ -7,3 +7,5 @@
 /pkg/
 /spec/reports/
 /tmp/
+
+log/

@@ -28,16 +28,13 @@ module Procrastinator
          def read(filter = {})
             data = CSV.table(@path.to_s, force_quotes: false).to_a
 
-            headers = data.shift
+            headers = data.shift || []
 
             data = data.collect do |d|
-               hash = headers&.zip(d).to_h
+               headers.zip(d)
+            end.collect(&:to_h).reject(&:empty?)
 
-               hash[:data]  = hash[:data].gsub('""', '"')
-               hash[:queue] = hash[:queue].to_sym
-
-               hash
-            end
+            data = correct_types(data)
 
             data.select do |row|
                filter.keys.all? do |key|
@@ -107,6 +104,25 @@ module Procrastinator
             @path.open('w') do |f|
                f.puts HEADERS.join(',')
                f.puts lines.join
+            end
+         end
+
+         private
+
+         def correct_types(data)
+            non_empty_keys = [:run_at, :expire_at, :attempts, :last_fail_at]
+
+            data.collect do |hash|
+               non_empty_keys.each do |key|
+                  hash.delete(key) if hash[key].is_a?(String) && hash[key].empty?
+               end
+
+               hash[:attempts] ||= 0
+
+               hash[:data]  = (hash[:data] || '').gsub('""', '"')
+               hash[:queue] = hash[:queue].to_sym
+
+               hash
             end
          end
       end
