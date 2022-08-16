@@ -4,7 +4,7 @@ module Procrastinator
    # Configuration object (State Pattern) used to coordinate settings across
    # various components within Procrastinator.
    #
-   # All of its state is read-only, set using the methods in the DSL module below.
+   # It is immutable after init; use the config DSL in the configuration block to set its state.
    #
    # @author Robin Miller
    #
@@ -41,6 +41,13 @@ module Procrastinator
          @log_level      = Logger::INFO
          @log_shift_age  = DEFAULT_LOG_SHIFT_AGE
          @log_shift_size = DEFAULT_LOG_SHIFT_SIZE
+
+         yield(self) if block_given?
+
+         load_with(Loader::CSVLoader.new) unless @loader
+
+         @queues.freeze
+         freeze
       end
 
       # Collection of all of the methods intended for use within Procrastinator.setup
@@ -97,20 +104,6 @@ module Procrastinator
 
       include DSL
 
-      def setup
-         yield(self)
-
-         load_with(Loader::CSVLoader.new) unless @loader
-
-         raise SetupError, SetupError::ERR_NO_QUEUE if @queues.empty?
-
-         if @container && @queues.none? { |queue| queue.task_class.method_defined?(:container=) }
-            raise SetupError, SetupError::ERR_UNUSED_CONTAINER
-         end
-
-         self
-      end
-
       def queues_string
          # it drops the colon if you call #to_s on a symbol, so we need to add it back
          @queues.map { |queue| ":#{ queue.name }" }.join(', ')
@@ -157,19 +150,6 @@ module Procrastinator
             raise MalformedTaskError, err
          end
       end
-   end
-
-   class SetupError < RuntimeError
-      ERR_NO_QUEUE         = 'setup block must call #define_queue on the environment'
-      ERR_UNUSED_CONTAINER = <<~ERROR
-         setup block called #provide_container, but no queue task classes import :container.
-
-         Either remove the call to #provide_container or add this to relevant Task class definitions:
-
-            include Procrastinator::Task
-
-            task_attr :container
-      ERROR
    end
 
    class MalformedTaskLoaderError < RuntimeError

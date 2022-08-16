@@ -4,11 +4,8 @@ require 'spec_helper'
 
 module Procrastinator
    describe QueueWorker do
-      let(:config) { Config.new }
       let(:persister) { double('loader', read: [], create: nil, update: nil, delete: nil) }
       let(:test_task) { Test::Task::AllHooks }
-      let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: test_task) }
-      let(:instant_queue) { Procrastinator::Queue.new(name: :test_queue, task_class: test_task, update_period: 0) }
 
       describe '#initialize' do
          it 'should require a queue' do
@@ -23,11 +20,16 @@ module Procrastinator
       describe '#work' do
          include FakeFS::SpecHelpers
 
+         let(:config) do
+            Config.new do |c|
+               c.define_queue(:fast_queue, test_task, update_period: 0.01)
+            end
+         end
+
          # this needs to be here and not in init because work is called in sub threads / daemon,
          # but init is called in the parent booting process
          it 'should start a new log' do
-            queue  = Procrastinator::Queue.new(name: :queue, task_class: test_task)
-            worker = QueueWorker.new(queue: queue, config: Config.new)
+            worker = QueueWorker.new(queue: config.queues.first, config: config)
 
             allow(worker).to receive(:loop) # stub infiniloop
 
@@ -38,11 +40,11 @@ module Procrastinator
 
          it 'should wait for update_period' do
             [0.01, 0.02].each do |period|
-               queue = Procrastinator::Queue.new(name:          :fast_queue,
-                                                 task_class:    test_task,
-                                                 update_period: period)
+               config = Config.new do |c|
+                  c.define_queue(:fast_queue, test_task, update_period: period)
+               end
 
-               worker = QueueWorker.new(queue: queue, config: Config.new)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                expect(worker).to receive(:loop) do |&block|
                   block.call
@@ -55,12 +57,8 @@ module Procrastinator
          end
 
          it 'should cyclically call #work_one' do
-            queue = Procrastinator::Queue.new(name:          :fast_queue,
-                                              task_class:    test_task,
-                                              update_period: 0.1)
-
-            worker = QueueWorker.new(queue:  queue,
-                                     config: Config.new)
+            worker = QueueWorker.new(queue:  config.queues.first,
+                                     config: config)
 
             allow(worker).to receive(:sleep) # stub sleep
 
@@ -76,16 +74,18 @@ module Procrastinator
             worker.work
          end
 
-         it 'should pass the TaskWorker the logger if log directory given' do
+         it 'should pass the TaskWorker the logger' do
             logger = Logger.new(StringIO.new)
 
             allow(Logger).to receive(:new).and_return(logger)
+
+            config = Config.new do |c|
+               c.define_queue(:fast_queue, test_task, update_period: 0)
+               c.load_with fake_persister([{run_at: 1}])
+            end
+
             expect(TaskWorker).to receive(:new).with(hash_including(logger: logger)).and_call_original
-
-            config.load_with fake_persister([{run_at: 1}])
-            config.log_with directory: '/log'
-
-            worker = QueueWorker.new(queue: instant_queue, config: config)
+            worker = QueueWorker.new(queue: config.queues.first, config: config)
             allow(worker).to receive(:loop).and_yield
 
             worker.work
@@ -97,8 +97,6 @@ module Procrastinator
                parent_pid = pid_hash[:parent]
                child_pid  = pid_hash[:child]
                queue_name = pid_hash[:queues]
-
-               config.log_with directory: 'some_dir'
 
                queue = Procrastinator::Queue.new(name:          queue_name,
                                                  task_class:    Test::Task::AllHooks,
@@ -112,52 +110,41 @@ module Procrastinator
 
                worker.work
 
-               log_contents = Pathname.new("some_dir/#{ queue.name }-queue-worker.log").read
+               log_contents = Pathname.new("log/#{ queue.name }-queue-worker.log").read
 
                expect(log_contents).to include("Started worker thread to consume queue: #{ queue_name }")
             end
          end
 
          it 'should log fatal errors from #work_one if logging' do
-            FakeFS do
-               queue = Procrastinator::Queue.new(name:          :test,
-                                                 task_class:    test_task,
-                                                 update_period: 0.1)
+            worker = QueueWorker.new(queue: config.queues.first, config: config)
 
-               config = Config.new
-               config.log_with directory: 'log/'
+            err = 'some fatal error'
 
-               worker = QueueWorker.new(queue: queue, config: config)
+            allow(worker).to receive(:sleep) # stub sleep
 
-               err = 'some fatal error'
-
-               allow(worker).to receive(:sleep) # stub sleep
-
-               # control looping, otherwise infiniloop by design
-               allow(worker).to receive(:loop) do |&block|
-                  block.call
-               end
-
-               allow(worker).to receive(:work_one).and_raise(err)
-
-               worker.work
-
-               log = File.read('log/test-queue-worker.log')
-
-               expect(log).to include('F, ') # default fatal error notation in Ruby logger
-               expect(log).to include(err)
+            # control looping, otherwise infiniloop by design
+            allow(worker).to receive(:loop) do |&block|
+               block.call
             end
+
+            allow(worker).to receive(:work_one).and_raise(err)
+
+            worker.work
+
+            log = File.read('log/fast_queue-queue-worker.log')
+
+            expect(log).to include('F, ') # default fatal error notation in Ruby logger
+            expect(log).to include(err)
          end
 
          it 'should reraise fatal errors from #work_one if logging disabled' do
-            queue = Procrastinator::Queue.new(name:          :fast_queue,
-                                              task_class:    test_task,
-                                              update_period: 0.1)
+            config = Config.new do |c|
+               c.define_queue :fast_queue, test_task, update_period: 0.1
+               c.log_with level: nil
+            end
 
-            config = Config.new
-            config.log_with level: nil
-
-            worker = QueueWorker.new(queue: queue, config: config)
+            worker = QueueWorker.new(queue: config.queues.first, config: config)
             worker.open_log!('fast_queue-worker', config)
 
             err = 'some fatal error'
@@ -180,43 +167,23 @@ module Procrastinator
       describe '#work_one' do
          include FakeFS::SpecHelpers
 
+         let(:config) do
+            Config.new do |c|
+               c.define_queue(:email, test_task, update_period: 0.01)
+               c.define_queue(:cleanup, test_task, update_period: 0.01)
+               c.load_with persister
+            end
+         end
+
          context 'loading and running tasks' do
             it 'should pass the given queue to its persister' do
-               [:email, :cleanup].each do |name|
-                  queue = Procrastinator::Queue.new(name:          name,
-                                                    task_class:    test_task,
-                                                    update_period: 0.01)
-
-                  config = Config.new
-                  config.load_with persister
-
+               config.queues.each do |queue|
                   worker = QueueWorker.new(queue: queue, config: config)
 
-                  expect(persister).to receive(:read).with(queue: name)
+                  expect(persister).to receive(:read).with(queue: queue.name)
 
                   worker.work_one
                end
-            end
-
-            it 'should always fetch the persister from config' do
-               wrong_loader   = fake_persister([{id: 1}])
-               correct_loader = fake_persister([{id: 2}])
-
-               queue = Procrastinator::Queue.new(name:          :queueA,
-                                                 task_class:    test_task,
-                                                 update_period: 0.01)
-
-               config = Config.new
-               config.load_with wrong_loader
-
-               worker = QueueWorker.new(queue: queue, config: config)
-
-               config.load_with correct_loader
-
-               expect(correct_loader).to receive(:read)
-               expect(wrong_loader).to_not receive(:read)
-
-               worker.work_one
             end
 
             it 'should sort tasks by run_at' do
@@ -236,10 +203,12 @@ module Procrastinator
                                   update: nil,
                                   delete: nil)
 
-               config = Config.new
-               config.load_with persister
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with persister
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                expect(handler1).to receive(:run)
 
@@ -261,9 +230,12 @@ module Procrastinator
                                   update: nil,
                                   delete: nil)
 
-               config.load_with persister
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with persister
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                expect(task1).to_not receive(:run)
                expect(task2).to receive(:run)
@@ -288,7 +260,10 @@ module Procrastinator
                job1 = {run_at: 1}
                job2 = {run_at: 1}
 
-               config.load_with persister
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with persister
+               end
 
                allow(persister).to receive(:read).and_return([job1], [job2])
 
@@ -297,7 +272,7 @@ module Procrastinator
                start_time = Time.now
 
                Timecop.freeze(start_time) do
-                  worker = QueueWorker.new(queue: instant_queue, config: config)
+                  worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                   worker.work_one
                   worker.work_one
@@ -320,9 +295,12 @@ module Procrastinator
 
                expect(TaskMetaData).to receive(:new).with(task_data).and_call_original
 
-               config.load_with fake_persister([task_data])
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with fake_persister([task_data])
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                worker.work_one
             end
@@ -342,9 +320,12 @@ module Procrastinator
 
                expect(TaskMetaData).to receive(:new).with(task_data.to_h).and_call_original
 
-               config.load_with fake_persister([task_data])
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with fake_persister([task_data])
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                worker.work_one
             end
@@ -360,9 +341,12 @@ module Procrastinator
                                                    run_at: task_data[:run_at])
                                              .and_call_original
 
-               config.load_with fake_persister([task_data])
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with fake_persister([task_data])
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                worker.work_one
             end
@@ -375,9 +359,12 @@ module Procrastinator
 
                expect(TaskWorker).to receive(:new).with(hash_including(metadata: meta)).and_call_original
 
-               config.load_with fake_persister([task_data])
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with fake_persister([task_data])
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                worker.work_one
             end
@@ -388,20 +375,27 @@ module Procrastinator
 
                expect(TaskWorker).to receive(:new).with(hash_including(container: container)).and_call_original
 
-               config.load_with fake_persister([task_data])
-               config.provide_container container
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with fake_persister([task_data])
+                  c.provide_container container
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                worker.work_one
             end
 
             it 'should pass the TaskWorker the queue settings' do
-               expect(TaskWorker).to receive(:new).with(hash_including(queue: instant_queue)).and_call_original
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with fake_persister([{run_at: 1}])
+               end
+               queue  = config.queues.first
 
-               config.load_with fake_persister([{run_at: 1}])
+               expect(TaskWorker).to receive(:new).with(hash_including(queue: queue)).and_call_original
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: queue, config: config)
 
                worker.work_one
             end
@@ -409,9 +403,12 @@ module Procrastinator
             it 'should pass the TaskWorker the scheduler' do
                expect(TaskWorker).to receive(:new).with(hash_including(scheduler: an_instance_of(Scheduler))).and_call_original
 
-               config.load_with fake_persister([{run_at: 1}])
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with fake_persister([{run_at: 1}])
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                worker.work_one
             end
@@ -423,9 +420,12 @@ module Procrastinator
 
                expect(TaskWorker).to receive(:new).once.and_call_original
 
-               config.load_with fake_persister([task_data1, task_data2, task_data3])
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with fake_persister([task_data1, task_data2, task_data3])
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                worker.work_one
             end
@@ -439,9 +439,12 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).ordered.and_call_original
                expect(TaskWorker).to_not receive(:new).ordered.and_call_original
 
-               config.load_with fake_persister([task_data1, task_data2])
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with fake_persister([task_data1, task_data2])
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                Timecop.freeze(now) do
                   worker.work_one
@@ -458,9 +461,12 @@ module Procrastinator
 
                allow(persister).to receive(:read).and_return([task_data])
 
-               config.load_with persister
+               config = Config.new do |c|
+                  c.define_queue(:email, test_task)
+                  c.load_with persister
+               end
 
-               worker = QueueWorker.new(queue: instant_queue, config: config)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
 
                expect(persister).to receive(:delete).with(task_data[:id])
 
@@ -482,7 +488,10 @@ module Procrastinator
 
                   persister = fake_persister([task_data])
 
-                  config.load_with persister
+                  config = Config.new do |c|
+                     c.define_queue(:email, test_task)
+                     c.load_with persister
+                  end
 
                   # allow_any_instance_of(TaskWorker).to receive(:to_h).and_return(task_hash)
 
@@ -504,11 +513,11 @@ module Procrastinator
    end
 
    describe Loggable do
-      let(:config) { Config.new }
-
       let(:loggable) do
          Test::TestLoggable.new
       end
+
+      let(:test_task) { Test::Task::AllHooks }
 
       describe '#open_log!' do
          include FakeFS::SpecHelpers
@@ -517,13 +526,17 @@ module Procrastinator
             FakeFS.clear! if FakeFS.activated?
          end
 
+         let(:log_dir) { Pathname.new '/var/log' }
+
          context 'falsey log level' do
-            before(:each) do
-               config.log_with level: nil
+            let(:config) do
+               Config.new do |c|
+                  c.log_with level:     nil,
+                             directory: log_dir
+               end
             end
 
             it 'should NOT create the log directory' do
-               config.log_with directory: '/var/log'
                loggable.open_log!('test-log', config)
 
                expect(Dir.glob('/var/log/*')).to be_empty
@@ -542,41 +555,43 @@ module Procrastinator
             end
          end
 
-         context 'logging directory provided' do
-            before(:each) do
-               config.log_with directory: 'some_dir/'
+         context 'truthy log level' do
+            let(:config) do
+               Config.new do |c|
+                  c.log_with level:     1,
+                             directory: log_dir
+               end
             end
 
             it 'should create the log directory if it does not exist' do
                loggable.open_log!('test-log', config)
 
-               expect(File.directory?('some_dir/')).to be true
+               expect(log_dir).to be_directory
             end
 
             it 'should append to the log file if it already exists' do
-               log_dir = 'a/log/directory'
+               log_path = log_dir / 'existing.log'
 
-               config.log_with directory: log_dir
+               existing_data = 'this is text from before'
+               new_data      = 'new text'
 
-               log_path = "#{ log_dir }/a-file-name.log"
+               log_dir.mkpath
+               log_path.write(existing_data)
 
-               existing_data = 'abcdef'
+               logger = loggable.open_log!('existing', config)
+               logger.info(new_data)
 
-               FileUtils.mkdir_p(log_dir)
-               File.open(log_path, 'a+') do |f|
-                  f.write existing_data
-               end
-
-               loggable.open_log!('test-log', config)
-
-               expect(File.read(log_path)).to include(existing_data)
+               expect(log_path.read).to start_with(existing_data)
+               expect(log_path.read.strip).to end_with(new_data)
             end
 
             it 'should log at the provided level' do
                logger = Logger.new(StringIO.new)
 
                Logger::Severity.constants.each do |level|
-                  config.log_with level: level
+                  config = Config.new do |c|
+                     c.log_with level: level
+                  end
 
                   expect(Logger).to receive(:new).with(anything, anything, anything, hash_including(level: level))
                                                  .and_return logger
@@ -586,13 +601,11 @@ module Procrastinator
             end
 
             it 'should include the log name in the log output' do
-               config.log_with directory: 'some_dir'
-
                ['some-name', 'another name'].each do |name|
                   logger = loggable.open_log!(name, config)
                   logger.info('test')
 
-                  log_contents = Pathname.new("some_dir/#{ name }.log").read
+                  log_contents = Pathname.new("#{ log_dir }/#{ name }.log").read
 
                   expect(log_contents).to include("-- #{ name }:")
                end
@@ -601,9 +614,11 @@ module Procrastinator
             it 'should use the provided shift age and size' do
                logger = Logger.new(StringIO.new)
 
-               size = double('size')
-               age  = double('age')
-               config.log_with(shift_size: size, shift_age: age)
+               size   = double('size')
+               age    = double('age')
+               config = Config.new do |c|
+                  c.log_with shift_size: size, shift_age: age
+               end
 
                expect(Logger).to receive(:new).with(anything, age, size, anything).and_return(logger)
 

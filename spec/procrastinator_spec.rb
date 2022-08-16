@@ -15,23 +15,21 @@ module Procrastinator
          let(:persister) { Test::Persister.new }
 
          it 'should provide the block a configuration instance' do
-            config = Config.new
-            config.load_with(persister)
-            config.define_queue(:setup_test_queue, test_task)
+            # allow(Config).to receive(:new).and_yield
 
-            allow(Config).to receive(:new).and_return(config)
+            Procrastinator.setup do |config|
+               expect(config).to be_a(Config)
 
-            expect do |block|
-               Procrastinator.setup(&block)
-            end.to yield_with_args(config)
+               config.define_queue(:setup_test_queue, test_task)
+            end
          end
 
          it 'should return a scheduler configured with config' do
             scheduler = double('scheduler')
-            config    = Config.new
-
-            config.load_with(persister)
-            config.define_queue(:setup_test_queue, test_task)
+            config    = Config.new do |c|
+               c.load_with(persister)
+               c.define_queue(:setup_test_queue, test_task)
+            end
 
             expect(Config).to receive(:new).and_return(config)
             expect(Scheduler).to receive(:new).with(config).and_return(scheduler)
@@ -79,9 +77,15 @@ module Procrastinator
             expect do
                Procrastinator.setup do |config|
                   config.define_queue(:setup_test, task_class)
-                  config.load_with(persister)
                end
             end.to_not raise_error
+         end
+
+         it 'should complain if it does not have any queues defined' do
+            expect do
+               Procrastinator.setup do |config|
+               end
+            end.to raise_error(SetupError, SetupError::ERR_NO_QUEUE)
          end
       end
    end

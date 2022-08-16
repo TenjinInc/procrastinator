@@ -31,10 +31,27 @@ module Procrastinator
    def self.setup(&block)
       raise ArgumentError, 'Procrastinator.setup must be given a block' unless block
 
-      config = Config.new
+      config = Config.new(&block)
 
-      config.setup(&block)
+      raise SetupError, SetupError::ERR_NO_QUEUE if config.queues.empty?
+
+      if config.container && config.queues.none? { |queue| queue.task_class.method_defined?(:container=) }
+         raise SetupError, SetupError::ERR_UNUSED_CONTAINER
+      end
 
       Scheduler.new(config)
+   end
+
+   class SetupError < RuntimeError
+      ERR_NO_QUEUE         = 'setup block must call #define_queue on the environment'
+      ERR_UNUSED_CONTAINER = <<~ERROR
+         setup block called #provide_container, but no queue task classes import :container.
+
+         Either remove the call to #provide_container or add this to relevant Task class definitions:
+
+            include Procrastinator::Task
+
+            task_attr :container
+      ERROR
    end
 end

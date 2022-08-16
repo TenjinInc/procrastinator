@@ -4,8 +4,34 @@ module Procrastinator
    require 'spec_helper'
 
    describe Config do
-      let(:config) { Config.new }
       let(:test_task) { Test::Task::AllHooks }
+
+      describe '#initialize' do
+         it 'should yield itself' do
+            yielded_instance = nil
+            new_instance     = described_class.new { |i| yielded_instance = i }
+            expect(yielded_instance).to be new_instance
+         end
+
+         it 'should default to the basic CSV task loader if none is provided' do
+            config = Config.new
+
+            expect(config.loader).to be_a(Procrastinator::Loader::CSVLoader)
+         end
+
+         # immutable to aid with thread-safety and predictability
+         it 'should freeze itself' do
+            config = Config.new
+
+            expect(config).to be_frozen
+         end
+
+         it 'should freeze its queue list' do
+            config = Config.new
+
+            expect(config.queues).to be_frozen
+         end
+      end
 
       context 'DSL' do
          describe '#load_with' do
@@ -16,25 +42,29 @@ module Procrastinator
                loader = Loader::CSVLoader.new(path)
                expect(Loader::CSVLoader).to receive(:new).with(path).and_return(loader)
 
-               config.load_with(location: path)
+               config = Config.new do |c|
+                  c.load_with(location: path)
+               end
 
                expect(config.loader).to be loader
             end
 
-            it 'should complain about other hash values' do
+            it 'should complain about unknown hash values' do
                path = '/some/path/file.csv'
                expect(Loader::CSVLoader).to_not receive(:new)
 
                expect do
-                  config.load_with(bogus: path)
+                  Config.new do |c|
+                     c.load_with(bogus: path)
+                  end
                end.to raise_error ArgumentError, 'Must pass keyword :location if specifying a location for CSV file'
-
-               expect(config.loader).to be_nil
             end
 
             it 'should complain if the loader is nil' do
                expect do
-                  config.load_with(nil)
+                  Config.new do |c|
+                     c.load_with(nil)
+                  end
                end.to raise_error(MalformedTaskLoaderError, 'task loader cannot be nil')
             end
 
@@ -43,7 +73,11 @@ module Procrastinator
 
                err = "task loader #{ bad_loader.class } must respond to #read"
 
-               expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
+               expect do
+                  Config.new do |c|
+                     c.load_with(bad_loader)
+                  end
+               end.to raise_error(MalformedTaskLoaderError, err)
             end
 
             it 'should complain if the loader does not respond to #create' do
@@ -51,7 +85,11 @@ module Procrastinator
 
                err = "task loader #{ bad_loader.class } must respond to #create"
 
-               expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
+               expect do
+                  Config.new do |c|
+                     c.load_with(bad_loader)
+                  end
+               end.to raise_error(MalformedTaskLoaderError, err)
             end
 
             it 'should complain if the loader does not respond to #update' do
@@ -59,7 +97,11 @@ module Procrastinator
 
                err = "task loader #{ bad_loader.class } must respond to #update"
 
-               expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
+               expect do
+                  Config.new do |c|
+                     c.load_with(bad_loader)
+                  end
+               end.to raise_error(MalformedTaskLoaderError, err)
             end
 
             it 'should complain if the loader does not respond to #delete' do
@@ -67,7 +109,11 @@ module Procrastinator
 
                err = "task loader #{ bad_loader.class } must respond to #delete"
 
-               expect { config.load_with(bad_loader) }.to raise_error(MalformedTaskLoaderError, err)
+               expect do
+                  Config.new do |c|
+                     c.load_with(bad_loader)
+                  end
+               end.to raise_error(MalformedTaskLoaderError, err)
             end
          end
 
@@ -75,7 +121,9 @@ module Procrastinator
             it 'should store the container' do
                container = double('block')
 
-               config.provide_container(container)
+               config = Config.new do |c|
+                  c.provide_container(container)
+               end
 
                expect(config.container).to be container
             end
@@ -83,25 +131,35 @@ module Procrastinator
 
          describe '#define_queue' do
             it 'should require that the queue name NOT be nil' do
-               expect { config.define_queue(nil, double('taskClass')) }.to raise_error(ArgumentError, 'queue name cannot be nil')
+               expect do
+                  Config.new do |c|
+                     c.define_queue(nil, double('taskClass'))
+                  end
+               end.to raise_error(ArgumentError, 'queue name cannot be nil')
             end
 
             it 'should require that the queue task class NOT be nil' do
-               expect { config.define_queue(:queue_name, nil) }.to raise_error(ArgumentError, 'queue task class cannot be nil')
+               expect do
+                  Config.new do |c|
+                     c.define_queue(:queue_name, nil)
+                  end
+               end.to raise_error(ArgumentError, 'queue task class cannot be nil')
             end
 
             it 'should add a queue with its timeout, max_attempts, update_period' do
-               config.define_queue(:test1, test_task,
-                                   timeout:       1,
-                                   max_attempts:  3,
-                                   update_period: 4)
-               config.define_queue(:test2, test_task,
-                                   timeout:       5,
-                                   max_attempts:  7,
-                                   update_period: 8)
+               config = Config.new do |c|
+                  c.define_queue(:test1, test_task,
+                                 timeout:       1,
+                                 max_attempts:  3,
+                                 update_period: 4)
+                  c.define_queue(:test2, test_task,
+                                 timeout:       5,
+                                 max_attempts:  7,
+                                 update_period: 8)
+               end
 
-               queue1 = config.queues.first
-               queue2 = config.queues.last
+               queue1 = config.queues.first || raise('queue missing')
+               queue2 = config.queues.last || raise('queue missing')
 
                expect(queue1.timeout).to eq 1
                expect(queue1.max_attempts).to eq 3
@@ -117,12 +175,14 @@ module Procrastinator
             it 'should complain if the task class does NOT support #run' do
                klass = double('bad_task_class')
 
-               expect do
-                  allow(klass).to receive(:method_defined?) do |name|
-                     name != :run
-                  end
+               allow(klass).to receive(:method_defined?) do |name|
+                  name != :run
+               end
 
-                  config.define_queue(:test_queue, klass)
+               expect do
+                  Config.new do |c|
+                     c.define_queue(:test_queue, klass)
+                  end
                end.to raise_error(MalformedTaskError, "task #{ klass } does not support #run method")
             end
 
@@ -132,7 +192,9 @@ module Procrastinator
                err = "task #{ klass } cannot require parameters to its #run method"
 
                expect do
-                  config.define_queue(:test_queue, klass)
+                  Config.new do |c|
+                     c.define_queue(:test_queue, klass)
+                  end
                end.to raise_error(MalformedTaskError, err)
             end
 
@@ -142,7 +204,9 @@ module Procrastinator
                   err = "task #{ klass } must accept 1 parameter to its #success method"
 
                   expect do
-                     config.define_queue(:test_queue, klass)
+                     Config.new do |c|
+                        c.define_queue(:test_queue, klass)
+                     end
                   end.to raise_error(MalformedTaskError, err)
                end
             end
@@ -153,7 +217,9 @@ module Procrastinator
                   err = "task #{ klass } must accept 1 parameter to its #fail method"
 
                   expect do
-                     config.define_queue(:test_queue, klass)
+                     Config.new do |c|
+                        c.define_queue(:test_queue, klass)
+                     end
                   end.to raise_error(MalformedTaskError, err)
                end
             end
@@ -164,123 +230,111 @@ module Procrastinator
                   err = "task #{ klass } must accept 1 parameter to its #final_fail method"
 
                   expect do
-                     config.define_queue(:test_queue, klass)
+                     Config.new do |c|
+                        c.define_queue(:test_queue, klass)
+                     end
                   end.to raise_error(MalformedTaskError, err)
                end
             end
          end
 
          describe '#log_with' do
-            let(:config) { Config.new }
-
             it 'should set the log directory' do
                dir = '/a/logging/directory'
 
-               config.log_with(directory: dir)
+               config = Config.new do |c|
+                  c.log_with(directory: dir)
+               end
 
                expect(config.log_dir.to_s).to eq dir
             end
 
             it 'should set the log level' do
-               lvl = Logger::FATAL
-
-               config.log_with(level: lvl)
+               lvl    = Logger::FATAL
+               config = Config.new do |c|
+                  c.log_with(level: lvl)
+               end
 
                expect(config.log_level).to be lvl
             end
 
             it 'should set the shift_age' do
-               age = 123
-
-               config.log_with(shift_age: age)
+               age    = 123
+               config = Config.new do |c|
+                  c.log_with(shift_age: age)
+               end
 
                expect(config.log_shift_age).to be age
             end
 
             it 'should set the shift_size' do
-               size = 456
-
-               config.log_with(shift_size: size)
+               size   = 456
+               config = Config.new do |c|
+                  c.log_with(shift_size: size)
+               end
 
                expect(config.log_shift_size).to be size
             end
 
             it 'should use default directory if omitted' do
-               config.log_with(level: Logger::DEBUG)
+               config = Config.new do |c|
+                  c.log_with(level: Logger::DEBUG)
+               end
 
                expect(config.log_dir).to eq Config::DEFAULT_LOG_DIRECTORY
             end
 
             it 'should use default level if omitted' do
-               config.log_with(directory: '/test/log')
-
+               config = Config.new do |c|
+                  c.log_with(directory: '/test/log')
+               end
                expect(config.log_level).to eq Logger::INFO
             end
 
             it 'should use default shift age if omitted' do
-               config.log_with(directory: '/test/log')
-
+               config = Config.new do |c|
+                  c.log_with(directory: '/test/log')
+               end
                expect(config.log_shift_age).to eq Config::DEFAULT_LOG_SHIFT_AGE
             end
 
             it 'should use default shift size if omitted' do
-               config.log_with(directory: '/test/log')
-
+               config = Config.new do |c|
+                  c.log_with(directory: '/test/log')
+               end
                # 2**20 = 1 MB
                expect(config.log_shift_size).to eq Config::DEFAULT_LOG_SHIFT_SIZE
             end
          end
       end
 
-      describe '#setup' do
-         it 'should yield itself' do
-            config.define_queue(:test_queue, test_task)
-
-            expect { |b| config.setup(&b) }.to yield_with_args(config)
-         end
-
-         it 'should default to the basic CSV task loader if none is provided' do
-            config = Config.new
-
-            config.setup do |c|
-               c.define_queue(:test_queue, test_task)
-            end
-
-            expect(config.loader).to be_a(Procrastinator::Loader::CSVLoader)
-         end
-
-         it 'should complain if it does not have any queues defined' do
-            config = Config.new
-
-            expect do
-               config.setup do |c|
-                  c.load_with(Test::Persister.new)
-               end
-            end.to raise_error(SetupError, SetupError::ERR_NO_QUEUE)
-         end
-      end
-
       describe '#queues_string' do
          it 'should return queue names with symbol formatting' do
-            config.define_queue(:test1, test_task)
+            config = Config.new do |c|
+               c.define_queue(:test1, test_task)
+            end
 
             expect(config.queues_string).to eq ':test1'
          end
 
          it 'should return queue names in a comma list' do
-            config.define_queue(:test1, test_task)
-            config.define_queue(:test2, test_task)
-            config.define_queue(:test3, test_task)
+            config = Config.new do |c|
+               c.define_queue(:test1, test_task)
+               c.define_queue(:test2, test_task)
+               c.define_queue(:test3, test_task)
+            end
 
             expect(config.queues_string).to eq ':test1, :test2, :test3'
          end
       end
 
       describe '#log_dir' do
-         it 'should return the log direcory' do
+         it 'should return the log directory' do
             dir = '/logging/path'
 
-            config.log_with directory: dir
+            config = Config.new do |c|
+               c.log_with directory: dir
+            end
 
             expect(config.log_dir.to_s).to eq dir
          end
