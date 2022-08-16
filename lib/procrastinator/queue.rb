@@ -40,6 +40,7 @@ module Procrastinator
          @max_attempts  = max_attempts
          @timeout       = timeout
          @update_period = update_period
+         freeze
       end
    end
 end

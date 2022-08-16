@@ -107,6 +107,14 @@ module Procrastinator
 
             expect(queue.update_period).to eq Queue::DEFAULT_UPDATE_PERIOD
          end
+
+         # queues should not
+         it 'should freeze itself' do
+            queue = Procrastinator::Queue.new(name:       :queues,
+                                              task_class: test_task)
+
+            expect(queue).to be_frozen
+         end
       end
    end
 end
