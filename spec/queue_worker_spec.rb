@@ -92,25 +92,17 @@ module Procrastinator
          end
 
          it 'should log starting a queue worker' do
-            [{parent: 10, child: 2000, queues: :test1},
-             {parent: 30, child: 4000, queues: :test2}].each do |pid_hash|
-               parent_pid = pid_hash[:parent]
-               child_pid  = pid_hash[:child]
-               queue_name = pid_hash[:queues]
+            [:test1, :test2].each do |queue_name|
+               config = Config.new do |c|
+                  c.define_queue(queue_name, test_task, update_period: 0)
+                  c.load_with persister
+               end
 
-               queue = Procrastinator::Queue.new(name:          queue_name,
-                                                 task_class:    Test::Task::AllHooks,
-                                                 update_period: 0)
-
-               worker = QueueWorker.new(queue: queue, config: config)
-
-               allow(Process).to receive(:ppid).and_return(parent_pid)
-               allow(Process).to receive(:pid).and_return(child_pid)
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
                allow(worker).to receive(:loop).and_yield
-
                worker.work
 
-               log_contents = Pathname.new("log/#{ queue.name }-queue-worker.log").read
+               log_contents = Pathname.new("log/#{ queue_name }-queue-worker.log").read
 
                expect(log_contents).to include("Started worker thread to consume queue: #{ queue_name }")
             end
