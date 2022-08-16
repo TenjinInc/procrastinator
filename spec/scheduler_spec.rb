@@ -620,6 +620,19 @@ module Procrastinator
                   expect(error.status).to eq(0)
                end
             end
+
+            it 'should NOT run the given block' do
+               allow(worker_proxy).to receive(:fork).and_return(1234)
+
+               was_run = false
+               expect do
+                  worker_proxy.daemonized! do
+                     was_run = true
+                  end
+               end.to raise_error(SystemExit)
+
+               expect(was_run).to eq false
+            end
          end
          context 'child process' do
             before(:each) do
@@ -628,7 +641,7 @@ module Procrastinator
                allow(worker_proxy).to receive(:loop).and_yield
             end
 
-            # prevents pointing to a pwd inherited from a manual terminal run
+            # prevents pointing to a pwd inherited from a manual terminal run (which might disappear)
             it 'should chdir to root' do
                expect(Dir).to receive(:chdir).with('/')
                worker_proxy.daemonized!
@@ -638,6 +651,15 @@ module Procrastinator
                expect(worker_proxy).to receive(:threaded)
 
                worker_proxy.daemonized!
+            end
+
+            it 'should run the given block' do
+               was_run = false
+               worker_proxy.daemonized! do
+                  was_run = true
+               end
+
+               expect(was_run).to eq true
             end
 
             # not sure this is actually necessary to test, so leaving just as a note:

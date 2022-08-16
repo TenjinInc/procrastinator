@@ -510,7 +510,7 @@ scheduler.work(:greeting, :reminders).threaded
 Daemonized working **consumes the current process** and then proceeds with threaded working in the new daemon.
 
 Use daemonized working for production environments, especially in conjunction with daemon monitors
-like [Monit](https://mmonit.com/monit/).
+like [Monit](https://mmonit.com/monit/). Provide a block to daemonized! to get
 
 ```ruby
 # work tasks forever as a headless daemon process.
@@ -524,6 +524,12 @@ scheduler.work.daemonized!(pid_path: '/var/run/myapp.pid')
 
 # only work tasks in the 'greeting' and 'reminder' queues
 scheduler.work(:greeting, :reminders).daemonized!
+
+# supply a block to run code after the daemon subprocess has forked off
+scheduler.work.daemonized! do
+   # this gets run after the daemon is spawned
+   task_store.reconnect_mysql
+end
 ```
 
 Procrastinator endeavours to be thread-safe and support concurrency, but this flexibility allows for many possible

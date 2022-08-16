@@ -179,16 +179,10 @@ module Procrastinator
          #                      Not guaranteed to be set, depending on OS support.
          # @param pid_path [Pathname|File|String] Path to where the process ID file is to be kept.
          #                                        Assumed to be a directory unless ends with '.pid'.
-         def daemonized!(name: nil, pid_path: nil)
-            summon_demon(pid_path)
+         def daemonized!(name: nil, pid_path: nil, &block)
+            spawn_daemon(pid_path, name)
 
-            unless name.nil?
-               warn "Warning: process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
-               name = name[0, MAX_PROC_LEN]
-
-               warn "Warning: a process is already named \"#{ name }\". Consider the \"name:\" argument to distinguish."
-               Process.setproctitle(name)
-            end
+            yield if block
 
             threaded
 
@@ -197,8 +191,8 @@ module Procrastinator
 
          private
 
-         # And his name is *Shawn*?
-         def summon_demon(pid_path)
+         # "And his name is ... Shawn?"
+         def spawn_daemon(pid_path, name)
             # double fork to guarantee no terminal can be attached.
             exit if fork
             Process.setsid
@@ -208,6 +202,8 @@ module Procrastinator
             warn('Starting Procrastinator...')
 
             manage_pid(pid_path)
+
+            rename_process(name)
          end
 
          def manage_pid(pid_path)
@@ -226,6 +222,16 @@ module Procrastinator
                pid_path.delete if pid_path.exist?
                warn("Procrastinator (pid #{ Process.pid }) halted.")
             end
+         end
+
+         def rename_process(name)
+            return if name.nil?
+
+            warn "Warning: process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
+            name = name[0, MAX_PROC_LEN]
+
+            warn "Warning: a process is already named \"#{ name }\". Consider the \"name:\" argument to distinguish."
+            Process.setproctitle(name)
          end
       end
 
