@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'yaml'
+require 'json'
 require 'ostruct'
 require 'timeout'
 require 'forwardable'
@@ -93,7 +93,7 @@ module Procrastinator
 
          @metadata.fail(msg, final: true)
 
-         @logger&.debug("Task failed permanently: #{ YAML.dump(@task) }")
+         @logger&.debug("Task failed permanently: #{ JSON.dump(@task) }")
 
          try_hook(:final_fail, error)
       end

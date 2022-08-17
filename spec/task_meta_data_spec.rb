@@ -17,11 +17,11 @@ module Procrastinator
 
          it 'should deserialize data parameter' do
             task_data = {name: 'task-data', list: [1, 2, 3]}
-            task_yml  = YAML.dump(task_data)
+            task_str  = JSON.dump(task_data)
 
-            allow(YAML).to receive(:load).with(task_yml).and_return(task_data)
+            allow(JSON).to receive(:load).with(task_str).and_return(task_data)
 
-            task = TaskMetaData.new(data: task_yml)
+            task = TaskMetaData.new(data: task_str)
 
             expect(task.data).to eq task_data
          end
@@ -182,9 +182,9 @@ module Procrastinator
 
          it 'should pass in the data to the task initialization if data' do
             data = 'task data'
-            allow(YAML).to receive(:load).and_return(data)
+            allow(JSON).to receive(:load).and_return(data)
 
-            meta       = TaskMetaData.new(data: YAML.dump(data))
+            meta       = TaskMetaData.new(data: JSON.dump(data))
             task_class = double('klass')
 
             expect(task_class).to receive(:new).with(data)
@@ -202,7 +202,7 @@ module Procrastinator
                   attempts:     double('attempts'),
                   last_fail_at: double('last_fail_at'),
                   last_error:   double('last_error'),
-                  data:         YAML.dump('some data')
+                  data:         JSON.dump('some data')
             }
 
             run_at         = double('run_at', to_i: double('run_at_i'))

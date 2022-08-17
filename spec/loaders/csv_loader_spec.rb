@@ -92,16 +92,16 @@ module Procrastinator
                expect(loader.read.length).to eq 0
             end
 
-            it 'should account for YAML syntax' do
-               first_data  = YAML.dump(user: 7, hash: true)
-               second_data = YAML.dump('string data')
-               third_data  = YAML.dump([:this, 'is', :an, 'array'])
+            it 'should account for JSON syntax' do
+               first_data  = JSON.dump(user: 7, hash: true)
+               second_data = JSON.dump('string data')
+               third_data  = JSON.dump([:this, 'is', :an, 'array'])
 
                contents = <<~CONTENTS
                   id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","","2","3","4","5","6","problem","#{ first_data }"
-                  "1","","2","3","4","5","6","problem","#{ second_data }"
-                  "1","","2","3","4","5","6","problem","#{ third_data }"
+                  "1","","2","3","4","5","6","problem","#{ first_data.gsub('"', '""') }"
+                  "1","","2","3","4","5","6","problem","#{ second_data.gsub('"', '""') }"
+                  "1","","2","3","4","5","6","problem","#{ third_data.gsub('"', '""') }"
                CONTENTS
 
                path.write(contents)
@@ -114,17 +114,21 @@ module Procrastinator
             end
 
             it 'should account for CSV escaped strings' do
-               data = YAML.dump('string with "quotes" in it')
+               str = 'string with "quotes" in it'
 
-               contents = <<~CONTENTS
+               # In CSV, double quotes are put twice in a row to escape them (so " becomes "").
+               # The backslash is from JSON strings.
+               # This HEREDOC must be non-interpolated or else you will lose 1 sanity point and be stunned for a turn.
+               contents = <<~'CONTENTS'
                   id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","","2","3","4","5","6","problem","#{ data.gsub('"', '"""') }"
+                  "1","","2","3","4","5","6","problem","""string with \""quotes\"" in it"""
                CONTENTS
 
                path.write(contents)
 
                db = loader.read
 
+               data = JSON.dump(str)
                expect(db.first[:data]).to eq data
             end
 

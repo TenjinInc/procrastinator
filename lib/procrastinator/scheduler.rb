@@ -17,7 +17,7 @@ module Procrastinator
       #
       # @param queue [Symbol] the symbol identifier for the queue to add a new task on
       # @param run_at [Time, Integer] Optional time when this task should be executed. Defaults to the current time.
-      # @param data [Hash, Array] Optional simple data object to be provided to the task upon execution.
+      # @param data [Hash, Array, String, Integer] Optional simple data object to be provided to the task upon execution.
       # @param expire_at [Time, Integer] Optional time when the task should be abandoned
       def delay(queue = nil, data: nil, run_at: Time.now.to_i, expire_at: nil)
          verify_queue_arg!(queue)
@@ -30,7 +30,7 @@ module Procrastinator
                        run_at:         run_at.to_i,
                        initial_run_at: run_at.to_i,
                        expire_at:      expire_at.nil? ? nil : expire_at.to_i,
-                       data:           YAML.dump(data))
+                       data:           JSON.dump(data))
       end
 
       # Alters an existing task to run at a new time, expire at a new time, or both.
@@ -85,7 +85,7 @@ module Procrastinator
       # @see Scheduler#reschedule
       class UpdateProxy
          def initialize(config, identifier:)
-            identifier[:data] = YAML.dump(identifier[:data]) if identifier[:data]
+            identifier[:data] = JSON.dump(identifier[:data]) if identifier[:data]
 
             @config     = config
             @identifier = identifier

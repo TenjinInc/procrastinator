@@ -59,7 +59,7 @@ module Procrastinator
             it 'should provide the data to the new task instance if requested' do
                task_class.task_attr :data
 
-               meta = TaskMetaData.new(data: YAML.dump('data here'))
+               meta = TaskMetaData.new(data: JSON.dump('data here'))
 
                queue = Procrastinator::Queue.new(name:       :test_queue,
                                                  task_class: task_class)
@@ -232,15 +232,15 @@ module Procrastinator
             end
 
             it 'should log #success at debug level' do
-               logger    = double('logger')
-               data_yaml = YAML.dump('some data text')
+               logger   = double('logger')
+               data_str = JSON.dump('some data text')
 
                worker = TaskWorker.new(queue:    queue,
                                        logger:   logger,
                                        metadata: TaskMetaData.new(last_fail_at: double('failtime'),
-                                                                  data:         data_yaml))
+                                                                  data:         data_str))
 
-               expect(logger).to receive(:debug).with("Task completed: #{ Test::Task::AllHooks } [#{ data_yaml }]")
+               expect(logger).to receive(:debug).with("Task completed: #{ Test::Task::AllHooks } [#{ data_str }]")
 
                worker.work
             end
@@ -438,11 +438,11 @@ module Procrastinator
 
                queue = Procrastinator::Queue.new(name: :test, task_class: task_class)
 
-               worker = TaskWorker.new(metadata: TaskMetaData.new(data: YAML.dump(data)),
+               worker = TaskWorker.new(metadata: TaskMetaData.new(data: JSON.dump(data)),
                                        logger:   logger,
                                        queue:    queue)
 
-               expect(logger).to receive(:debug).with("Task failed: #{ queue.name } with #{ YAML.dump(data) }")
+               expect(logger).to receive(:debug).with("Task failed: #{ queue.name } with #{ JSON.dump(data) }")
 
                worker.work
             end
@@ -590,7 +590,7 @@ module Procrastinator
                                        logger:   logger,
                                        queue:    final_fail_queue)
 
-               expect(logger).to receive(:debug).with("Task failed permanently: #{ YAML.dump(task) }")
+               expect(logger).to receive(:debug).with("Task failed permanently: #{ JSON.dump(task) }")
 
                worker.work
             end
@@ -606,7 +606,7 @@ module Procrastinator
             attempts       = double('attempts')
             last_fail_at   = double('last_fail_at')
             last_error     = double('last_error')
-            data           = YAML.dump('one data, please')
+            data           = JSON.dump('one data, please')
 
             task = TaskMetaData.new(id:             double('id'),
                                     attempts:       attempts,

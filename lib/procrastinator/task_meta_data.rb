@@ -27,7 +27,7 @@ module Procrastinator
    # @!attribute [r] :last_fail_at
    #    @return [Integer] Linux epoch timestamp of when the last_error was recorded
    # @!attribute [r] :data
-   #    @return [String] User-provided data serialized to string using YAML
+   #    @return [String] App-provided JSON data
    class TaskMetaData
       # These are the attributes expected to be in the persistence mechanism
       EXPECTED_DATA = [:id, :run_at, :initial_run_at, :expire_at, :attempts, :last_error, :last_fail_at, :data].freeze
@@ -49,7 +49,7 @@ module Procrastinator
          @attempts       = attempts || 0
          @last_error     = last_error
          @last_fail_at   = last_fail_at
-         @data           = data ? YAML.safe_load(data, [Symbol, Date]) : nil
+         @data           = data ? JSON.parse(data, symbolize_names: true) : nil
       end
 
       def init_task(queue)
@@ -104,7 +104,7 @@ module Procrastinator
       # rubocop:enable Layout/SpaceAroundOperators
 
       def serialized_data
-         YAML.dump(@data)
+         JSON.dump(@data)
       end
 
       def verify_expiry!

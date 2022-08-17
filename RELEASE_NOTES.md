@@ -27,6 +27,7 @@
     * Use a dedicated process monitor (like `monit`) instead in production environments
     * Suuply a block to `daemonized!` to run code in the spawned process.
 * `max_tasks` is removed as it only added concurrency complexity
+* Data is now stored as JSON instead of YAML
 
 ### Minor Changes
 

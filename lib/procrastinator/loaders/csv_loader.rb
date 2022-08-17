@@ -26,7 +26,7 @@ module Procrastinator
          end
 
          def read(filter = {})
-            data = CSV.table(@path.to_s, force_quotes: false).to_a
+            data = CSV.table(@path.to_s, force_quotes: true).to_a
 
             headers = data.shift || []
 
@@ -119,7 +119,7 @@ module Procrastinator
 
                hash[:attempts] ||= 0
 
-               hash[:data]  = (hash[:data] || '').gsub('""', '"')
+               # hash[:data]  = (hash[:data] || '').gsub('""', '"')
                hash[:queue] = hash[:queue].to_sym
 
                hash

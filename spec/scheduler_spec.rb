@@ -63,7 +63,7 @@ module Procrastinator
             data = double('some_data')
 
             # these are, at the moment, all of the arguments the dev can pass in
-            expect(persister).to receive(:create).with(include(data: YAML.dump(data)))
+            expect(persister).to receive(:create).with(include(data: JSON.dump(data)))
 
             scheduler.delay(:data_queue, data: data)
          end
@@ -366,7 +366,7 @@ module Procrastinator
 
             update_proxy = Scheduler::UpdateProxy.new(config, identifier: {data: data})
 
-            expect(persister).to receive(:read).with(data: YAML.dump(data)).and_return([double('task', '[]': 6)])
+            expect(persister).to receive(:read).with(data: JSON.dump(data)).and_return([double('task', '[]': 6)])
 
             update_proxy.to(run_at: 0)
          end

@@ -282,7 +282,7 @@ module Procrastinator
                      attempts:       0,
                      last_error:     double('last error'),
                      last_fail_at:   double('last fail at'),
-                     data:           YAML.dump(%w[some data])
+                     data:           '{"some data": 5}'
                }
 
                expect(TaskMetaData).to receive(:new).with(task_data).and_call_original
@@ -307,7 +307,7 @@ module Procrastinator
                                         attempts:       0,
                                         last_error:     double('last error'),
                                         last_fail_at:   double('last fail at'),
-                                        data:           YAML.dump(%w[some data])
+                                        data:           '{"some data": 5}'
                                   })
 
                expect(TaskMetaData).to receive(:new).with(task_data.to_h).and_call_original
