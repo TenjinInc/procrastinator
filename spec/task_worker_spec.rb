@@ -12,7 +12,7 @@ module Procrastinator
       describe '#inititalize' do
          let(:task_instance) { double('task', run: nil) }
          let(:task_class) { double('task class', new: task_instance) }
-         let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: task_class) }
+         let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: task_class, store: fake_persister) }
 
          it 'should complain when no queue is given' do
             expect do
@@ -24,7 +24,8 @@ module Procrastinator
             task       = double('task instance')
             task_class = double('BadTaskClass', new: task)
 
-            queue = Procrastinator::Queue.new(name: :test_queue, task_class: task_class)
+            queue = Procrastinator::Queue.new(name:       :test_queue, store: fake_persister,
+                                              task_class: task_class)
 
             expect do
                TaskWorker.new(metadata: meta, queue: queue)
@@ -62,7 +63,7 @@ module Procrastinator
                meta = TaskMetaData.new(data: JSON.dump('data here'))
 
                queue = Procrastinator::Queue.new(name:       :test_queue,
-                                                 task_class: task_class)
+                                                 task_class: task_class, store: fake_persister)
 
                expect(task).to receive(:data=).with(meta.data)
 

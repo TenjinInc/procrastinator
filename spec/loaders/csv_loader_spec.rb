@@ -4,25 +4,25 @@ require 'spec_helper'
 require 'pathname'
 
 module Procrastinator
-   module Loader
-      describe CSVLoader do
+   module TaskStore
+      describe CSVStore do
          describe 'initialize' do
             include FakeFS::SpecHelpers
 
             it 'should accept a path argument' do
-               CSVLoader.new('testfile.csv').write([])
+               CSVStore.new('testfile.csv').write([])
 
                expect(File).to exist('testfile.csv')
             end
 
             it 'should provide a default path argument' do
-               CSVLoader.new.write([])
+               CSVStore.new.write([])
 
-               expect(File).to exist(CSVLoader::DEFAULT_FILE)
+               expect(File).to exist(CSVStore::DEFAULT_FILE)
             end
 
             it 'should add a .csv extension to the path if missing extension' do
-               CSVLoader.new('plainfile').write([])
+               CSVStore.new('plainfile').write([])
 
                expect(File).to exist('plainfile.csv')
             end
@@ -30,17 +30,17 @@ module Procrastinator
             it 'should add a default filename if the provided path is a directory name' do
                slash_end_path = '/some/place/'
 
-               CSVLoader.new(slash_end_path).write([])
+               CSVStore.new(slash_end_path).write([])
 
-               expect(File).to exist("#{ slash_end_path }/#{ CSVLoader::DEFAULT_FILE }")
+               expect(File).to exist("#{ slash_end_path }/#{ CSVStore::DEFAULT_FILE }")
             end
 
             it 'should add a default filename if the provided path is an existing directory' do
                existing_dir = 'test_dir'
                FileUtils.mkdir existing_dir
-               CSVLoader.new(existing_dir).write([])
+               CSVStore.new(existing_dir).write([])
 
-               expect(File).to exist("#{ existing_dir }/#{ CSVLoader::DEFAULT_FILE }")
+               expect(File).to exist("#{ existing_dir }/#{ CSVStore::DEFAULT_FILE }")
             end
          end
 
@@ -48,7 +48,7 @@ module Procrastinator
             include FakeFS::SpecHelpers
 
             let(:path) { Pathname.new 'procrastinator-data.csv' }
-            let(:loader) { CSVLoader.new(path) }
+            let(:store) { CSVStore.new(path) }
 
             before(:each) do
                contents = <<~CONTENTS
@@ -68,18 +68,18 @@ module Procrastinator
                 Pathname.new('/some/place/some-other-data.csv')].each do |path|
                   path.dirname.mkpath
                   File.open(path.to_s, 'w') do |f|
-                     f.puts(CSVLoader::HEADERS.join(','))
+                     f.puts(CSVStore::HEADERS.join(','))
                      f.puts(data)
                   end
 
-                  loader = CSVLoader.new(path)
+                  store = CSVStore.new(path)
 
-                  expect(loader.read.length).to eq 1
+                  expect(store.read.length).to eq 1
                end
             end
 
             it 'should read the whole file' do
-               expect(loader.read.length).to eq 3
+               expect(store.read.length).to eq 3
             end
 
             it 'should handle a file with no tasks' do
@@ -89,7 +89,7 @@ module Procrastinator
 
                path.write(contents)
 
-               expect(loader.read.length).to eq 0
+               expect(store.read.length).to eq 0
             end
 
             it 'should account for JSON syntax' do
@@ -106,7 +106,7 @@ module Procrastinator
 
                path.write(contents)
 
-               db = loader.read
+               db = store.read
 
                expect(db[0][:data]).to eq first_data
                expect(db[1][:data]).to eq second_data
@@ -126,14 +126,14 @@ module Procrastinator
 
                path.write(contents)
 
-               db = loader.read
+               db = store.read
 
                data = JSON.dump(str)
                expect(db.first[:data]).to eq data
             end
 
             it 'should return hashes of the read data' do
-               data = loader.read
+               data = store.read
 
                data.each do |d|
                   expect(d).to be_a Hash
@@ -151,7 +151,7 @@ module Procrastinator
 
                path.write(contents)
 
-               data = loader.read(queue: :greetings)
+               data = store.read(queue: :greetings)
 
                expect(data.length).to eq 2
                expect(data.first).to include(queue: :greetings, id: 2)
@@ -159,14 +159,14 @@ module Procrastinator
             end
 
             it 'should filter data by id' do
-               data = loader.read(id: 8)
+               data = store.read(id: 8)
 
                expect(data.length).to eq 1
                expect(data.first).to include(id: 8)
             end
 
             it 'should return all when filter is empty' do
-               data = loader.read
+               data = store.read
 
                expect(data.length).to eq 3
             end
@@ -181,7 +181,7 @@ module Procrastinator
 
                path.write(contents)
 
-               data = loader.read
+               data = store.read
 
                data.each do |row|
                   [:run_at, :expire_at, :last_fail_at].each do |key|
@@ -204,14 +204,14 @@ module Procrastinator
             include FakeFS::SpecHelpers
 
             let(:path) { 'procrastinator-data.csv' }
-            let(:loader) { CSVLoader.new(path) }
+            let(:store) { CSVStore.new(path) }
 
             let(:required_args) do
                {queue: :some_queue, run_at: 0, initial_run_at: 0, expire_at: nil, data: ''}
             end
 
             it 'should write a header row' do
-               loader.create(required_args)
+               store.create(required_args)
 
                file_content = File.new(path).readlines
 
@@ -221,7 +221,7 @@ module Procrastinator
             end
 
             it 'should write a new data line' do
-               loader.create(required_args)
+               store.create(required_args)
 
                file_content = File.new(path).readlines
 
@@ -235,7 +235,7 @@ module Procrastinator
                ]
 
                data.each do |arguments|
-                  loader.create(arguments)
+                  store.create(arguments)
 
                   file_content = File.new(path).readlines
                   data_line    = file_content.last&.strip
@@ -253,7 +253,7 @@ module Procrastinator
             end
 
             it 'should write default values' do
-               loader.create(required_args)
+               store.create(required_args)
 
                file_content = File.new(path).readlines
                data_line    = file_content.last&.strip
@@ -277,7 +277,7 @@ module Procrastinator
 
                File.write(path, contents)
 
-               loader.create(required_args)
+               store.create(required_args)
 
                file_content = File.new(path).readlines
 
@@ -294,7 +294,7 @@ module Procrastinator
 
                File.write(path, contents)
 
-               loader.create(required_args)
+               store.create(required_args)
 
                file_content = File.new(path).read
 
@@ -307,7 +307,7 @@ module Procrastinator
             include FakeFS::SpecHelpers
 
             let(:path) { 'procrastinator-data.csv' }
-            let(:loader) { CSVLoader.new(path) }
+            let(:store) { CSVStore.new(path) }
 
             before(:each) do
                contents = <<~CONTENTS
@@ -331,14 +331,14 @@ module Procrastinator
                error_at = 0
                data     = 'boop'
 
-               loader.update(id,
-                             run_at:         run,
-                             initial_run_at: initial,
-                             expire_at:      expire,
-                             attempts:       attempts,
-                             last_fail_at:   error_at,
-                             last_error:     error,
-                             data:           data)
+               store.update(id,
+                            run_at:         run,
+                            initial_run_at: initial,
+                            expire_at:      expire,
+                            attempts:       attempts,
+                            last_fail_at:   error_at,
+                            last_error:     error,
+                            data:           data)
 
                file_lines = File.new(path).readlines
 
@@ -348,7 +348,7 @@ module Procrastinator
             end
 
             it 'should NOT create a new task' do
-               loader.update(2, run_at: 0)
+               store.update(2, run_at: 0)
 
                file_lines = File.new(path).readlines
 
@@ -356,7 +356,7 @@ module Procrastinator
             end
 
             it 'should NOT change the task id' do
-               loader.update(2, run_at: 0)
+               store.update(2, run_at: 0)
 
                file_lines = File.new(path).readlines
 
@@ -371,7 +371,7 @@ module Procrastinator
             include FakeFS::SpecHelpers
 
             let(:path) { 'procrastinator-data.csv' }
-            let(:loader) { CSVLoader.new(path) }
+            let(:store) { CSVStore.new(path) }
 
             before(:each) do
                contents = <<~CONTENTS
@@ -387,7 +387,7 @@ module Procrastinator
             it 'should remove a line' do
                id = 2
 
-               loader.delete(id)
+               store.delete(id)
 
                file_lines = File.new(path).readlines
 
@@ -403,7 +403,7 @@ module Procrastinator
 
                id = 2
 
-               loader.delete(id)
+               store.delete(id)
 
                file_content = File.new(path).read
 
@@ -415,14 +415,14 @@ module Procrastinator
             include FakeFS::SpecHelpers
 
             let(:path) { 'procrastinator-data.csv' }
-            let(:loader) { CSVLoader.new(path) }
+            let(:store) { CSVStore.new(path) }
 
             it 'should create a file if it does not exist' do
                %w[missing-file.csv
                   /some/other/place/data-file.csv].each do |path|
-                  loader = CSVLoader.new(path)
+                  store = CSVStore.new(path)
 
-                  loader.write([])
+                  store.write([])
 
                   expect(File).to exist(path)
                end
@@ -430,7 +430,7 @@ module Procrastinator
 
             # CSV considers "" to an escaped "
             it 'should escape double quote characters' do
-               loader.write([{data: 'this has "quotes" in it'}])
+               store.write([{data: 'this has "quotes" in it'}])
 
                file_content = File.new(path).readlines
 
@@ -450,7 +450,7 @@ module Procrastinator
                      data:           'user_id: 5'
                }
 
-               loader.write([task_info])
+               store.write([task_info])
 
                file_content = File.new(path).readlines
 

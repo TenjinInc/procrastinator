@@ -9,7 +9,7 @@ require 'procrastinator/queue_worker'
 require 'procrastinator/config'
 require 'procrastinator/task'
 require 'procrastinator/scheduler'
-require 'procrastinator/loaders/csv_loader'
+require 'procrastinator/task_store/csv_store'
 
 require 'logger'
 require 'pathname'

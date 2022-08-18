@@ -13,10 +13,9 @@ module Procrastinator
             expect(yielded_instance).to be new_instance
          end
 
-         it 'should default to the basic CSV task loader if none is provided' do
-            config = Config.new
-
-            expect(config.loader).to be_a(Procrastinator::Loader::CSVLoader)
+         it 'should default to the basic CSV task store if none is provided' do
+            expect(Config.new.default_store).to be_a(Procrastinator::TaskStore::CSVStore)
+            expect(Config.new.default_store.path).to eq TaskStore::CSVStore::DEFAULT_FILE
          end
 
          # immutable to aid with thread-safety and predictability
@@ -34,86 +33,36 @@ module Procrastinator
       end
 
       context 'DSL' do
-         describe '#load_with' do
+         describe '#store_with' do
             include FakeFS::SpecHelpers
 
-            it 'should accept a location hash' do
-               path   = '/some/path/file.csv'
-               loader = Loader::CSVLoader.new(path)
-               expect(Loader::CSVLoader).to receive(:new).with(path).and_return(loader)
+            it 'should accept a location path for a CSV store' do
+               path = Pathname.new('/some/path/file.csv')
 
                config = Config.new do |c|
-                  c.load_with(location: path)
+                  c.store_with(csv: path)
                end
 
-               expect(config.loader).to be loader
+               expect(config.default_store).to be_a(TaskStore::CSVStore)
+               expect(config.default_store&.path).to eq path
             end
 
             it 'should complain about unknown hash values' do
                path = '/some/path/file.csv'
-               expect(Loader::CSVLoader).to_not receive(:new)
 
                expect do
                   Config.new do |c|
-                     c.load_with(bogus: path)
+                     c.store_with(bogus: path)
                   end
-               end.to raise_error ArgumentError, 'Must pass keyword :location if specifying a location for CSV file'
+               end.to raise_error ArgumentError, 'Must pass keyword :csv if specifying a location for CSV file'
             end
 
-            it 'should complain if the loader is nil' do
+            it 'should complain if the task store is nil' do
                expect do
                   Config.new do |c|
-                     c.load_with(nil)
+                     c.store_with(nil)
                   end
-               end.to raise_error(MalformedTaskLoaderError, 'task loader cannot be nil')
-            end
-
-            it 'should complain if the loader does not respond to #read' do
-               bad_loader = double('block', create: nil, update: nil, delete: nil)
-
-               err = "task loader #{ bad_loader.class } must respond to #read"
-
-               expect do
-                  Config.new do |c|
-                     c.load_with(bad_loader)
-                  end
-               end.to raise_error(MalformedTaskLoaderError, err)
-            end
-
-            it 'should complain if the loader does not respond to #create' do
-               bad_loader = double('block', read: nil, update: nil, delete: nil)
-
-               err = "task loader #{ bad_loader.class } must respond to #create"
-
-               expect do
-                  Config.new do |c|
-                     c.load_with(bad_loader)
-                  end
-               end.to raise_error(MalformedTaskLoaderError, err)
-            end
-
-            it 'should complain if the loader does not respond to #update' do
-               bad_loader = double('block', read: nil, create: nil, delete: nil)
-
-               err = "task loader #{ bad_loader.class } must respond to #update"
-
-               expect do
-                  Config.new do |c|
-                     c.load_with(bad_loader)
-                  end
-               end.to raise_error(MalformedTaskLoaderError, err)
-            end
-
-            it 'should complain if the loader does not respond to #delete' do
-               bad_loader = double('block', read: nil, create: nil, update: nil)
-
-               err = "task loader #{ bad_loader.class } must respond to #delete"
-
-               expect do
-                  Config.new do |c|
-                     c.load_with(bad_loader)
-                  end
-               end.to raise_error(MalformedTaskLoaderError, err)
+               end.to raise_error(ArgumentError, 'task store cannot be nil')
             end
          end
 
@@ -130,12 +79,32 @@ module Procrastinator
          end
 
          describe '#define_queue' do
+            it 'should add a queue with the given name' do
+               config = Config.new do |c|
+                  c.define_queue(:queue_name_here, test_task)
+               end
+
+               queue = config.queues.first
+
+               expect(queue&.name).to eq :queue_name_here
+            end
+
             it 'should require that the queue name NOT be nil' do
                expect do
                   Config.new do |c|
                      c.define_queue(nil, double('taskClass'))
                   end
                end.to raise_error(ArgumentError, 'queue name cannot be nil')
+            end
+
+            it 'should add a queue with the given task class' do
+               config = Config.new do |c|
+                  c.define_queue(:test1, test_task)
+               end
+
+               queue = config.queues.first
+
+               expect(queue&.task_class).to eq test_task
             end
 
             it 'should require that the queue task class NOT be nil' do
@@ -146,62 +115,93 @@ module Procrastinator
                end.to raise_error(ArgumentError, 'queue task class cannot be nil')
             end
 
-            it 'should add a queue with its timeout, max_attempts, update_period' do
+            it 'should add a queue with the given max_attempts' do
                config = Config.new do |c|
-                  c.define_queue(:test1, test_task,
-                                 timeout:       1,
-                                 max_attempts:  3,
-                                 update_period: 4)
-                  c.define_queue(:test2, test_task,
-                                 timeout:       5,
-                                 max_attempts:  7,
-                                 update_period: 8)
+                  c.define_queue(:test1, test_task, max_attempts: 3)
+               end
+
+               queue = config.queues.first
+
+               expect(queue&.max_attempts).to eq 3
+            end
+
+            it 'should add a queue with the given timeout' do
+               config = Config.new do |c|
+                  c.define_queue(:test1, test_task, timeout: 5)
+               end
+
+               queue = config.queues.first
+
+               expect(queue&.timeout).to eq 5
+            end
+
+            it 'should add a queue with the given update_period' do
+               config = Config.new do |c|
+                  c.define_queue(:test1, test_task, update_period: 4)
+                  c.define_queue(:test2, test_task, update_period: 8)
                end
 
                queue1 = config.queues.first || raise('queue missing')
                queue2 = config.queues.last || raise('queue missing')
 
-               expect(queue1.timeout).to eq 1
-               expect(queue1.max_attempts).to eq 3
                expect(queue1.update_period).to eq 4
                expect(queue1.task_class).to eq test_task
 
-               expect(queue2.timeout).to eq 5
-               expect(queue2.max_attempts).to eq 7
                expect(queue2.update_period).to eq 8
                expect(queue2.task_class).to eq test_task
             end
 
-            it 'should complain if the task class does NOT support #run' do
-               klass = double('bad_task_class')
+            context 'storage' do
+               let(:persister) { fake_persister([]) }
 
-               allow(klass).to receive(:method_defined?) do |name|
-                  name != :run
-               end
-
-               expect do
-                  Config.new do |c|
-                     c.define_queue(:test_queue, klass)
+               it 'should add a queue with the given storage' do
+                  config = Config.new do |c|
+                     c.define_queue(:test1, test_task, store: persister)
                   end
-               end.to raise_error(MalformedTaskError, "task #{ klass } does not support #run method")
-            end
 
-            it 'should complain if task #run expects parameters' do
-               klass = Procrastinator::Test::Task::MissingParam::ArgRun
+                  queue = config.queues.first || raise('queue missing')
 
-               err = "task #{ klass } cannot require parameters to its #run method"
+                  expect(queue.store).to eq persister
+               end
 
-               expect do
-                  Config.new do |c|
-                     c.define_queue(:test_queue, klass)
+               it 'should use the default storage when not specified for queue' do
+                  config = Config.new do |c|
+                     c.store_with(persister)
+                     c.define_queue(:test1, test_task)
                   end
-               end.to raise_error(MalformedTaskError, err)
+
+                  expect(config.queues.first&.store).to eq persister
+               end
+
+               it 'should override default storage with queue defined storage' do
+                  config = Config.new do |c|
+                     c.store_with(double('some default'))
+                     c.define_queue(:test1, test_task, store: persister)
+                  end
+
+                  expect(config.queues.first&.store).to eq persister
+               end
             end
 
-            it 'should complain if task does NOT accept 1 parameter to #success' do
-               [Procrastinator::Test::Task::MissingParam::NoArgSuccess,
-                Procrastinator::Test::Task::MissingParam::MultiArgSuccess].each do |klass|
-                  err = "task #{ klass } must accept 1 parameter to its #success method"
+            context 'task requirements' do
+               it 'should complain if the task class does NOT support #run' do
+                  klass = double('bad_task_class')
+
+                  allow(klass).to receive(:method_defined?) do |name|
+                     name != :run
+                  end
+
+                  expect do
+                     Config.new do |c|
+                        c.define_queue(:test_queue, klass)
+                     end
+                  end.to raise_error(MalformedTaskError, "task #{ klass } does not support #run method")
+               end
+
+               it 'should complain if task #run expects parameters' do
+                  klass = Procrastinator::Test::Task::MissingParam::ArgRun
+
+                  err = "task #{ klass } cannot require parameters to its #run method"
 
                   expect do
                      Config.new do |c|
@@ -209,31 +209,44 @@ module Procrastinator
                      end
                   end.to raise_error(MalformedTaskError, err)
                end
-            end
 
-            it 'should complain if task does NOT accept 1 parameter in #fail' do
-               [Procrastinator::Test::Task::MissingParam::NoArgFail,
-                Procrastinator::Test::Task::MissingParam::MultiArgFail].each do |klass|
-                  err = "task #{ klass } must accept 1 parameter to its #fail method"
+               it 'should complain if task does NOT accept 1 parameter to #success' do
+                  [Procrastinator::Test::Task::MissingParam::NoArgSuccess,
+                   Procrastinator::Test::Task::MissingParam::MultiArgSuccess].each do |klass|
+                     err = "task #{ klass } must accept 1 parameter to its #success method"
 
-                  expect do
-                     Config.new do |c|
-                        c.define_queue(:test_queue, klass)
-                     end
-                  end.to raise_error(MalformedTaskError, err)
+                     expect do
+                        Config.new do |c|
+                           c.define_queue(:test_queue, klass)
+                        end
+                     end.to raise_error(MalformedTaskError, err)
+                  end
                end
-            end
 
-            it 'should complain if task does NOT accept 1 parameter in #final_fail' do
-               [Procrastinator::Test::Task::MissingParam::NoArgFinalFail,
-                Procrastinator::Test::Task::MissingParam::MultiArgFinalFail].each do |klass|
-                  err = "task #{ klass } must accept 1 parameter to its #final_fail method"
+               it 'should complain if task does NOT accept 1 parameter in #fail' do
+                  [Procrastinator::Test::Task::MissingParam::NoArgFail,
+                   Procrastinator::Test::Task::MissingParam::MultiArgFail].each do |klass|
+                     err = "task #{ klass } must accept 1 parameter to its #fail method"
 
-                  expect do
-                     Config.new do |c|
-                        c.define_queue(:test_queue, klass)
-                     end
-                  end.to raise_error(MalformedTaskError, err)
+                     expect do
+                        Config.new do |c|
+                           c.define_queue(:test_queue, klass)
+                        end
+                     end.to raise_error(MalformedTaskError, err)
+                  end
+               end
+
+               it 'should complain if task does NOT accept 1 parameter in #final_fail' do
+                  [Procrastinator::Test::Task::MissingParam::NoArgFinalFail,
+                   Procrastinator::Test::Task::MissingParam::MultiArgFinalFail].each do |klass|
+                     err = "task #{ klass } must accept 1 parameter to its #final_fail method"
+
+                     expect do
+                        Config.new do |c|
+                           c.define_queue(:test_queue, klass)
+                        end
+                     end.to raise_error(MalformedTaskError, err)
+                  end
                end
             end
          end

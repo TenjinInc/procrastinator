@@ -4,16 +4,18 @@ require 'csv'
 require 'pathname'
 
 module Procrastinator
-   module Loader
+   module TaskStore
       # Simple Task I/O object that writes task information (ie. TaskMetaData attributes) to a CSV file.
       #
       # @author Robin Miller
-      class CSVLoader
+      class CSVStore
          # ordered
          HEADERS = [:id, :queue, :run_at, :initial_run_at, :expire_at,
                     :attempts, :last_fail_at, :last_error, :data].freeze
 
-         DEFAULT_FILE = 'procrastinator-tasks.csv'
+         DEFAULT_FILE = Pathname.new('procrastinator-tasks.csv').freeze
+
+         attr_reader :path
 
          def initialize(file_path = DEFAULT_FILE)
             @path = Pathname.new(file_path)
@@ -34,9 +36,7 @@ module Procrastinator
                headers.zip(d)
             end.collect(&:to_h).reject(&:empty?)
 
-            data = correct_types(data)
-
-            data.select do |row|
+            correct_types(data).select do |row|
                filter.keys.all? do |key|
                   row[key] == filter[key]
                end

@@ -11,9 +11,9 @@ module Procrastinator
    # @!attribute [r] :queues
    #    @return [Array] List of defined queues
    # @!attribute [r] :container
-   #    @return [Object] Provided container object that will be forwarded to tasks
-   # @!attribute [r] :loader
-   #    @return [Object] Provided persistence strategy object to use for task I/O
+   #    @return [Object] Container object that will be forwarded to tasks
+   # @!attribute [r] :store
+   #    @return [Object] Persistence strategy object to use for task I/O
    # @!attribute [r] :log_dir
    #    @return [Pathname] Directory to write log files in
    # @!attribute [r] :log_level
@@ -23,7 +23,7 @@ module Procrastinator
    # @!attribute [r] :log_shift_size
    #    @return [Integer] Filesize before rotating to a new logfile (see Ruby Logger for details)
    class Config
-      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container, :loader
+      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container, :default_store
 
       DEFAULT_LOG_DIRECTORY = Pathname.new('log/').freeze
       DEFAULT_LOG_SHIFT_AGE = 0
@@ -35,16 +35,14 @@ module Procrastinator
 
       def initialize
          @queues         = []
-         @loader         = nil
          @container      = nil
          @log_dir        = DEFAULT_LOG_DIRECTORY
          @log_level      = Logger::INFO
          @log_shift_age  = DEFAULT_LOG_SHIFT_AGE
          @log_shift_size = DEFAULT_LOG_SHIFT_SIZE
+         store_with(csv: TaskStore::CSVStore::DEFAULT_FILE)
 
          yield(self) if block_given?
-
-         load_with(Loader::CSVLoader.new) unless @loader
 
          @queues.freeze
          freeze
@@ -55,24 +53,19 @@ module Procrastinator
       # @see Procrastinator
       module DSL
          # Assigns a task loader
-         def load_with(loader)
-            if loader.is_a? Hash
-               unless loader.key? :location
-                  raise ArgumentError, 'Must pass keyword :location if specifying a location for CSV file'
+         def store_with(store)
+            if store.is_a? Hash
+               csv_path_key = :csv
+               unless store.key? csv_path_key
+                  raise ArgumentError, "Must pass keyword :#{ csv_path_key } if specifying a location for CSV file"
                end
 
-               loader = Loader::CSVLoader.new(loader[:location])
+               store = TaskStore::CSVStore.new(store[csv_path_key])
             end
 
-            raise MalformedTaskLoaderError, 'task loader cannot be nil' if loader.nil?
+            raise(ArgumentError, 'task store cannot be nil') if store.nil?
 
-            [:read, :create, :update, :delete].each do |method|
-               unless loader.respond_to? method
-                  raise MalformedTaskLoaderError, "task loader #{ loader.class } must respond to ##{ method }"
-               end
-            end
-
-            @loader = loader
+            @default_store = store
          end
 
          def provide_container(container)
@@ -85,7 +78,7 @@ module Procrastinator
 
             verify_task_class(task_class)
 
-            @queues << Queue.new(properties.merge(name: name, task_class: task_class))
+            @queues << Queue.new({name: name, task_class: task_class, store: @default_store}.merge(properties))
          end
 
          # Sets details of logging behaviour
@@ -150,8 +143,5 @@ module Procrastinator
             raise MalformedTaskError, err
          end
       end
-   end
-
-   class MalformedTaskLoaderError < RuntimeError
    end
 end

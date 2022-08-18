@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module Procrastinator
-   # A QueueWorker checks for tasks to run from the loader defined in the provided config and executes them,
-   # updating information in the task loader as necessary.
+   # A QueueWorker checks for tasks to run from the task store and executes them, updating information in the task
+   # store as necessary.
    #
    # @author Robin Miller
    class QueueWorker
@@ -16,9 +16,20 @@ module Procrastinator
       PERSISTER_METHODS = [:read, :update, :delete].freeze
 
       def initialize(queue:, config:)
-         @queue     = queue
-         @config    = config
+         raise ArgumentError, ':queue cannot be nil' if queue.nil?
+         raise ArgumentError, ':config cannot be nil' if config.nil?
+
+         @config = config
+
+         @queue = if queue.is_a? Symbol
+                     config.queue(name: queue)
+                  else
+                     queue
+                  end
+
          @scheduler = Scheduler.new(config)
+
+         # freeze
       end
 
       # Works on jobs forever
@@ -27,17 +38,15 @@ module Procrastinator
 
          @logger&.info("Started worker thread to consume queue: #{ @queue.name }")
 
-         begin
-            loop do
-               sleep(@queue.update_period)
+         loop do
+            sleep(@queue.update_period)
 
-               work_one
-            end
-         rescue StandardError => e
-            raise unless @logger
-
-            @logger.fatal(e)
+            work_one
          end
+      rescue StandardError => e
+         raise unless @logger
+
+         @logger.fatal(e)
       end
 
       # Performs exactly one task on the queue
@@ -54,18 +63,18 @@ module Procrastinator
          worker.work
 
          if worker.successful?
-            @config.loader.delete(worker.id)
+            @queue.delete(worker.id)
          else
             worker_info = worker.to_h
             id          = worker_info.delete(:id)
-            @config.loader.update(id, **worker_info)
+            @queue.update(id, **worker_info)
          end
       end
 
       private
 
       def fetch_task
-         tasks = @config.loader.read(queue: @queue.name).map(&:to_h).reject { |t| t[:run_at].nil? }
+         tasks = @queue.read(queue: name).map(&:to_h).reject { |t| t[:run_at].nil? }
 
          metas = sort_tasks(tasks).collect do |t|
             TaskMetaData.new(t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) })

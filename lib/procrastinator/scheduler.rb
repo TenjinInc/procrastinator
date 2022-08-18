@@ -7,30 +7,30 @@ module Procrastinator
    #
    # @author Robin Miller
    class Scheduler
-      extend Forwardable
-
       def initialize(config)
          @config = config
       end
 
       # Records a new task to be executed at the given time.
       #
-      # @param queue [Symbol] the symbol identifier for the queue to add a new task on
+      # @param queue_name [Symbol] the symbol identifier for the queue to add a new task on
       # @param run_at [Time, Integer] Optional time when this task should be executed. Defaults to the current time.
       # @param data [Hash, Array, String, Integer] Optional simple data object to be provided to the task upon execution.
       # @param expire_at [Time, Integer] Optional time when the task should be abandoned
-      def delay(queue = nil, data: nil, run_at: Time.now.to_i, expire_at: nil)
-         verify_queue_arg!(queue)
+      def delay(queue_name = nil, data: nil, run_at: Time.now.to_i, expire_at: nil)
+         verify_queue_arg!(queue_name)
 
-         queue = @config.queue.name if @config.single_queue?
+         queue_name = @config.queue.name if @config.single_queue?
 
-         verify_queue_data!(queue, data)
+         verify_queue_data!(queue_name, data)
 
-         loader.create(queue:          queue.to_s,
-                       run_at:         run_at.to_i,
-                       initial_run_at: run_at.to_i,
-                       expire_at:      expire_at.nil? ? nil : expire_at.to_i,
-                       data:           JSON.dump(data))
+         queue = @config.queue(name: queue_name)
+
+         queue.create(queue:          queue_name.to_s,
+                      run_at:         run_at.to_i,
+                      initial_run_at: run_at.to_i,
+                      expire_at:      expire_at.nil? ? nil : expire_at.to_i,
+                      data:           JSON.dump(data))
       end
 
       # Alters an existing task to run at a new time, expire at a new time, or both.
@@ -60,12 +60,14 @@ module Procrastinator
       #
       # @see TaskMetaData
       def cancel(queue, identifier)
-         tasks = loader.read(identifier.merge(queue: queue.to_s))
+         queue = @config.queue(name: queue)
+
+         tasks = queue.read(identifier.merge(queue: queue.name.to_s))
 
          raise "no task matches search: #{ identifier }" if tasks.empty?
          raise "multiple tasks match search: #{ identifier }" if tasks.size > 1
 
-         loader.delete(tasks.first[:id])
+         queue.delete(tasks.first[:id])
       end
 
       # Spawns a new worker thread for each queue defined in the config
@@ -84,10 +86,10 @@ module Procrastinator
       #
       # @see Scheduler#reschedule
       class UpdateProxy
-         def initialize(config, identifier:)
+         def initialize(queue, identifier:)
             identifier[:data] = JSON.dump(identifier[:data]) if identifier[:data]
 
-            @config     = config
+            @queue      = queue
             @identifier = identifier
          end
 
@@ -106,7 +108,7 @@ module Procrastinator
             new_data = new_data.merge(run_at: run_at.to_i, initial_run_at: run_at.to_i) if run_at
             new_data = new_data.merge(expire_at: expire_at.to_i) if expire_at
 
-            @config.loader.update(task[:id], new_data)
+            @queue.update(task[:id], new_data)
          end
 
          alias at to
@@ -130,7 +132,7 @@ module Procrastinator
          end
 
          def fetch_task(identifier)
-            tasks = @config.loader.read(identifier)
+            tasks = @queue.read(identifier)
 
             raise "no task found matching #{ identifier }" if tasks.nil? || tasks.empty?
             raise "too many (#{ tasks.size }) tasks match #{ identifier }. Found: #{ tasks }" if tasks.size > 1
@@ -236,12 +238,6 @@ module Procrastinator
       end
 
       private
-
-      # Scheduler must always get the loader indirectly. If it saves the loader to an instance variable,
-      # then that might hold a stale object reference. Better to fetch each time.
-      def loader
-         @config.loader
-      end
 
       def verify_queue_arg!(queue_name)
          raise ArgumentError, <<~ERR if !queue_name.nil? && !queue_name.is_a?(Symbol)

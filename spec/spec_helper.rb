@@ -116,7 +116,7 @@ module Procrastinator
    end
 end
 
-def fake_persister(data)
+def fake_persister(data = [])
    persister = Procrastinator::Test::Persister.new
    allow(persister).to receive(:read).and_return(data)
    persister

@@ -8,13 +8,45 @@ module Procrastinator
       let(:test_task) { Test::Task::AllHooks }
 
       describe '#initialize' do
-         it 'should require a queue' do
+         let(:config) do
+            Config.new do |config|
+               config.define_queue(:emails, test_task)
+               config.define_queue(:reminders, test_task)
+            end
+         end
+
+         it 'should require a queue keyword argument' do
             expect { QueueWorker.new(config: nil) }.to raise_error(ArgumentError, 'missing keyword: queue')
          end
 
-         it 'should require a persister' do
+         it 'should require queue not be nil' do
+            expect { QueueWorker.new(queue: nil, config: nil) }.to raise_error(ArgumentError, ':queue cannot be nil')
+         end
+
+         it 'should require a config keyword argument' do
             expect { QueueWorker.new(queue: nil) }.to raise_error(ArgumentError, 'missing keyword: config')
          end
+
+         it 'should require the config argument not be nil' do
+            expect { QueueWorker.new(queue: config.queues.first, config: nil) }.to raise_error(ArgumentError, ':config cannot be nil')
+         end
+
+         it 'should accept a queue name instead of a queue object' do
+            config = Config.new do |c|
+               c.define_queue(:some_queue, test_task)
+            end
+
+            worker = QueueWorker.new(queue: :some_queue, config: config)
+
+            expect(worker.name).to eq :some_queue
+         end
+
+         # TOOD: would be nice if this was frozen, too.
+         # it 'should freeze itself' do
+         #    worker = QueueWorker.new(queue: config.queues.first, config: config)
+         #
+         #    expect(worker).to be_frozen
+         # end
       end
 
       describe '#work' do
@@ -29,7 +61,7 @@ module Procrastinator
          # this needs to be here and not in init because work is called in sub threads / daemon,
          # but init is called in the parent booting process
          it 'should start a new log' do
-            worker = QueueWorker.new(queue: config.queues.first, config: config)
+            worker = QueueWorker.new(queue: :fast_queue, config: config)
 
             allow(worker).to receive(:loop) # stub infiniloop
 
@@ -44,7 +76,7 @@ module Procrastinator
                   c.define_queue(:fast_queue, test_task, update_period: period)
                end
 
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
+               worker = QueueWorker.new(queue: :fast_queue, config: config)
 
                expect(worker).to receive(:loop) do |&block|
                   block.call
@@ -57,7 +89,7 @@ module Procrastinator
          end
 
          it 'should cyclically call #work_one' do
-            worker = QueueWorker.new(queue:  config.queues.first,
+            worker = QueueWorker.new(queue:  :fast_queue,
                                      config: config)
 
             allow(worker).to receive(:sleep) # stub sleep
@@ -80,12 +112,11 @@ module Procrastinator
             allow(Logger).to receive(:new).and_return(logger)
 
             config = Config.new do |c|
-               c.define_queue(:fast_queue, test_task, update_period: 0)
-               c.load_with fake_persister([{run_at: 1}])
+               c.define_queue(:fast_queue, test_task, update_period: 0, store: fake_persister([{run_at: 1}]))
             end
 
             expect(TaskWorker).to receive(:new).with(hash_including(logger: logger)).and_call_original
-            worker = QueueWorker.new(queue: config.queues.first, config: config)
+            worker = QueueWorker.new(queue: :fast_queue, config: config)
             allow(worker).to receive(:loop).and_yield
 
             worker.work
@@ -94,11 +125,10 @@ module Procrastinator
          it 'should log starting a queue worker' do
             [:test1, :test2].each do |queue_name|
                config = Config.new do |c|
-                  c.define_queue(queue_name, test_task, update_period: 0)
-                  c.load_with persister
+                  c.define_queue(queue_name, test_task, update_period: 0, store: persister)
                end
 
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
+               worker = QueueWorker.new(queue: queue_name, config: config)
                allow(worker).to receive(:loop).and_yield
                worker.work
 
@@ -109,7 +139,7 @@ module Procrastinator
          end
 
          it 'should log fatal errors from #work_one if logging' do
-            worker = QueueWorker.new(queue: config.queues.first, config: config)
+            worker = QueueWorker.new(queue: :fast_queue, config: config)
 
             err = 'some fatal error'
 
@@ -161,9 +191,9 @@ module Procrastinator
 
          let(:config) do
             Config.new do |c|
+               c.store_with persister
                c.define_queue(:email, test_task, update_period: 0.01)
                c.define_queue(:cleanup, test_task, update_period: 0.01)
-               c.load_with persister
             end
          end
 
@@ -196,8 +226,7 @@ module Procrastinator
                                   delete: nil)
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with persister
+                  c.define_queue(:email, test_task, store: persister)
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -223,8 +252,7 @@ module Procrastinator
                                   delete: nil)
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with persister
+                  c.define_queue(:email, test_task, store: persister)
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -253,8 +281,7 @@ module Procrastinator
                job2 = {run_at: 1}
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with persister
+                  c.define_queue(:email, test_task, store: persister)
                end
 
                allow(persister).to receive(:read).and_return([job1], [job2])
@@ -288,8 +315,7 @@ module Procrastinator
                expect(TaskMetaData).to receive(:new).with(task_data).and_call_original
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with fake_persister([task_data])
+                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -313,8 +339,7 @@ module Procrastinator
                expect(TaskMetaData).to receive(:new).with(task_data.to_h).and_call_original
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with fake_persister([task_data])
+                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -334,8 +359,7 @@ module Procrastinator
                                              .and_call_original
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with fake_persister([task_data])
+                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -352,8 +376,7 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).with(hash_including(metadata: meta)).and_call_original
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with fake_persister([task_data])
+                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -368,8 +391,7 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).with(hash_including(container: container)).and_call_original
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with fake_persister([task_data])
+                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
                   c.provide_container container
                end
 
@@ -380,8 +402,7 @@ module Procrastinator
 
             it 'should pass the TaskWorker the queue settings' do
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with fake_persister([{run_at: 1}])
+                  c.define_queue(:email, test_task, store: fake_persister([{run_at: 1}]))
                end
                queue  = config.queues.first
 
@@ -396,8 +417,7 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).with(hash_including(scheduler: an_instance_of(Scheduler))).and_call_original
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with fake_persister([{run_at: 1}])
+                  c.define_queue(:email, test_task, store: fake_persister([{run_at: 1}]))
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -413,8 +433,7 @@ module Procrastinator
                expect(TaskWorker).to receive(:new).once.and_call_original
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with fake_persister([task_data1, task_data2, task_data3])
+                  c.define_queue(:email, test_task, store: fake_persister([task_data1, task_data2, task_data3]))
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -432,8 +451,7 @@ module Procrastinator
                expect(TaskWorker).to_not receive(:new).ordered.and_call_original
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with fake_persister([task_data1, task_data2])
+                  c.define_queue(:email, test_task, store: fake_persister([task_data1, task_data2]))
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -454,8 +472,7 @@ module Procrastinator
                allow(persister).to receive(:read).and_return([task_data])
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task)
-                  c.load_with persister
+                  c.define_queue(:email, test_task, store: persister)
                end
 
                worker = QueueWorker.new(queue: config.queues.first, config: config)
@@ -467,7 +484,7 @@ module Procrastinator
          end
 
          context 'TaskWorker fails for fails For The Last Time' do
-            # to do:
+            # Vader:
             # it 'should promote Captain Piett to Admiral Piett'
 
             it 'should update the task' do
@@ -481,18 +498,15 @@ module Procrastinator
                   persister = fake_persister([task_data])
 
                   config = Config.new do |c|
-                     c.define_queue(:email, test_task)
-                     c.load_with persister
+                     c.define_queue(name, Test::Task::Fail,
+                                    store:         persister,
+                                    update_period: 0,
+                                    max_attempts:  max_attempts)
                   end
 
                   # allow_any_instance_of(TaskWorker).to receive(:to_h).and_return(task_hash)
 
-                  queue = Procrastinator::Queue.new(name:          name,
-                                                    task_class:    Test::Task::Fail,
-                                                    update_period: 0,
-                                                    max_attempts:  max_attempts)
-
-                  worker = QueueWorker.new(queue: queue, config: config)
+                  worker = QueueWorker.new(queue: name, config: config)
 
                   expect(persister).to receive(:update).with(id, hash_including(run_at: nil,
                                                                                 queue:  name))

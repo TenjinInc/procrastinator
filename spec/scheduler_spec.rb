@@ -9,9 +9,9 @@ module Procrastinator
 
       let(:config) do
          Config.new do |c|
+            c.store_with(persister)
             c.define_queue(:emails, test_task)
             c.define_queue(:reminders, test_task)
-            c.load_with(persister)
          end
       end
 
@@ -54,8 +54,7 @@ module Procrastinator
             end
 
             config = Config.new do |c|
-               c.define_queue(:data_queue, task_with_data)
-               c.load_with(persister)
+               c.define_queue(:data_queue, task_with_data, store: persister)
             end
 
             scheduler = Scheduler.new(config)
@@ -79,8 +78,7 @@ module Procrastinator
             end
 
             config = Config.new do |c|
-               c.define_queue(:data_queue, test_task)
-               c.load_with(persister)
+               c.define_queue(:data_queue, test_task, store: persister)
             end
 
             scheduler = Scheduler.new(config)
@@ -99,8 +97,7 @@ module Procrastinator
             end
 
             config = Config.new do |c|
-               c.define_queue(:data_queue, test_task)
-               c.load_with(persister)
+               c.define_queue(:data_queue, test_task, store: persister)
             end
 
             scheduler = Scheduler.new(config)
@@ -160,8 +157,7 @@ module Procrastinator
          context 'only one queue' do
             let(:config) do
                Config.new do |c|
-                  c.define_queue(:the_only_queue, test_task)
-                  c.load_with persister
+                  c.define_queue(:the_only_queue, test_task, store: persister)
                end
             end
 
@@ -178,10 +174,10 @@ module Procrastinator
          context 'multiple queues' do
             let(:config) do
                Config.new do |c|
+                  c.store_with persister
                   c.define_queue(:first_queue, test_task)
                   c.define_queue(:second_queue, test_task)
                   c.define_queue(:third_queue, test_task)
-                  c.load_with persister
                end
             end
 
@@ -235,7 +231,7 @@ module Procrastinator
       describe '#cancel' do
          let(:config) do
             Config.new do |config|
-               config.load_with(persister)
+               config.store_with(persister)
                config.define_queue(:greeting, test_task)
                config.define_queue(:reminder, test_task)
             end
@@ -307,7 +303,7 @@ module Procrastinator
          let(:queue_names) { [:first, :second, :third] }
          let(:config) do
             Config.new do |config|
-               config.load_with(persister)
+               config.store_with(persister)
                queue_names.each do |name|
                   config.define_queue(name, test_task)
                end
@@ -339,12 +335,12 @@ module Procrastinator
       let(:persister) { Test::Persister.new }
       let(:config) do
          Config.new do |c|
-            c.load_with(persister)
-            c.define_queue(:test_queue, test_task)
+            c.define_queue(:test_queue, test_task, store: persister)
          end
       end
       let(:identifier) { {id: 'id'} }
-      let(:update_proxy) { Scheduler::UpdateProxy.new(config, identifier: identifier) }
+      let(:queue) { config.queue(name: :test_queue) }
+      let(:update_proxy) { Scheduler::UpdateProxy.new(queue, identifier: identifier) }
 
       describe '#to' do
          before(:each) do
@@ -353,7 +349,7 @@ module Procrastinator
 
          it 'should find the task matching the given information' do
             [{id: 5}, {data: {user_id: 5, appointment_id: 2}}].each do |identifier|
-               update_proxy = Scheduler::UpdateProxy.new(config, identifier: identifier)
+               update_proxy = Scheduler::UpdateProxy.new(queue, identifier: identifier)
 
                expect(persister).to receive(:read).with(identifier).and_return([double('task', '[]': 6)])
 
@@ -364,7 +360,7 @@ module Procrastinator
          it 'should find the task matching the given serialized :data' do
             data = {user_id: 5, appointment_id: 2}
 
-            update_proxy = Scheduler::UpdateProxy.new(config, identifier: {data: data})
+            update_proxy = Scheduler::UpdateProxy.new(queue, identifier: {data: data})
 
             expect(persister).to receive(:read).with(data: JSON.dump(data)).and_return([double('task', '[]': 6)])
 
@@ -374,7 +370,7 @@ module Procrastinator
          it 'should complain if no task matches the given information' do
             identifier = {bogus: 66}
 
-            update_proxy = Scheduler::UpdateProxy.new(config, identifier: identifier)
+            update_proxy = Scheduler::UpdateProxy.new(queue, identifier: identifier)
 
             [[], nil].each do |ret|
                allow(persister).to receive(:read).and_return(ret)
@@ -496,7 +492,7 @@ module Procrastinator
                c.define_queue(name, test_task)
             end
 
-            c.load_with(persister)
+            c.store_with(persister)
          end
       end
 

@@ -27,8 +27,7 @@ module Procrastinator
          it 'should return a scheduler configured with config' do
             scheduler = double('scheduler')
             config    = Config.new do |c|
-               c.load_with(persister)
-               c.define_queue(:setup_test_queue, test_task)
+               c.define_queue(:setup_test_queue, test_task, store: persister)
             end
 
             expect(Config).to receive(:new).and_return(config)
@@ -48,7 +47,7 @@ module Procrastinator
          it 'should require at least one queue is defined' do
             expect do
                Procrastinator.setup do |config|
-                  config.load_with(persister)
+                  config # just a placeholder to avoid rubocop complaint
                end
             end.to raise_error(SetupError, 'setup block must call #define_queue on the environment')
          end
@@ -61,8 +60,7 @@ module Procrastinator
 
             expect do
                Procrastinator.setup do |config|
-                  config.define_queue(:setup_test, task_class)
-                  config.load_with(persister)
+                  config.define_queue(:setup_test, task_class, store: persister)
                   config.provide_container(double('some container'))
                end
             end.to raise_error(SetupError, SetupError::ERR_UNUSED_CONTAINER)

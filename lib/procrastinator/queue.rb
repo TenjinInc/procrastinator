@@ -14,33 +14,59 @@ module Procrastinator
    # @!attribute [r] :max_attempts
    #    @return [Object] Maximum number of attempts for tasks in this queue.
    # @!attribute [r] :update_period
-   #    @return [Pathname] Delay (seconds) between reloads of tasks from the task loader.
+   #    @return [Pathname] Delay (seconds) between reloads of tasks from the task store.
    class Queue
+      extend Forwardable
+
       DEFAULT_TIMEOUT       = 3600 # in seconds; one hour total
       DEFAULT_MAX_ATTEMPTS  = 20
       DEFAULT_UPDATE_PERIOD = 10 # seconds
 
-      attr_reader :name, :task_class, :max_attempts, :timeout, :update_period
+      attr_reader :name, :task_class, :max_attempts, :timeout, :update_period, :task_store
+
+      alias store task_store
+      alias storage task_store
+
+      def_delegators :@task_store, :read, :create, :update, :delete
 
       # Timeout is in seconds
       def initialize(name:,
                      task_class:,
                      max_attempts: DEFAULT_MAX_ATTEMPTS,
                      timeout: DEFAULT_TIMEOUT,
-                     update_period: DEFAULT_UPDATE_PERIOD)
-         raise ArgumentError, ':name may not be nil' unless name
-         raise ArgumentError, ':task_class may not be nil' unless task_class
+                     update_period: DEFAULT_UPDATE_PERIOD,
+                     store: TaskStore::CSVStore.new)
+         raise ArgumentError, ':name cannot be nil' unless name
 
+         raise ArgumentError, ':task_class cannot be nil' unless task_class
          raise ArgumentError, 'Task class must be initializable' unless task_class.respond_to? :new
 
-         raise ArgumentError, 'timeout cannot be negative' if timeout&.negative?
+         validate_task_store(store)
+
+         raise ArgumentError, ':timeout cannot be negative' if timeout&.negative?
 
          @name          = name.to_s.strip.gsub(/[^A-Za-z0-9]+/, '_').to_sym
          @task_class    = task_class
+         @task_store    = store
          @max_attempts  = max_attempts
          @timeout       = timeout
          @update_period = update_period
          freeze
       end
+
+      private
+
+      def validate_task_store(store)
+         raise ArgumentError, ':store cannot be nil' if store.nil?
+
+         [:read, :create, :update, :delete].each do |method|
+            unless store.respond_to? method
+               raise MalformedTaskStoreError, "task store #{ store.class } must respond to ##{ method }"
+            end
+         end
+      end
+   end
+
+   class MalformedTaskStoreError < RuntimeError
    end
 end

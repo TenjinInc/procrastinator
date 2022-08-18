@@ -120,7 +120,7 @@ module Procrastinator
          let(:queue) do
             Procrastinator::Queue.new(name:         :queue,
                                       task_class:   Test::Task::Fail,
-                                      max_attempts: 3)
+                                      max_attempts: 3, store: fake_persister)
          end
 
          it 'should be true if under the limit' do
