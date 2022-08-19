@@ -4,7 +4,7 @@ require 'spec_helper'
 
 module Procrastinator
    describe QueueWorker do
-      let(:persister) { double('loader', read: [], create: nil, update: nil, delete: nil) }
+      let(:persister) { double('task store', read: [], create: nil, update: nil, delete: nil) }
       let(:test_task) { Test::Task::AllHooks }
 
       describe '#initialize' do
@@ -191,9 +191,10 @@ module Procrastinator
 
          let(:config) do
             Config.new do |c|
-               c.store_with persister
-               c.define_queue(:email, test_task, update_period: 0.01)
-               c.define_queue(:cleanup, test_task, update_period: 0.01)
+               c.with_store(persister) do
+                  c.define_queue(:email, test_task, update_period: 0.01)
+                  c.define_queue(:cleanup, test_task, update_period: 0.01)
+               end
             end
          end
 

@@ -9,9 +9,10 @@ module Procrastinator
 
       let(:config) do
          Config.new do |c|
-            c.store_with(persister)
-            c.define_queue(:emails, test_task)
-            c.define_queue(:reminders, test_task)
+            c.with_store(persister) do
+               c.define_queue(:emails, test_task)
+               c.define_queue(:reminders, test_task)
+            end
          end
       end
 
@@ -174,10 +175,11 @@ module Procrastinator
          context 'multiple queues' do
             let(:config) do
                Config.new do |c|
-                  c.store_with persister
-                  c.define_queue(:first_queue, test_task)
-                  c.define_queue(:second_queue, test_task)
-                  c.define_queue(:third_queue, test_task)
+                  c.with_store persister do
+                     c.define_queue(:first_queue, test_task)
+                     c.define_queue(:second_queue, test_task)
+                     c.define_queue(:third_queue, test_task)
+                  end
                end
             end
 
@@ -231,9 +233,10 @@ module Procrastinator
       describe '#cancel' do
          let(:config) do
             Config.new do |config|
-               config.store_with(persister)
-               config.define_queue(:greeting, test_task)
-               config.define_queue(:reminder, test_task)
+               config.with_store(persister) do
+                  config.define_queue(:greeting, test_task)
+                  config.define_queue(:reminder, test_task)
+               end
             end
          end
 
@@ -303,10 +306,7 @@ module Procrastinator
          let(:queue_names) { [:first, :second, :third] }
          let(:config) do
             Config.new do |config|
-               config.store_with(persister)
-               queue_names.each do |name|
-                  config.define_queue(name, test_task)
-               end
+               queue_names.each { |name| config.define_queue(name, test_task, store: persister) }
             end
          end
 
@@ -488,11 +488,11 @@ module Procrastinator
       let(:persister) { Test::Persister.new }
       let(:config) do
          Config.new do |c|
-            queue_names.each do |name|
-               c.define_queue(name, test_task)
+            c.with_store(persister) do
+               queue_names.each do |name|
+                  c.define_queue(name, test_task)
+               end
             end
-
-            c.store_with(persister)
          end
       end
 

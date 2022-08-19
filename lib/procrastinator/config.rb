@@ -12,8 +12,6 @@ module Procrastinator
    #    @return [Array] List of defined queues
    # @!attribute [r] :container
    #    @return [Object] Container object that will be forwarded to tasks
-   # @!attribute [r] :store
-   #    @return [Object] Persistence strategy object to use for task I/O
    # @!attribute [r] :log_dir
    #    @return [Pathname] Directory to write log files in
    # @!attribute [r] :log_level
@@ -23,7 +21,7 @@ module Procrastinator
    # @!attribute [r] :log_shift_size
    #    @return [Integer] Filesize before rotating to a new logfile (see Ruby Logger for details)
    class Config
-      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container, :default_store
+      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container
 
       DEFAULT_LOG_DIRECTORY = Pathname.new('log/').freeze
       DEFAULT_LOG_SHIFT_AGE = 0
@@ -33,6 +31,9 @@ module Procrastinator
       DEFAULT_LOG_SHIFT_SIZE = 2 ** 20 # 1 MB
       # rubocop:enable Layout/SpaceAroundOperators
 
+      def self.derp
+      end
+
       def initialize
          @queues         = []
          @container      = nil
@@ -40,9 +41,10 @@ module Procrastinator
          @log_level      = Logger::INFO
          @log_shift_age  = DEFAULT_LOG_SHIFT_AGE
          @log_shift_size = DEFAULT_LOG_SHIFT_SIZE
-         store_with(csv: TaskStore::CSVStore::DEFAULT_FILE)
 
-         yield(self) if block_given?
+         with_store(csv: TaskStore::CSVStore::DEFAULT_FILE) do
+            yield(self) if block_given?
+         end
 
          @queues.freeze
          freeze
@@ -53,7 +55,7 @@ module Procrastinator
       # @see Procrastinator
       module DSL
          # Assigns a task loader
-         def store_with(store)
+         def with_store(store)
             if store.is_a? Hash
                csv_path_key = :csv
                unless store.key? csv_path_key
@@ -64,8 +66,12 @@ module Procrastinator
             end
 
             raise(ArgumentError, 'task store cannot be nil') if store.nil?
+            raise(ArgumentError, 'store_with must be provided a block') unless block_given?
 
+            old_store      = @default_store
             @default_store = store
+            yield
+            @default_store = old_store
          end
 
          def provide_container(container)

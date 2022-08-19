@@ -189,6 +189,39 @@ reduce the chance of a serialization error.
 Times are all stored as unix epoch integer timestamps. This is to avoid confusion or conversion errors with timezones or
 daylight savings.
 
+#### Default Task Store
+
+Specifying no storage will cause Procrastinator to save tasks using the very basic built-in CSV storage. It is not
+designed for heavy loads, so you should replace it in a production environment.
+
+The file path is defined in `Procrastinator::Store::CSVStore::DEFAULT_FILE`.
+
+```ruby
+Procrastinator.setup do |config|
+   # this will use the default CSV task store. 
+   config.define_queue(:reminder, ReminderTask)
+end
+```
+
+#### Shared Task Stores
+
+When there are tasks use the same storage, you can wrap them in a `with_store` block.
+
+```ruby
+email_task_store = EmailTaskStore.new # eg. some SQL task storage class you wrote
+
+Procrastinator.setup do |config|
+   with_store(email_task_store) do
+      # queues defined inside this block will use the email task store
+      config.define_queue(:welcome, WelcomeTask)
+      config.define_queue(:reminder, ReminderTask)
+   end
+
+   # and this will not use it
+   config.define_queue(:thumbnails, ThumbnailTask)
+end
+```
+
 ### Task Container
 
 Whatever is given to `#provide_container` will available to Tasks through the task attribute `:container`.

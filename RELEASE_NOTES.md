@@ -28,6 +28,8 @@
     * Suuply a block to `daemonized!` to run code in the spawned process.
 * `max_tasks` is removed as it only added concurrency complexity
 * Data is now stored as JSON instead of YAML
+* Added store_with that applies its settings to its block
+   * `load_with` has been removed
 
 ### Minor Changes
 

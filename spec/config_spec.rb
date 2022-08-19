@@ -14,8 +14,14 @@ module Procrastinator
          end
 
          it 'should default to the basic CSV task store if none is provided' do
-            expect(Config.new.default_store).to be_a(Procrastinator::TaskStore::CSVStore)
-            expect(Config.new.default_store.path).to eq TaskStore::CSVStore::DEFAULT_FILE
+            config = Config.new do |c|
+               c.define_queue(:test_queue, test_task)
+            end
+
+            created_queue = config.queue(name: :test_queue)
+
+            expect(created_queue.store).to be_a(TaskStore::CSVStore)
+            expect(created_queue.store.path).to eq TaskStore::CSVStore::DEFAULT_FILE
          end
 
          # immutable to aid with thread-safety and predictability
@@ -40,11 +46,15 @@ module Procrastinator
                path = Pathname.new('/some/path/file.csv')
 
                config = Config.new do |c|
-                  c.store_with(csv: path)
+                  c.with_store(csv: path) do
+                     c.define_queue(:test_queue, test_task)
+                  end
                end
 
-               expect(config.default_store).to be_a(TaskStore::CSVStore)
-               expect(config.default_store&.path).to eq path
+               created_queue = config.queue(name: :test_queue)
+
+               expect(created_queue.store).to be_a(TaskStore::CSVStore)
+               expect(created_queue.store.path).to eq path
             end
 
             it 'should complain about unknown hash values' do
@@ -52,7 +62,7 @@ module Procrastinator
 
                expect do
                   Config.new do |c|
-                     c.store_with(bogus: path)
+                     c.with_store(bogus: path)
                   end
                end.to raise_error ArgumentError, 'Must pass keyword :csv if specifying a location for CSV file'
             end
@@ -60,9 +70,38 @@ module Procrastinator
             it 'should complain if the task store is nil' do
                expect do
                   Config.new do |c|
-                     c.store_with(nil)
+                     c.with_store(nil)
                   end
                end.to raise_error(ArgumentError, 'task store cannot be nil')
+            end
+
+            it 'should yield to the given block' do
+               expect do |block|
+                  Config.new do |c|
+                     c.with_store(csv: 'something.csv', &block)
+                  end
+               end.to yield_with_no_args
+            end
+
+            it 'should use the provided task store as the new default within the block' do
+               expect do |block|
+                  Config.new do |c|
+                     c.with_store(csv: 'something.csv', &block)
+                  end
+               end.to yield_with_no_args
+            end
+
+            it 'should return the default to original' do
+               custom_path = Pathname.new('custom.csv')
+               config      = Config.new do |c|
+                  c.with_store(csv: custom_path) do
+                     c.define_queue(:inner_queue, test_task)
+                  end
+                  c.define_queue(:outer_queue, test_task)
+               end
+
+               expect(config.queue(name: :inner_queue).store.path).to eq(custom_path)
+               expect(config.queue(name: :outer_queue).store.path).to eq(Pathname.new(TaskStore::CSVStore::DEFAULT_FILE))
             end
          end
 
@@ -164,22 +203,22 @@ module Procrastinator
                   expect(queue.store).to eq persister
                end
 
-               it 'should use the default storage when not specified for queue' do
+               it 'should override default storage with queue defined storage' do
                   config = Config.new do |c|
-                     c.store_with(persister)
-                     c.define_queue(:test1, test_task)
+                     c.with_store(double('some default')) do
+                        c.define_queue(:test1, test_task, store: persister)
+                     end
                   end
 
                   expect(config.queues.first&.store).to eq persister
                end
 
-               it 'should override default storage with queue defined storage' do
-                  config = Config.new do |c|
-                     c.store_with(double('some default'))
-                     c.define_queue(:test1, test_task, store: persister)
-                  end
-
-                  expect(config.queues.first&.store).to eq persister
+               it 'should require a block' do
+                  expect do
+                     Config.new do |c|
+                        c.with_store(double('some default'))
+                     end
+                  end.to raise_error(ArgumentError, 'store_with must be provided a block')
                end
             end
 
