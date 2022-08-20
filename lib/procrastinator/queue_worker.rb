@@ -44,9 +44,9 @@ module Procrastinator
             work_one
          end
       rescue StandardError => e
-         raise unless @logger
+         @logger&.fatal(e)
 
-         @logger.fatal(e)
+         raise
       end
 
       # Performs exactly one task on the queue

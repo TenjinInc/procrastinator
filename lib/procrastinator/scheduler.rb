@@ -166,36 +166,28 @@ module Procrastinator
 
          # Work off jobs per queue, each in its own thread.
          def threaded(timeout: nil)
-            Thread.abort_on_exception = true
-            $stderr.sync              = true
+            shutdown_on_interrupt
 
-            threads = @workers.collect do |worker|
-               Thread.new do
-                  # Thread.handle_interrupt(Interrupt => :never) do
+            @threads = @workers.collect do |worker|
+               Thread.new(worker) do |w|
+                  Thread.current.abort_on_exception = true
+                  Thread.current.thread_variable_set(:name, w.name)
+
                   begin
-                     # Thread.handle_interrupt(Interrupt => :immediate) do
                      worker.work
-                     # end
-                  rescue StandardError => e
-                     warn("Queue thread crash! (#{ worker.name })")
-                     warn e.message
-                     warn e.backtrace.join("\n")
                   ensure
                      worker.halt
                   end
-                  # end
                end
             end
 
-            Signal.trap('INT') do
-               warn 'Exiting gracefully'
-               threads.each(&:kill)
-               exit
-            end
-
-            threads.each do |thread|
+            @threads.each do |thread|
                thread.join(timeout)
             end
+         rescue StandardError => e # TODO: should this be any exception?
+            thread_crash(e)
+         ensure
+            shutdown
          end
 
          # Consumes the current process and turns it into a background daemon.
@@ -224,7 +216,7 @@ module Procrastinator
             exit if fork
             Dir.chdir '/' # allows process to continue even if the pwd of its running terminal disappears (eg deleted)
 
-            warn('Starting Procrastinator...')
+            warn 'Starting Procrastinator daemon...'
 
             manage_pid(pid_path)
 
@@ -257,6 +249,34 @@ module Procrastinator
 
             warn "Warning: a process is already named \"#{ name }\". Consider the \"name:\" argument to distinguish."
             Process.setproctitle(name)
+         end
+
+         def shutdown
+            threads = (@threads || []).select(&:alive?)
+
+            return if threads.empty?
+
+            warn 'Shutting down worker threads'
+            threads.each do |t|
+               warn "Halting #{ t.thread_variable_get(:name) }"
+               t.kill
+               # t.join
+            end
+         end
+
+         def shutdown_on_interrupt
+            Signal.trap('INT') do
+               shutdown
+            end
+         end
+
+         def thread_crash(error)
+            warn 'Crash detected in queue worker thread.'
+            (@threads || []).select { |t| t.status.nil? }.each do |thread|
+               warn "Crashed thread: #{ thread.thread_variable_get(:name) }"
+            end
+            warn error.message
+            warn error.backtrace.join("\n")
          end
       end
 

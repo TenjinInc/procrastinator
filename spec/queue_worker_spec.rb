@@ -71,7 +71,7 @@ module Procrastinator
          it 'should wait for update_period' do
             [0.01, 0.02].each do |period|
                config = Config.new do |c|
-                  c.define_queue(:fast_queue, test_task, update_period: period)
+                  c.define_queue(:fast_queue, test_task, update_period: period, store: persister)
                end
 
                worker = QueueWorker.new(queue: :fast_queue, config: config)
@@ -136,21 +136,21 @@ module Procrastinator
             end
          end
 
-         it 'should log fatal errors from #work_one if logging' do
+         it 'should log fatal errors if logging' do
             worker = QueueWorker.new(queue: :fast_queue, config: config)
 
-            err = 'some fatal error'
-
             allow(worker).to receive(:sleep) # stub sleep
-
             # control looping, otherwise infiniloop by design
             allow(worker).to receive(:loop) do |&block|
                block.call
             end
 
+            err = 'some fatal error'
             allow(worker).to receive(:work_one).and_raise(err)
 
-            worker.work
+            expect do
+               worker.work
+            end.to raise_error
 
             log = File.read('log/fast_queue-queue-worker.log')
 
@@ -158,24 +158,46 @@ module Procrastinator
             expect(log).to include(err)
          end
 
-         it 'should reraise fatal errors from #work_one if logging disabled' do
+         it 'should NOT log fatal errors if NOT logging' do
             config = Config.new do |c|
                c.define_queue :fast_queue, test_task, update_period: 0.1
-               c.log_with level: nil
+               c.log_with level: false
             end
+            worker = QueueWorker.new(queue: :fast_queue, config: config)
 
-            worker = QueueWorker.new(queue: config.queues.first, config: config)
-            worker.open_log!('fast_queue-worker', config)
-
-            err = 'some fatal error'
-
-            allow(worker).to receive(:sleep) # stub sleep
-
-            # control looping, otherwise infiniloop by design
+            # stub sleep and loop
+            allow(worker).to receive(:sleep)
             allow(worker).to receive(:loop) do |&block|
                block.call
             end
 
+            err = 'some fatal error'
+            allow(worker).to receive(:work_one).and_raise(err)
+
+            expect do
+               worker.work
+            end.to raise_error
+
+            expect(Pathname.new('log/fast_queue-queue-worker.log')).to_not exist
+         end
+
+         # Errors are reraised to prevent the case where a single thread crashes semi-silently but the others continue.
+         # The whole set would need to be started anyway. These errors are for fatal things like a corrupted/missing
+         # data store.
+         it 'should reraise fatal errors' do
+            config = Config.new do |c|
+               c.define_queue :fast_queue, test_task, update_period: 0.1
+            end
+
+            worker = QueueWorker.new(queue: :fast_queue, config: config)
+
+            # stub sleep and loop
+            allow(worker).to receive(:sleep)
+            allow(worker).to receive(:loop) do |&block|
+               block.call
+            end
+
+            err = 'some fatal error'
             allow(worker).to receive(:work_one).and_raise(RuntimeError, err)
 
             expect do
