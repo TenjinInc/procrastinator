@@ -3,9 +3,7 @@
 module Procrastinator
    # Mixin module that adds log file support
    module Loggable
-      # Starts a log file and stores the logger within this queue worker.
-      #
-      # Separate from init because logging is context-dependent
+      # Starts a log file and returns the created Logger
       def open_log!(name, config)
          return unless config.log_level
 

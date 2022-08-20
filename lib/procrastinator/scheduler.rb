@@ -166,13 +166,36 @@ module Procrastinator
 
          # Work off jobs per queue, each in its own thread.
          def threaded(timeout: nil)
+            Thread.abort_on_exception = true
+            $stderr.sync              = true
+
             threads = @workers.collect do |worker|
                Thread.new do
-                  worker.work
+                  # Thread.handle_interrupt(Interrupt => :never) do
+                  begin
+                     # Thread.handle_interrupt(Interrupt => :immediate) do
+                     worker.work
+                     # end
+                  rescue StandardError => e
+                     warn("Queue thread crash! (#{ worker.name })")
+                     warn e.message
+                     warn e.backtrace.join("\n")
+                  ensure
+                     worker.halt
+                  end
+                  # end
                end
             end
 
-            threads.each { |thread| thread.join(timeout) }
+            Signal.trap('INT') do
+               warn 'Exiting gracefully'
+               threads.each(&:kill)
+               exit
+            end
+
+            threads.each do |thread|
+               thread.join(timeout)
+            end
          end
 
          # Consumes the current process and turns it into a background daemon.

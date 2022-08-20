@@ -58,8 +58,8 @@ module Procrastinator
             end
          end
 
-         # this needs to be here and not in init because work is called in sub threads / daemon,
-         # but init is called in the parent booting process
+         # this needs to be here and not in init because they get initialized in the parent boot process
+         # and if it is daemonized, the file handles may disappear
          it 'should start a new log' do
             worker = QueueWorker.new(queue: :fast_queue, config: config)
 
@@ -514,6 +514,55 @@ module Procrastinator
 
                   worker.work_one
                end
+            end
+         end
+      end
+
+      describe '#halt' do
+         include FakeFS::SpecHelpers
+
+         let(:str_log) { StringIO.new }
+         let(:logger) { Logger.new(str_log) }
+
+         let(:config) do
+            Config.new do |c|
+               c.with_store(persister) do
+                  c.define_queue(:email, test_task, update_period: 0.01)
+                  c.define_queue(:reminders, test_task, update_period: 0.01)
+               end
+            end
+         end
+
+         before(:each) do
+            allow(Logger).to receive(:new).and_return(logger)
+         end
+
+         it 'should close its logger' do
+            expect(logger).to receive(:close)
+
+            worker = QueueWorker.new(queue: :email, config: config)
+            allow(worker).to receive(:loop).and_yield
+            worker.work
+            worker.halt
+         end
+
+         it 'should NOT close its logger if nil' do
+            expect(logger).to_not receive(:close)
+
+            worker = QueueWorker.new(queue: :some_queue, config: config)
+            worker.halt
+         end
+
+         it 'should log clean shutdown' do
+            [:email, :reminders].each do |queue_name|
+               expect(logger).to receive(:close)
+
+               worker = QueueWorker.new(queue: queue_name, config: config)
+               allow(worker).to receive(:loop).and_yield
+               worker.work
+               worker.halt
+
+               expect(str_log.string.strip).to end_with "Halted worker on queue: #{ queue_name }"
             end
          end
       end

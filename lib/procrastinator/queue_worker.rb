@@ -71,6 +71,11 @@ module Procrastinator
          end
       end
 
+      def halt
+         @logger&.info("Halted worker on queue: #{ name }")
+         @logger&.close
+      end
+
       private
 
       def fetch_task

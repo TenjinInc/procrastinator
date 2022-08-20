@@ -535,7 +535,7 @@ module Procrastinator
          let(:thread_double) { double('thread', join: nil) }
          let(:queue_workers) do
             queue_names.collect do |queue_name|
-               double("queue worker #{ queue_name }", work: nil)
+               QueueWorker.new(queue: queue_name, config: config)
             end
          end
          let(:worker_proxy) { Scheduler::WorkProxy.new(queue_workers) }
@@ -547,14 +547,50 @@ module Procrastinator
          end
 
          # ie. testing inside the child thread
-         it 'should tell the queue worker to work on the thread' do
-            allow(Thread).to receive(:new).and_yield.and_return(thread_double)
-
-            queue_workers.each do |worker|
-               expect(worker).to receive(:work)
+         context 'child thread' do
+            before(:each) do
+               allow(Thread).to receive(:new).and_yield.and_return(thread_double)
             end
 
-            worker_proxy.threaded
+            it 'should tell the queue worker to work' do
+               queue_workers.each do |worker|
+                  expect(worker).to receive(:work)
+               end
+
+               worker_proxy.threaded
+            end
+
+            # worker#work loops indefinitely, but can be interrupted by shutdown.
+            it 'should tell the worker to halt when interrupted' do
+               queue_workers.each do |worker|
+                  allow(worker).to receive(:work) # need to stub work because it uses an inifiniloop
+                  expect(worker).to receive(:halt)
+               end
+
+               worker_proxy.threaded
+            end
+
+            # this is a backstop to the queue worker's internal logging, just in case that fails
+            it 'should warn about errors' do
+               msg = "Queue thread crash! (#{ queue_workers.first.name })"
+               err = 'dummy test error'
+               queue_workers.each do |worker|
+                  allow(worker).to receive(:work).and_raise(StandardError, err)
+                  allow(worker).to receive(:halt)
+               end
+
+               expect { worker_proxy.threaded }.to output(/^#{ Regexp.quote(msg) }$/).to_stderr
+               expect { worker_proxy.threaded }.to output(/^#{ Regexp.quote(err) }$/).to_stderr
+            end
+
+            it 'should call halt when errors happen' do
+               queue_workers.each do |worker|
+                  allow(worker).to receive(:work).and_raise(StandardError, 'dummy test error')
+                  expect(worker).to receive(:halt)
+               end
+
+               worker_proxy.threaded
+            end
          end
 
          it 'should wait for the threads to complete' do
@@ -570,13 +606,48 @@ module Procrastinator
             worker_proxy.threaded
          end
 
-         it 'should wait respect the given timeout' do
-            allow(Thread).to receive(:new).and_yield.and_return(thread_double)
+         it 'should respect the given timeout' do
+            allow(Thread).to receive(:new).and_return(thread_double)
 
             n = 5
             expect(thread_double).to receive(:join).with(n)
 
             worker_proxy.threaded(timeout: n)
+         end
+
+         context 'SIGINT' do
+            it 'should register a SIGINT handler' do
+               allow(Thread).to receive(:new).and_return(thread_double)
+
+               expect(Signal).to receive(:trap).with('INT')
+
+               worker_proxy.threaded
+            end
+
+            it 'should register a SIGINT handler before calling join' do
+               allow(Thread).to receive(:new).and_return(thread_double)
+
+               expect(Signal).to receive(:trap).ordered
+               expect(thread_double).to receive(:join).ordered
+
+               worker_proxy.threaded
+            end
+
+            it 'should kill each thread in the handler' do
+               threads = [double('threadA', join: nil),
+                          double('threadB', join: nil),
+                          double('threadC', join: nil)]
+               allow(Thread).to receive(:new).and_return(*threads)
+
+               allow(Signal).to receive(:trap).and_yield
+               allow(worker_proxy).to receive(:exit)
+
+               threads.each do |thread|
+                  expect(thread).to receive(:kill).once
+               end
+
+               worker_proxy.threaded
+            end
          end
       end
 
