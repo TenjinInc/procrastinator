@@ -7,8 +7,6 @@ module Procrastinator
    module TaskStore
       describe CSVStore do
          describe 'initialize' do
-            include FakeFS::SpecHelpers
-
             it 'should accept a path argument' do
                CSVStore.new('testfile.csv').write([])
 
@@ -45,8 +43,6 @@ module Procrastinator
          end
 
          describe 'read' do
-            include FakeFS::SpecHelpers
-
             let(:path) { Pathname.new 'procrastinator-data.csv' }
             let(:store) { CSVStore.new(path) }
 
@@ -201,8 +197,6 @@ module Procrastinator
          end
 
          describe 'create' do
-            include FakeFS::SpecHelpers
-
             let(:path) { 'procrastinator-data.csv' }
             let(:store) { CSVStore.new(path) }
 
@@ -304,8 +298,6 @@ module Procrastinator
          end
 
          describe 'update' do
-            include FakeFS::SpecHelpers
-
             let(:path) { 'procrastinator-data.csv' }
             let(:store) { CSVStore.new(path) }
 
@@ -368,8 +360,6 @@ module Procrastinator
          end
 
          describe 'delete' do
-            include FakeFS::SpecHelpers
-
             let(:path) { 'procrastinator-data.csv' }
             let(:store) { CSVStore.new(path) }
 
@@ -412,8 +402,6 @@ module Procrastinator
          end
 
          describe 'write' do
-            include FakeFS::SpecHelpers
-
             let(:path) { 'procrastinator-data.csv' }
             let(:store) { CSVStore.new(path) }
 

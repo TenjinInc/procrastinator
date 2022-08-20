@@ -50,8 +50,6 @@ module Procrastinator
       end
 
       describe '#work' do
-         include FakeFS::SpecHelpers
-
          let(:config) do
             Config.new do |c|
                c.define_queue(:fast_queue, test_task, update_period: 0.01)
@@ -187,8 +185,6 @@ module Procrastinator
       end
 
       describe '#work_one' do
-         include FakeFS::SpecHelpers
-
          let(:config) do
             Config.new do |c|
                c.with_store(persister) do
@@ -519,8 +515,6 @@ module Procrastinator
       end
 
       describe '#halt' do
-         include FakeFS::SpecHelpers
-
          let(:str_log) { StringIO.new }
          let(:logger) { Logger.new(str_log) }
 
@@ -576,12 +570,6 @@ module Procrastinator
       let(:test_task) { Test::Task::AllHooks }
 
       describe '#open_log!' do
-         include FakeFS::SpecHelpers
-
-         before(:each) do
-            FakeFS.clear! if FakeFS.activated?
-         end
-
          let(:log_dir) { Pathname.new '/var/log' }
 
          context 'falsey log level' do

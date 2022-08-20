@@ -9,8 +9,6 @@ module Procrastinator
       end
 
       describe '.setup' do
-         include FakeFS::SpecHelpers
-
          let(:test_task) { Test::Task::AllHooks }
          let(:persister) { Test::Persister.new }
 

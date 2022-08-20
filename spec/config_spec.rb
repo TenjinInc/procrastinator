@@ -21,7 +21,7 @@ module Procrastinator
             created_queue = config.queue(name: :test_queue)
 
             expect(created_queue.store).to be_a(TaskStore::CSVStore)
-            expect(created_queue.store.path).to eq TaskStore::CSVStore::DEFAULT_FILE
+            expect(created_queue.store.path.to_s).to eq TaskStore::CSVStore::DEFAULT_FILE.to_s
          end
 
          # immutable to aid with thread-safety and predictability
@@ -40,8 +40,6 @@ module Procrastinator
 
       context 'DSL' do
          describe '#store_with' do
-            include FakeFS::SpecHelpers
-
             it 'should accept a location path for a CSV store' do
                path = Pathname.new('/some/path/file.csv')
 
@@ -333,7 +331,7 @@ module Procrastinator
                   c.log_with(level: Logger::DEBUG)
                end
 
-               expect(config.log_dir).to eq Config::DEFAULT_LOG_DIRECTORY
+               expect(config.log_dir.to_s).to eq Config::DEFAULT_LOG_DIRECTORY.to_s
             end
 
             it 'should use default level if omitted' do

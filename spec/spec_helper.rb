@@ -14,6 +14,10 @@ require 'fakefs/spec_helpers'
 
 require 'procrastinator'
 
+RSpec.configure do |config|
+   config.include FakeFS::SpecHelpers
+end
+
 module Procrastinator
    module Test
       class Persister
