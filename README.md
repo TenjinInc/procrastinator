@@ -21,16 +21,19 @@ Setup a procrastination environment:
 
 ```ruby
 scheduler = Procrastinator.setup do |env|
-   env.define_queue :greeting, SendWelcomeEmail, store: 'tasks.csv'
-   env.define_queue :thumbnail, GenerateThumbnail, store: 'tasks.csv', timeout: 60
-   env.define_queue :birthday, SendBirthdayEmail, store: 'tasks.csv', max_attempts: 3
+   env.with_store 'email-tasks.csv' do
+      env.define_queue :greeting, SendWelcomeEmail
+      env.define_queue :birthday, SendBirthdayEmail, max_attempts: 3
+   end
+
+   env.define_queue :thumbnail, GenerateThumbnail, store: 'imgtasks.csv', timeout: 60
 end
 ```
 
 And then - eventually - do some work:
 
 ```ruby
-# starts a thread for each queue. Other options: Single-process or daemonized
+# starts a thread for each queue. Other options: Direct control or daemonized
 scheduler.work.threaded
 
 scheduler.delay(:greeting, data: 'bob@example.com')
@@ -102,7 +105,7 @@ It then returns a `Scheduler` that your code can use to schedule tasks or tell t
 In setup, call `#define_queue` with a symbol name and the class that performs those jobs:
 
 ```ruby
-   # You must provide a queue name and the class that handles those jobs
+# You must provide a queue name and the class that handles those jobs
 config.define_queue :greeting, SendWelcomeEmail
 
 # but queues have some optional settings, too
@@ -577,6 +580,29 @@ guarantee concurrency in your Task Store.
 
 Process ID files are a single-line file that saves the daemon's process ID number. It's saved to the directory given
 by `:pid_dir`. The default location is `pids/` relative to the file that called `#daemonized!`.
+
+## Similar Tools
+
+Procrastinator is a library that exists to enable job queues with flexibility in storage mechanism and minimal
+dependencies. It's neat but it is specifically intended for smaller datasets. Some other approaches include:
+
+### Linux etc: Cron and At
+
+Consider [Cron](https://en.wikipedia.org/wiki/Cron) for tasks that run on a regular schedule.
+
+Consider [At](https://en.wikipedia.org/wiki/At_(command)) for tasks that run once at a particular time.
+
+While neither tool natively supports retry nor prioritization, they can be great solutions for simple situations.
+
+### Gem: Resque
+
+Consider [Resque](https://rubygems.org/gems/resque) for larger datasets (eg. 10,000+ jobs) where performance
+optimization becomes relevant.
+
+### Gem: Rails ActiveJob / DelayedJob
+
+Consider [DelayedJob](https://rubygems.org/gems/delayed_job) for projects that are tightly integrated with Rails and
+fully commit to live in that ecosystem.
 
 ## Contributing
 

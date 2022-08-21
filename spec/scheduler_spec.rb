@@ -29,7 +29,7 @@ module Procrastinator
          end
 
          it 'should record a task with given run_at' do
-            run_stamp = double('runstamp')
+            run_stamp = double('run stamp')
 
             expect(persister).to receive(:create).with(include(run_at: run_stamp))
 
@@ -37,7 +37,7 @@ module Procrastinator
          end
 
          it 'should record a task with given expire_at' do
-            expire_stamp = double('expirestamp')
+            expire_stamp = double('expire stamp')
 
             expect(persister).to receive(:create).with(include(expire_at: expire_stamp))
 
@@ -591,12 +591,12 @@ module Procrastinator
 
                allow(Thread).to receive(:new).and_yield(worker).and_return(thread_double)
 
-               allow(worker).to receive(:work) # need to stub work because it uses an inifiniloop
+               allow(worker).to receive(:work!) # need to stub work because it uses an infiniloop
                allow(worker).to receive(:halt)
             end
 
             it 'should tell the queue worker to work' do
-               expect(worker).to receive(:work)
+               expect(worker).to receive(:work!)
 
                worker_proxy.threaded
             end
@@ -612,7 +612,7 @@ module Procrastinator
             it 'should warn about errors' do
                msg = 'Crash detected in queue worker thread.'
                err = 'dummy test error'
-               allow(worker).to receive(:work).and_raise(StandardError, err)
+               allow(worker).to receive(:work!).and_raise(StandardError, err)
 
                expect(main_logger).to receive(:fatal).with(include(msg, # generic crash alert
                                                                    err, # real error message
@@ -624,7 +624,7 @@ module Procrastinator
             it 'should warn about errors with the crashed queue name' do
                allow(Thread).to receive(:new).and_return(thread_double)
 
-               # need this one to be separately tested because the threads group is nil when immediately crashing on #work
+               # need this one to be separately tested because the threads group is nil when immediately crashing on #work!
                err = 'dummy test error'
                allow(thread_double).to receive(:join).and_raise(StandardError, err)
 
@@ -645,7 +645,7 @@ module Procrastinator
             # gently clean up the other threads when one sibling crashes
             it 'should call halt when errors happen' do
                err = 'dummy test error'
-               allow(queue_workers.first).to receive(:work).and_raise(StandardError, err)
+               allow(queue_workers.first).to receive(:work!).and_raise(StandardError, err)
 
                expect(worker).to receive(:halt).once
 
@@ -797,48 +797,49 @@ module Procrastinator
             #    it 'should respond to SIGTERM to exit cleanly'
 
             context 'process name' do
+               let(:max_len) { Scheduler::WorkProxy::MAX_PROC_LEN }
+               let(:max_prog_name) { 'a' * max_len }
+
                before(:each) do
                   allow(worker_proxy).to receive(:system).with('pidof', anything).and_return(false)
                end
 
                it 'should rename the daemon process' do
-                  procname = 'deemins'
+                  prog_name = 'vicky'
 
-                  expect(Process).to receive(:setproctitle).with(procname)
+                  expect(Process).to receive(:setproctitle).with(prog_name)
 
-                  worker_proxy.daemonized!(name: procname)
+                  worker_proxy.daemonized!(name: prog_name)
                end
 
                it 'should warn if the process name is too long' do
-                  maxlen       = Scheduler::WorkProxy::MAX_PROC_LEN
-                  max_procname = 'a' * maxlen
-                  name         = "#{ max_procname }b"
+                  name = "#{ max_prog_name }b"
 
-                  msg = "process name is longer than max length (#{ maxlen }). Trimming to fit."
+                  msg = "process name is longer than max length (#{ max_len }). Trimming to fit."
                   expect(main_logger).to receive(:warn).with(msg)
 
                   worker_proxy.daemonized!(name: name)
                end
 
                it 'should warn trim long process names to fit' do
-                  maxlen       = Scheduler::WorkProxy::MAX_PROC_LEN
-                  max_procname = 'z' * maxlen
+                  maxlen        = Scheduler::WorkProxy::MAX_PROC_LEN
+                  max_proc_name = 'z' * maxlen
 
-                  expect(Process).to receive(:setproctitle).with(max_procname)
+                  expect(Process).to receive(:setproctitle).with(max_proc_name)
 
-                  worker_proxy.daemonized!(name: "#{ max_procname }more")
+                  worker_proxy.daemonized!(name: "#{ max_proc_name }more")
                end
 
                it 'should warn when an existing process has the same name' do
-                  procname = 'lemming'
+                  prog_name = 'lemming'
 
-                  expect(worker_proxy).to receive(:system).with('pidof', procname).and_return(true)
+                  expect(worker_proxy).to receive(:system).with('pidof', prog_name).and_return(true)
 
-                  msg = "a process is already named '#{ procname }'. Consider the 'name:' argument to distinguish."
+                  msg = "a process is already named '#{ prog_name }'. Consider the 'name:' argument to distinguish."
 
                   expect(main_logger).to receive(:warn).with(msg)
 
-                  worker_proxy.daemonized!(name: procname)
+                  worker_proxy.daemonized!(name: prog_name)
                end
             end
 

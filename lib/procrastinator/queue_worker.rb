@@ -33,7 +33,7 @@ module Procrastinator
       end
 
       # Works on jobs forever
-      def work
+      def work!
          @logger = open_log!("#{ @queue.name }-queue-worker", @config)
 
          @logger&.info("Started worker thread to consume queue: #{ @queue.name }")

@@ -49,7 +49,7 @@ module Procrastinator
          # end
       end
 
-      describe '#work' do
+      describe '#work!' do
          let(:config) do
             Config.new do |c|
                c.define_queue(:fast_queue, test_task, update_period: 0.01)
@@ -65,7 +65,7 @@ module Procrastinator
 
             expect(worker).to receive(:open_log!).and_call_original
 
-            worker.work
+            worker.work!
          end
 
          it 'should wait for update_period' do
@@ -82,7 +82,7 @@ module Procrastinator
 
                expect(worker).to receive(:sleep).with(period)
 
-               worker.work
+               worker.work!
             end
          end
 
@@ -101,7 +101,7 @@ module Procrastinator
 
             expect(worker).to receive(:work_one).exactly(n_loops).times
 
-            worker.work
+            worker.work!
          end
 
          it 'should pass the TaskWorker the logger' do
@@ -117,7 +117,7 @@ module Procrastinator
             worker = QueueWorker.new(queue: :fast_queue, config: config)
             allow(worker).to receive(:loop).and_yield
 
-            worker.work
+            worker.work!
          end
 
          it 'should log starting a queue worker' do
@@ -128,7 +128,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: queue_name, config: config)
                allow(worker).to receive(:loop).and_yield
-               worker.work
+               worker.work!
 
                log_contents = Pathname.new("log/#{ queue_name }-queue-worker.log").read
 
@@ -149,7 +149,7 @@ module Procrastinator
             allow(worker).to receive(:work_one).and_raise(err)
 
             expect do
-               worker.work
+               worker.work!
             end.to raise_error(RuntimeError, err)
 
             log = File.read('log/fast_queue-queue-worker.log')
@@ -175,7 +175,7 @@ module Procrastinator
             allow(worker).to receive(:work_one).and_raise(err)
 
             expect do
-               worker.work
+               worker.work!
             end.to raise_error(RuntimeError, err)
 
             expect(Pathname.new('log/fast_queue-queue-worker.log')).to_not exist
@@ -201,7 +201,7 @@ module Procrastinator
             allow(worker).to receive(:work_one).and_raise(RuntimeError, err)
 
             expect do
-               worker.work
+               worker.work!
             end.to raise_error(RuntimeError, err)
          end
       end
@@ -559,7 +559,7 @@ module Procrastinator
 
             worker = QueueWorker.new(queue: :email, config: config)
             allow(worker).to receive(:loop).and_yield
-            worker.work
+            worker.work!
             worker.halt
          end
 
@@ -576,7 +576,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: queue_name, config: config)
                allow(worker).to receive(:loop).and_yield
-               worker.work
+               worker.work!
                worker.halt
 
                expect(str_log.string.strip).to end_with "Halted worker on queue: #{ queue_name }"

@@ -213,7 +213,7 @@ module Procrastinator
                   Thread.current.thread_variable_set(:name, w.name)
 
                   begin
-                     worker.work
+                     worker.work!
                   ensure
                      worker.halt
                   end
