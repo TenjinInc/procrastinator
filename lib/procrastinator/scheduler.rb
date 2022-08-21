@@ -15,7 +15,7 @@ module Procrastinator
       #
       # @param queue_name [Symbol] the symbol identifier for the queue to add a new task on
       # @param run_at [Time, Integer] Optional time when this task should be executed. Defaults to the current time.
-      # @param data [Hash, Array, String, Integer] Optional simple data object to be provided to the task upon execution.
+      # @param data [Hash, Array, String, Integer] Optional simple data object to be provided to the task on execution.
       # @param expire_at [Time, Integer] Optional time when the task should be abandoned
       def delay(queue_name = nil, data: nil, run_at: Time.now.to_i, expire_at: nil)
          verify_queue_arg!(queue_name)
