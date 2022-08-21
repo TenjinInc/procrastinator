@@ -9,3 +9,6 @@
 /tmp/
 
 log/
+
+demo/log
+demo/*.csv

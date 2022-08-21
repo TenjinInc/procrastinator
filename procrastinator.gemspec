@@ -10,8 +10,8 @@ Gem::Specification.new do |spec|
    spec.authors = ['Robin Miller']
    spec.email   = ['robin@tenjin.ca']
 
-   spec.summary     = 'For apps that put work off until later'
-   spec.description = 'A straightforward, customizable Ruby job queue with zero dependencies.'
+   spec.summary     = 'For apps to put off work until later'
+   spec.description = 'A flexible pure Ruby job queue. Tasks are reschedulable after failures.'
    spec.homepage    = 'https://github.com/TenjinInc/procrastinator'
    spec.license     = 'MIT'
    spec.metadata    = {

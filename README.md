@@ -1,27 +1,27 @@
 # Procrastinator
 
-Procrastinator is a pure Ruby job scheduling gem. Put off tasks until later (or at least let another process handle it).
+Procrastinator is a pure Ruby job scheduling gem. Put off tasks until later or for another process to handle.
 
-If the task fails to complete or takes too long, it delays it and tries again later.
+Tasks are can be rescheduled and retried after failures, and you can use whatever storage mechanism is needed.
 
 ## Big Picture
 
 If you have tasks like this:
 
 ```ruby
-
+# Sends a welcome email
 class SendWelcomeEmail
    def run
-      # ... email stuff ...
+      # ... etc
    end
 end
 ```
 
-Setup a procrastination environment:
+Setup a procrastination environment like:
 
 ```ruby
 scheduler = Procrastinator.setup do |env|
-   env.with_store 'email-tasks.csv' do
+   env.with_store some_email_task_database do
       env.define_queue :greeting, SendWelcomeEmail
       env.define_queue :birthday, SendBirthdayEmail, max_attempts: 3
    end
@@ -30,17 +30,22 @@ scheduler = Procrastinator.setup do |env|
 end
 ```
 
-And then - eventually - do some work:
+Put jobs off until later:
 
 ```ruby
-# starts a thread for each queue. Other options: Direct control or daemonized
-scheduler.work.threaded
-
 scheduler.delay(:greeting, data: 'bob@example.com')
 
 scheduler.delay(:thumbnail, data: {file: 'full_image.png', width: 100, height: 100})
 
 scheduler.delay(:send_birthday_email, run_at: Time.now + 3600, data: {user_id: 5})
+```
+
+And tell a process to actually do them:
+
+```ruby
+# Starts a daemon with a thread for each queue. 
+# Other options are direct control (for testing) or threaded (for terminals)
+scheduler.work.daemonized!
 ```
 
 ## Contents
@@ -164,6 +169,9 @@ A task store is required to implement *all* of the following methods or else it 
 
 Procrastinator comes with a simple CSV file task store by default, but you are encouraged to build one that suits your
 situation.
+
+_Warning_: Task stores shared across queues **must** be thread-safe. The CSV store **is not**, so do not use it for more
+than one queue at a time.
 
 #### Data Fields
 
@@ -592,7 +600,7 @@ Consider [Cron](https://en.wikipedia.org/wiki/Cron) for tasks that run on a regu
 
 Consider [At](https://en.wikipedia.org/wiki/At_(command)) for tasks that run once at a particular time.
 
-While neither tool natively supports retry nor prioritization, they can be great solutions for simple situations.
+While neither tool natively supports retry, they can be great solutions for simple situations.
 
 ### Gem: Resque
 
