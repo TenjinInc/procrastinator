@@ -23,15 +23,10 @@ module Procrastinator
    class Config
       attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container
 
-      DEFAULT_LOG_DIRECTORY = Pathname.new('log/').freeze
-      DEFAULT_LOG_SHIFT_AGE = 0
-
-      # TODO: This cop for ** is currently incorrect. This disable can be removed once they fix it.
-      # rubocop:disable Layout/SpaceAroundOperators
+      DEFAULT_LOG_DIRECTORY  = Pathname.new('log/').freeze
+      DEFAULT_LOG_SHIFT_AGE  = 0
       DEFAULT_LOG_SHIFT_SIZE = 2 ** 20 # 1 MB
-      # rubocop:enable Layout/SpaceAroundOperators
-
-      DEFAULT_LOG_FORMATTER = proc do |severity, datetime, progname, msg|
+      DEFAULT_LOG_FORMATTER  = proc do |severity, datetime, progname, msg|
          [datetime.iso8601(8),
           severity,
           "#{ progname } (#{ Process.pid }):",

@@ -179,13 +179,16 @@ module Procrastinator
 
                data = store.read
 
+               nil_int_keys = [:run_at, :expire_at, :last_fail_at]
+               int_keys     = [:id, :initial_run_at, :attempts]
+
                data.each do |row|
-                  [:run_at, :expire_at, :last_fail_at].each do |key|
+                  nil_int_keys.each do |key|
                      expect(row[key]).to satisfy do |value|
                         value.is_a?(Integer) || value.nil?
                      end
                   end
-                  [:id, :initial_run_at, :attempts].each do |key|
+                  int_keys.each do |key|
                      value = row[key]
                      expect(value).to be_an(Integer)
                   end
@@ -290,9 +293,9 @@ module Procrastinator
 
                store.create(required_args)
 
-               file_content = File.new(path).read
+               file_content = File.new(path).read || ''
 
-               expect(file_content&.split("\n").size).to eq 5 # header + 3 existing + new record
+               expect(file_content.split("\n").size).to eq 5 # header + 3 existing + new record
                expect(file_content).to start_with(contents)
             end
          end

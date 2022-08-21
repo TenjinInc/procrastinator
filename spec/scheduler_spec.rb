@@ -644,8 +644,8 @@ module Procrastinator
                # end.to raise_error(StandardError, err)
             end
 
-            # Note: there is also a class-level version of abort_on_exception. This is on each instance to prevent
-            # accidental interactions with other gems, etc
+            # Be aware that there is also a class-level version of abort_on_exception.
+            # This is done per-instance to prevent accidental interactions with other gems, etc
             it 'should set this thread to raise errors to the parent' do
                expect(Thread.current).to receive(:abort_on_exception=).with(true)
 

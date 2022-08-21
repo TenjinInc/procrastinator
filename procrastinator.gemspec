@@ -14,6 +14,9 @@ Gem::Specification.new do |spec|
    spec.description = 'A straightforward, customizable Ruby job queue with zero dependencies.'
    spec.homepage    = 'https://github.com/TenjinInc/procrastinator'
    spec.license     = 'MIT'
+   spec.metadata    = {
+         'rubygems_mfa_required' => 'true'
+   }
 
    spec.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
    spec.bindir        = 'exe'

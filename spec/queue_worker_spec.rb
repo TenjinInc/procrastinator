@@ -150,7 +150,7 @@ module Procrastinator
 
             expect do
                worker.work
-            end.to raise_error
+            end.to raise_error(RuntimeError, err)
 
             log = File.read('log/fast_queue-queue-worker.log')
 
@@ -176,7 +176,7 @@ module Procrastinator
 
             expect do
                worker.work
-            end.to raise_error
+            end.to raise_error(RuntimeError, err)
 
             expect(Pathname.new('log/fast_queue-queue-worker.log')).to_not exist
          end
@@ -423,7 +423,8 @@ module Procrastinator
                config = Config.new do |c|
                   c.define_queue(:email, test_task, store: fake_persister([{run_at: 1}]))
                end
-               queue  = config.queues.first
+
+               queue = config.queues.first
 
                expect(TaskWorker).to receive(:new).with(hash_including(queue: queue)).and_call_original
 
@@ -659,8 +660,9 @@ module Procrastinator
                      c.log_with level: level
                   end
 
-                  expect(Logger).to receive(:new).with(anything, anything, anything, hash_including(level: level))
-                                                 .and_return logger
+                  expect(Logger).to receive(:new)
+                                          .with(anything, anything, anything, hash_including(level: level))
+                                          .and_return logger
 
                   loggable.open_log!('test-log', config)
                end

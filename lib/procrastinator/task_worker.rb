@@ -28,16 +28,14 @@ module Procrastinator
                      scheduler: nil)
          @queue = queue
 
-         @metadata       = metadata
-         @task           = queue.task_class.new
-
-         @task.data      = @metadata.data if @task.respond_to?(:data=)
-         @task.container = container if @task.respond_to?(:container=)
-         @task.logger    = logger if @task.respond_to?(:logger=)
-         @task.scheduler = scheduler if @task.respond_to?(:scheduler=)
+         @metadata = metadata
+         @task     = queue.task_class.new
 
          @logger    = logger
          @container = container
+         @scheduler = scheduler
+
+         assign_task_variables
 
          raise MalformedTaskError, "task #{ @task.class } does not support #run method" unless @task.respond_to? :run
       end
@@ -71,6 +69,13 @@ module Procrastinator
       end
 
       private
+
+      def assign_task_variables
+         @task.data      = @metadata.data if @task.respond_to?(:data=)
+         @task.container = @container if @task.respond_to?(:container=)
+         @task.logger    = @logger if @task.respond_to?(:logger=)
+         @task.scheduler = @scheduler if @task.respond_to?(:scheduler=)
+      end
 
       def try_hook(method, *params)
          @task.send(method, *params) if @task.respond_to? method

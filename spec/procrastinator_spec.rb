@@ -79,7 +79,8 @@ module Procrastinator
 
          it 'should complain if it does not have any queues defined' do
             expect do
-               Procrastinator.setup do |config|
+               Procrastinator.setup do |_config|
+                  # empty on purpose
                end
             end.to raise_error(SetupError, SetupError::ERR_NO_QUEUE)
          end

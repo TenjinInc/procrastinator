@@ -93,15 +93,11 @@ module Procrastinator
          !expired? && @last_error.nil? && @last_fail_at.nil?
       end
 
-      # TODO: This cop for ** is currently incorrect. This disable can be removed once they fix it.
-      # rubocop:disable Layout/SpaceAroundOperators
       def reschedule
          # (30 + n_attempts^4) seconds is chosen to rapidly expand
          # but with the baseline of 30s to avoid hitting the disk too frequently.
          @run_at += 30 + (@attempts ** 4) unless @run_at.nil?
       end
-
-      # rubocop:enable Layout/SpaceAroundOperators
 
       def serialized_data
          JSON.dump(@data)
