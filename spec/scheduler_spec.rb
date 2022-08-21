@@ -755,14 +755,11 @@ module Procrastinator
             it 'should NOT run the given block' do
                allow(worker_proxy).to receive(:fork).and_return(1234)
 
-               was_run = false
                expect do
-                  worker_proxy.daemonized! do
-                     was_run = true
-                  end
+                  expect do |block|
+                     worker_proxy.daemonized!(&block)
+                  end.to_not yield_control
                end.to raise_error(SystemExit)
-
-               expect(was_run).to eq false
             end
          end
          context 'child process' do

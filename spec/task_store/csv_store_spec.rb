@@ -36,9 +36,16 @@ module Procrastinator
             it 'should add a default filename if the provided path is an existing directory' do
                existing_dir = 'test_dir'
                FileUtils.mkdir existing_dir
-               CSVStore.new(existing_dir).write([])
+               store = CSVStore.new(existing_dir)
 
-               expect(File).to exist("#{ existing_dir }/#{ CSVStore::DEFAULT_FILE }")
+               expect(store.path.to_s).to eq("#{ existing_dir }/#{ CSVStore::DEFAULT_FILE }")
+            end
+
+            it 'should ensure the file exists' do
+               path = Pathname.new('test_dir/something.csv')
+               CSVStore.new(path)
+
+               expect(path).to exist
             end
          end
 

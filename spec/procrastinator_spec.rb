@@ -32,7 +32,7 @@ module Procrastinator
             expect(Scheduler).to receive(:new).with(config).and_return(scheduler)
 
             returned = Procrastinator.setup do |c|
-               expect(c).to be config
+               # config stuff
             end
 
             expect(returned).to be scheduler

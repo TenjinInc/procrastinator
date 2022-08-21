@@ -21,10 +21,13 @@ module Procrastinator
             @path = Pathname.new(file_path)
 
             if @path.directory? || @path.to_s.end_with?('/')
-               @path += DEFAULT_FILE
+               @path /= DEFAULT_FILE
             elsif @path.extname.empty?
                @path = Pathname.new("#{ file_path }.csv")
             end
+
+            @path.dirname.mkpath
+            FileUtils.touch(@path)
          end
 
          def read(filter = {})
@@ -44,11 +47,7 @@ module Procrastinator
          end
 
          def create(queue:, run_at:, initial_run_at:, expire_at:, data: '')
-            existing_data = begin
-                               read
-                            rescue Errno::ENOENT
-                               []
-                            end
+            existing_data = read
 
             max_id = existing_data.collect { |task| task[:id] }.max || 0
 
@@ -66,11 +65,7 @@ module Procrastinator
          end
 
          def update(id, data)
-            existing_data = begin
-                               read
-                            rescue Errno::ENOENT
-                               []
-                            end
+            existing_data = read
 
             task_data = existing_data.find do |task|
                task[:id] == id
@@ -82,11 +77,7 @@ module Procrastinator
          end
 
          def delete(id)
-            existing_data = begin
-                               read
-                            rescue Errno::ENOENT
-                               []
-                            end
+            existing_data = read
 
             existing_data.delete_if do |task|
                task[:id] == id
