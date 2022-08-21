@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'time'
+
 module Procrastinator
    # Mixin module that adds log file support
    module Loggable
@@ -14,8 +16,9 @@ module Procrastinator
 
          Logger.new(log_path.to_path,
                     config.log_shift_age, config.log_shift_size,
-                    level:    config.log_level,
-                    progname: name)
+                    level:     config.log_level,
+                    progname:  name,
+                    formatter: Config::DEFAULT_LOG_FORMATTER)
       end
    end
 end

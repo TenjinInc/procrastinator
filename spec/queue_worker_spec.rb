@@ -154,7 +154,7 @@ module Procrastinator
 
             log = File.read('log/fast_queue-queue-worker.log')
 
-            expect(log).to include('F, ') # default fatal error notation in Ruby logger
+            expect(log).to include("\tFATAL\t") # default fatal error notation in Ruby logger
             expect(log).to include(err)
          end
 
@@ -673,7 +673,7 @@ module Procrastinator
 
                   log_contents = Pathname.new("#{ log_dir }/#{ name }.log").read
 
-                  expect(log_contents).to include("-- #{ name }:")
+                  expect(log_contents).to match(/#{ name } \(\d+\):/)
                end
             end
 

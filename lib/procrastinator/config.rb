@@ -31,7 +31,11 @@ module Procrastinator
       DEFAULT_LOG_SHIFT_SIZE = 2 ** 20 # 1 MB
       # rubocop:enable Layout/SpaceAroundOperators
 
-      def self.derp
+      DEFAULT_LOG_FORMATTER = proc do |severity, datetime, progname, msg|
+         [datetime.iso8601(8),
+          severity,
+          "#{ progname } (#{ Process.pid }):",
+          msg].join("\t") << "\n"
       end
 
       def initialize
