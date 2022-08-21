@@ -154,6 +154,10 @@ module Procrastinator
 
          def initialize(workers)
             @workers = workers
+            @logger  = Logger.new($stderr,
+                                  progname:  'Procrastinator',
+                                  level:     Logger::INFO,
+                                  formatter: Config::DEFAULT_LOG_FORMATTER)
          end
 
          # Work off the given number of tasks for each queue and return
@@ -168,7 +172,42 @@ module Procrastinator
          def threaded(timeout: nil)
             shutdown_on_interrupt
 
-            @threads = @workers.collect do |worker|
+            @threads = spawn_threads
+
+            @threads.each do |thread|
+               thread.join(timeout)
+            end
+         rescue StandardError => e
+            thread_crash(e)
+         ensure
+            @logger.info 'Halting worker threads...'
+            shutdown!
+            @logger.info 'Threads halted.'
+         end
+
+         # Consumes the current process and turns it into a background daemon.
+         #
+         # @param name [String] The process name to request from the OS.
+         #                      Not guaranteed to be set, depending on OS support.
+         # @param pid_path [Pathname|File|String] Path to where the process ID file is to be kept.
+         #                                        Assumed to be a directory unless ends with '.pid '.
+         def daemonized!(name: nil, pid_path: nil, &block)
+            spawn_daemon(pid_path, name)
+
+            yield if block
+
+            threaded
+
+            @logger.info "Procrastinator running. Process ID: #{ Process.pid }"
+         end
+
+         private
+
+         def spawn_threads
+            @logger.info 'Starting worker threads...'
+
+            @workers.collect do |worker|
+               @logger.debug "Spawning: #{ worker.name }"
                Thread.new(worker) do |w|
                   Thread.current.abort_on_exception = true
                   Thread.current.thread_variable_set(:name, w.name)
@@ -180,33 +219,7 @@ module Procrastinator
                   end
                end
             end
-
-            @threads.each do |thread|
-               thread.join(timeout)
-            end
-         rescue StandardError => e # TODO: should this be any exception?
-            thread_crash(e)
-         ensure
-            shutdown
          end
-
-         # Consumes the current process and turns it into a background daemon.
-         #
-         # @param name [String] The process name to request from the OS.
-         #                      Not guaranteed to be set, depending on OS support.
-         # @param pid_path [Pathname|File|String] Path to where the process ID file is to be kept.
-         #                                        Assumed to be a directory unless ends with '.pid'.
-         def daemonized!(name: nil, pid_path: nil, &block)
-            spawn_daemon(pid_path, name)
-
-            yield if block
-
-            threaded
-
-            warn("Procrastinator running. Process ID: #{ Process.pid }")
-         end
-
-         private
 
          # "And his name is ... Shawn?"
          def spawn_daemon(pid_path, name)
@@ -216,7 +229,7 @@ module Procrastinator
             exit if fork
             Dir.chdir '/' # allows process to continue even if the pwd of its running terminal disappears (eg deleted)
 
-            warn 'Starting Procrastinator daemon...'
+            @logger.info 'Starting Procrastinator daemon...'
 
             manage_pid(pid_path)
 
@@ -237,46 +250,47 @@ module Procrastinator
 
             at_exit do
                pid_path.delete if pid_path.exist?
-               warn("Procrastinator (pid #{ Process.pid }) halted.")
+               @logger.info "Procrastinator (pid #{ Process.pid }) halted."
             end
          end
 
          def rename_process(name)
             return if name.nil?
 
-            warn "Warning: process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
-            name = name[0, MAX_PROC_LEN]
-
-            warn "Warning: a process is already named \"#{ name }\". Consider the \"name:\" argument to distinguish."
-            Process.setproctitle(name)
-         end
-
-         def shutdown
-            threads = (@threads || []).select(&:alive?)
-
-            return if threads.empty?
-
-            warn 'Shutting down worker threads'
-            threads.each do |t|
-               warn "Halting #{ t.thread_variable_get(:name) }"
-               t.kill
-               # t.join
+            if name.size > MAX_PROC_LEN
+               @logger.warn "process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
+               name = name[0, MAX_PROC_LEN]
             end
+
+            if system('pidof', name)
+               @logger.warn "a process is already named '#{ name }'. Consider the 'name:' argument to distinguish."
+            end
+
+            Process.setproctitle(name)
          end
 
          def shutdown_on_interrupt
             Signal.trap('INT') do
-               shutdown
+               warn "\n" # just to separate the shutdown log item
+               shutdown!
             end
          end
 
+         def shutdown!
+            (@threads || []).select(&:alive?).each(&:kill)
+         end
+
          def thread_crash(error)
-            warn 'Crash detected in queue worker thread.'
-            (@threads || []).select { |t| t.status.nil? }.each do |thread|
-               warn "Crashed thread: #{ thread.thread_variable_get(:name) }"
+            crashed_threads = (@threads || []).select { |t| t.status.nil? }.collect do |thread|
+               "Crashed thread: #{ thread.thread_variable_get(:name) }"
             end
-            warn error.message
-            warn error.backtrace.join("\n")
+
+            @logger.fatal <<~MSG
+               Crash detected in queue worker thread.
+                  #{ crashed_threads.join("\n") }
+                  #{ error.message }
+                  #{ error.backtrace.join("\n\t") }"
+            MSG
          end
       end
 
