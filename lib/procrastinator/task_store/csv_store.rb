@@ -15,6 +15,18 @@ module Procrastinator
 
          DEFAULT_FILE = Pathname.new('procrastinator-tasks.csv').freeze
 
+         CONVERTER = proc do |value, field_info|
+            if field_info.header == :data
+               value
+            else
+               begin
+                  Integer(value)
+               rescue ArgumentError
+                  value
+               end
+            end
+         end
+
          attr_reader :path
 
          def initialize(file_path = DEFAULT_FILE)
@@ -25,19 +37,23 @@ module Procrastinator
             elsif @path.extname.empty?
                @path = Pathname.new("#{ file_path }.csv")
             end
-
-            @path.dirname.mkpath
-            FileUtils.touch(@path)
          end
 
          def read(filter = {})
-            data = CSV.table(@path.to_s, force_quotes: true).to_a
+            ensure_file
 
-            headers = data.shift || []
+            data = CSV.parse(@path.read,
+                             headers:           true,
+                             header_converters: :symbol,
+                             skip_blanks:       true,
+                             converters:        CONVERTER,
+                             force_quotes:      true).to_a
+
+            headers = data.shift || HEADERS
 
             data = data.collect do |d|
-               headers.zip(d)
-            end.collect(&:to_h).reject(&:empty?)
+               headers.zip(d).to_h
+            end
 
             correct_types(data).select do |row|
                filter.keys.all? do |key|
@@ -99,6 +115,13 @@ module Procrastinator
          end
 
          private
+
+         def ensure_file
+            return if @path.exist?
+
+            @path.dirname.mkpath
+            FileUtils.touch(@path)
+         end
 
          def correct_types(data)
             non_empty_keys = [:run_at, :expire_at, :attempts, :last_fail_at]

@@ -40,17 +40,10 @@ module Procrastinator
 
                expect(store.path.to_s).to eq("#{ existing_dir }/#{ CSVStore::DEFAULT_FILE }")
             end
-
-            it 'should ensure the file exists' do
-               path = Pathname.new('test_dir/something.csv')
-               CSVStore.new(path)
-
-               expect(path).to exist
-            end
          end
 
          describe 'read' do
-            let(:path) { Pathname.new 'procrastinator-data.csv' }
+            let(:path) { Pathname.new CSVStore::DEFAULT_FILE }
             let(:store) { CSVStore.new(path) }
 
             before(:each) do
@@ -70,10 +63,10 @@ module Procrastinator
                [Pathname.new('special-procrastinator-data.csv'),
                 Pathname.new('/some/place/some-other-data.csv')].each do |path|
                   path.dirname.mkpath
-                  File.open(path.to_s, 'w') do |f|
-                     f.puts(CSVStore::HEADERS.join(','))
-                     f.puts(data)
-                  end
+                  path.write <<~EXISTING
+                     #{ CSVStore::HEADERS.join(',') }
+                     #{ data }
+                  EXISTING
 
                   store = CSVStore.new(path)
 
@@ -95,25 +88,75 @@ module Procrastinator
                expect(store.read.length).to eq 0
             end
 
-            it 'should account for JSON syntax' do
-               first_data  = JSON.dump(user: 7, hash: true)
-               second_data = JSON.dump('string data')
-               third_data  = JSON.dump([:this, 'is', :an, 'array'])
+            it 'should handle a blank file' do
+               path.write('')
 
-               contents = <<~CONTENTS
-                  id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","","2","3","4","5","6","problem","#{ first_data.gsub('"', '""') }"
-                  "1","","2","3","4","5","6","problem","#{ second_data.gsub('"', '""') }"
-                  "1","","2","3","4","5","6","problem","#{ third_data.gsub('"', '""') }"
-               CONTENTS
+               expect(store.read.length).to eq 0
+            end
 
-               path.write(contents)
+            it 'should ensure the file exists' do
+               [Pathname.new('procrastinator-data.csv'),
+                Pathname.new('some_dir/custom-file.csv')].each do |path|
+                  store = CSVStore.new(path)
 
-               db = store.read
+                  store.read
 
-               expect(db[0][:data]).to eq first_data
-               expect(db[1][:data]).to eq second_data
-               expect(db[2][:data]).to eq third_data
+                  expect(path).to exist
+               end
+            end
+
+            context 'serializing JSON data column' do
+               it 'should account for JSON object syntax' do
+                  hash_data = JSON.dump(user: 7, hash: true)
+
+                  contents = <<~CONTENTS
+                     id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+                     "1","","2","3","4","5","6","problem","#{ hash_data.gsub('"', '""') }"
+                  CONTENTS
+
+                  path.write(contents)
+
+                  expect(store.read.first[:data]).to eq hash_data
+               end
+
+               it 'should account for JSON array syntax' do
+                  array_data = JSON.dump([:this, 'is', :actually, 'an array'])
+
+                  contents = <<~CONTENTS
+                     id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+                     "1","","2","3","4","5","6","problem","#{ array_data.gsub('"', '""') }"
+                  CONTENTS
+
+                  path.write(contents)
+
+                  expect(store.read.first[:data]).to eq array_data
+               end
+
+               it 'should account for JSON string syntax' do
+                  string_data = JSON.dump('this is a test string')
+
+                  contents = <<~CONTENTS
+                     id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+                     "1","","2","3","4","5","6","problem","#{ string_data.gsub('"', '""') }"
+                  CONTENTS
+
+                  path.write(contents)
+
+                  expect(store.read.first[:data]).to eq string_data
+               end
+
+               it 'should account for JSON integer syntax' do
+                  integer_data = JSON.dump(5)
+
+                  contents = <<~CONTENTS
+                     id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+                     "1","","2","3","4","5","6","problem","#{ integer_data }"
+                  CONTENTS
+
+                  path.write(contents)
+
+                  expect(store.read.first[:data]).to eq integer_data
+               end
             end
 
             it 'should account for CSV escaped strings' do
@@ -141,6 +184,19 @@ module Procrastinator
                data.each do |d|
                   expect(d).to be_a Hash
                end
+            end
+
+            it 'should ignore blank lines' do
+               contents = <<~'CONTENTS'
+                  id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+                  "1","","2","3","4","5","6","problem","5"
+
+                  "2","","3","3","4","5","6","problem","5"
+               CONTENTS
+
+               path.write(contents)
+
+               expect(store.read.length).to eq 2
             end
 
             it 'should filter data by queue' do
@@ -207,7 +263,7 @@ module Procrastinator
          end
 
          describe 'create' do
-            let(:path) { 'procrastinator-data.csv' }
+            let(:path) { Pathname.new CSVStore::DEFAULT_FILE }
             let(:store) { CSVStore.new(path) }
 
             let(:required_args) do
@@ -217,7 +273,7 @@ module Procrastinator
             it 'should write a header row' do
                store.create(required_args)
 
-               file_content = File.new(path).readlines
+               file_content = path.readlines
 
                expected_header = 'id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data'
 
@@ -227,9 +283,7 @@ module Procrastinator
             it 'should write a new data line' do
                store.create(required_args)
 
-               file_content = File.new(path).readlines
-
-               expect(file_content.length).to eq 2 # header row and data row
+               expect(path.readlines.length).to eq 2 # header row and data row
             end
 
             it 'should write given values' do
@@ -279,11 +333,11 @@ module Procrastinator
                   "37","","2","3","4","5","6","err",""
                CONTENTS
 
-               File.write(path, contents)
+               path.write(contents)
 
                store.create(required_args)
 
-               file_content = File.new(path).readlines
+               file_content = path.readlines
 
                expect(file_content.last&.strip).to start_with('"38"')
             end
@@ -296,11 +350,11 @@ module Procrastinator
                   "37","","2","3","4","5","6","err",""
                CONTENTS
 
-               File.write(path, contents)
+               path.write(contents)
 
                store.create(required_args)
 
-               file_content = File.new(path).read || ''
+               file_content = path.read || ''
 
                expect(file_content.split("\n").size).to eq 5 # header + 3 existing + new record
                expect(file_content).to start_with(contents)
