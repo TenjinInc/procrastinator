@@ -55,20 +55,10 @@ module Procrastinator
       module DSL
          # Assigns a task loader
          def with_store(store)
-            if store.is_a? Hash
-               csv_path_key = :csv
-               unless store.key? csv_path_key
-                  raise ArgumentError, "Must pass keyword :#{ csv_path_key } if specifying a location for CSV file"
-               end
-
-               store = TaskStore::CSVStore.new(store[csv_path_key])
-            end
-
-            raise(ArgumentError, 'task store cannot be nil') if store.nil?
-            raise(ArgumentError, 'store_with must be provided a block') unless block_given?
+            raise(ArgumentError, 'with_store must be provided a block') unless block_given?
 
             old_store      = @default_store
-            @default_store = store
+            @default_store = interpret_store(store)
             yield
             @default_store = old_store
          end
@@ -82,6 +72,8 @@ module Procrastinator
             raise ArgumentError, 'queue task class cannot be nil' if task_class.nil?
 
             verify_task_class(task_class)
+
+            properties[:store] = interpret_store(properties[:store]) if properties.key? :store
 
             @queues << Queue.new({name: name, task_class: task_class, store: @default_store}.merge(properties))
          end
@@ -122,6 +114,24 @@ module Procrastinator
       end
 
       private
+
+      def interpret_store(store)
+         raise(ArgumentError, 'task store cannot be nil') if store.nil?
+
+         case store
+         when Hash
+            store_strategy = :csv
+            unless store.key? store_strategy
+               raise ArgumentError, "Must pass keyword :#{ store_strategy } if specifying a location for CSV file"
+            end
+
+            TaskStore::CSVStore.new(store[store_strategy])
+         when String, Pathname
+            TaskStore::CSVStore.new(store)
+         else
+            store
+         end
+      end
 
       def verify_task_class(task_class)
          unless task_class.method_defined? :run

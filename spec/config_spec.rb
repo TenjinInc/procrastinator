@@ -39,8 +39,8 @@ module Procrastinator
       end
 
       context 'DSL' do
-         describe '#store_with' do
-            it 'should accept a location path for a CSV store' do
+         describe '#with_store' do
+            it 'should accept a strategy hash' do
                path = Pathname.new('/some/path/file.csv')
 
                config = Config.new do |c|
@@ -55,12 +55,30 @@ module Procrastinator
                expect(created_queue.store.path).to eq path
             end
 
-            it 'should complain about unknown hash values' do
+            it 'should accept a path and assume the default strategy' do
+               ['a string path.csv',
+                Pathname.new('/some/path/file.csv')].each do |path|
+                  config = Config.new do |c|
+                     c.with_store(path) do
+                        c.define_queue(:test_queue, test_task)
+                     end
+                  end
+
+                  created_queue = config.queue(name: :test_queue)
+
+                  expect(created_queue.store).to be_a(TaskStore::CSVStore)
+                  expect(created_queue.store.path).to eq Pathname.new(path)
+               end
+            end
+
+            it 'should complain about unknown store strategies' do
                path = '/some/path/file.csv'
 
                expect do
                   Config.new do |c|
-                     c.with_store(bogus: path)
+                     c.with_store(bogus: path) do
+                        # define queues...
+                     end
                   end
                end.to raise_error ArgumentError, 'Must pass keyword :csv if specifying a location for CSV file'
             end
@@ -68,9 +86,19 @@ module Procrastinator
             it 'should complain if the task store is nil' do
                expect do
                   Config.new do |c|
-                     c.with_store(nil)
+                     c.with_store(nil) do
+                        # define queues ...
+                     end
                   end
                end.to raise_error(ArgumentError, 'task store cannot be nil')
+            end
+
+            it 'should require a block' do
+               expect do
+                  Config.new do |c|
+                     c.with_store(double('some storage'))
+                  end
+               end.to raise_error(ArgumentError, 'with_store must be provided a block')
             end
 
             it 'should yield to the given block' do
@@ -189,6 +217,7 @@ module Procrastinator
             end
 
             context 'storage' do
+               let(:storage_path) { Pathname.new('some-storage.csv') }
                let(:persister) { fake_persister([]) }
 
                it 'should add a queue with the given storage' do
@@ -211,12 +240,34 @@ module Procrastinator
                   expect(config.queues.first&.store).to eq persister
                end
 
-               it 'should require a block' do
+               it 'should interpret a hash as the storage strategy' do
+                  config = Config.new do |c|
+                     c.define_queue(:test1, test_task, store: {csv: storage_path})
+                  end
+
+                  queue = config.queues.first || raise('queue missing')
+
+                  expect(queue.store).to be_a TaskStore::CSVStore
+                  expect(queue.store.path).to eq storage_path
+               end
+
+               it 'should interpret a string as the path to the default storage strategy' do
+                  config = Config.new do |c|
+                     c.define_queue(:test1, test_task, store: storage_path)
+                  end
+
+                  queue = config.queues.first || raise('queue missing')
+
+                  expect(queue.store).to be_a TaskStore::CSVStore
+                  expect(queue.store.path).to eq storage_path
+               end
+
+               it 'should complain when the store is nil' do
                   expect do
                      Config.new do |c|
-                        c.with_store(double('some default'))
+                        c.define_queue(:test1, test_task, store: nil)
                      end
-                  end.to raise_error(ArgumentError, 'store_with must be provided a block')
+                  end.to raise_error(ArgumentError, 'task store cannot be nil')
                end
             end
 
