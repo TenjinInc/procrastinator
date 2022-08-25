@@ -37,6 +37,8 @@ module Procrastinator
             elsif @path.extname.empty?
                @path = Pathname.new("#{ file_path }.csv")
             end
+
+            freeze
          end
 
          def read(filter = {})

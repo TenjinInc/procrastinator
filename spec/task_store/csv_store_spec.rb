@@ -40,6 +40,13 @@ module Procrastinator
 
                expect(store.path.to_s).to eq("#{ existing_dir }/#{ CSVStore::DEFAULT_FILE }")
             end
+
+            # to encourage thread-safetey
+            it 'should be frozen after init' do
+               store = CSVStore.new
+
+               expect(store).to be_frozen
+            end
          end
 
          describe 'read' do
