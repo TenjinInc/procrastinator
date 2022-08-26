@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require 'pathname'
+require 'tmpdir'
 
 module Procrastinator
    module TaskStore
@@ -366,6 +367,45 @@ module Procrastinator
                expect(file_content.split("\n").size).to eq 5 # header + 3 existing + new record
                expect(file_content).to start_with(contents)
             end
+
+            context 'thread-safety' do
+               let(:storage_path) { store.path }
+
+               it 'should perform creates atomically' do
+                  path = storage_path.to_s
+                  lock = CSVStore.file_transactors[path]
+                  expect(storage_path).to receive(:read).ordered.and_wrap_original do |meth, *args, &block|
+                     expect(lock).to be_locked
+                     meth.call(*args, &block)
+                  end
+                  expect(storage_path).to receive(:write).ordered.and_wrap_original do |meth, *args, &block|
+                     expect(lock).to be_locked
+                     meth.call(*args, &block)
+                  end
+
+                  store.create(queue:  'thumbnail',
+                               run_at: 0, initial_run_at: 0, expire_at: nil,
+                               data:   'douglas-forcett.png')
+               end
+
+               it 'should share locks across instances' do
+                  CSVStore.new('thumbnail-queue.csv')
+                  CSVStore.new('thumbnail-queue.csv')
+
+                  CSVStore.file_transactors['thumbnail-queue.csv'].synchronize do
+                     expect(CSVStore.file_transactors['thumbnail-queue.csv']).to be_locked
+                  end
+               end
+
+               it 'should keep distinct locks per file' do
+                  CSVStore.new('thumbnail-queue.csv')
+                  CSVStore.new('reminder-queue.csv')
+
+                  CSVStore.file_transactors['thumbnail-queue.csv'].synchronize do
+                     expect(CSVStore.file_transactors['reminder-queue.csv']).to_not be_locked
+                  end
+               end
+            end
          end
 
          describe 'update' do
@@ -428,6 +468,25 @@ module Procrastinator
                expect(file_lines[2]).to start_with('"2",')
                expect(file_lines[3]).to start_with('"37",')
             end
+
+            context 'thread-safety' do
+               let(:storage_path) { store.path }
+
+               it 'should perform updates atomically' do
+                  path = storage_path.to_s
+                  lock = CSVStore.file_transactors[path]
+                  expect(storage_path).to receive(:read).ordered.and_wrap_original do |meth, *args, &block|
+                     expect(lock).to be_locked
+                     meth.call(*args, &block)
+                  end
+                  expect(storage_path).to receive(:write).ordered.and_wrap_original do |meth, *args, &block|
+                     expect(lock).to be_locked
+                     meth.call(*args, &block)
+                  end
+
+                  store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
+               end
+            end
          end
 
          describe 'delete' do
@@ -456,7 +515,7 @@ module Procrastinator
             end
 
             it 'should remove the task' do
-               contents = <<~CONTENTS
+               expected_file = <<~CONTENTS
                   id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
                   "1","reminders","2","3","4","5","6","err",""
                   "37","thumbnails","12","13","14","15","16","err","size: 500"
@@ -468,7 +527,26 @@ module Procrastinator
 
                file_content = File.new(path).read
 
-               expect(file_content).to eq contents # header + 2 data rows
+               expect(file_content).to eq expected_file # header + 2 data rows
+            end
+
+            context 'thread-safety' do
+               let(:storage_path) { store.path }
+
+               it 'should perform deletes atomically' do
+                  path = storage_path.to_s
+                  lock = CSVStore.file_transactors[path]
+                  expect(storage_path).to receive(:read).ordered.and_wrap_original do |meth, *args, &block|
+                     expect(lock).to be_locked
+                     meth.call(*args, &block)
+                  end
+                  expect(storage_path).to receive(:write).ordered.and_wrap_original do |meth, *args, &block|
+                     expect(lock).to be_locked
+                     meth.call(*args, &block)
+                  end
+
+                  store.delete(2)
+               end
             end
          end
 

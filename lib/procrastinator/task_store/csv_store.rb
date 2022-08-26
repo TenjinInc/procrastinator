@@ -5,15 +5,27 @@ require 'pathname'
 
 module Procrastinator
    module TaskStore
-      # Simple Task I/O object that writes task information (ie. TaskMetaData attributes) to a CSV file.
+      # Simple Task I/O adapter that writes task information (ie. TaskMetaData attributes) to a CSV file.
+      #
+      # CSVStore is not designed for efficiency or large loads (10,000+ tasks).
+      #
+      # For critical production environments, it is strongly recommended to use a more robust storage mechanism like a
+      # proper database.
       #
       # @author Robin Miller
       class CSVStore
+         @file_transactors = {}
+
+         class << self
+            attr_reader :file_transactors
+         end
+
          # ordered
          HEADERS = [:id, :queue, :run_at, :initial_run_at, :expire_at,
                     :attempts, :last_fail_at, :last_error, :data].freeze
 
-         DEFAULT_FILE = Pathname.new('procrastinator-tasks.csv').freeze
+         EXT          = 'csv'
+         DEFAULT_FILE = Pathname.new("procrastinator-tasks.#{ EXT }").freeze
 
          CONVERTER = proc do |value, field_info|
             if field_info.header == :data
@@ -30,6 +42,8 @@ module Procrastinator
          attr_reader :path
 
          def initialize(file_path = DEFAULT_FILE)
+            CSVStore.file_transactors[file_path.to_s] ||= Mutex.new
+
             @path = Pathname.new(file_path)
 
             if @path.directory? || @path.to_s.end_with?('/')
@@ -65,58 +79,78 @@ module Procrastinator
          end
 
          def create(queue:, run_at:, initial_run_at:, expire_at:, data: '')
-            existing_data = read
+            file_transaction do
+               existing_data = read
 
-            max_id = existing_data.collect { |task| task[:id] }.max || 0
+               max_id = existing_data.collect { |task| task[:id] }.max || 0
 
-            new_data = {
-                  id:             max_id + 1,
-                  queue:          queue,
-                  run_at:         run_at,
-                  initial_run_at: initial_run_at,
-                  expire_at:      expire_at,
-                  attempts:       0,
-                  data:           data
-            }
+               new_data = {
+                     id:             max_id + 1,
+                     queue:          queue,
+                     run_at:         run_at,
+                     initial_run_at: initial_run_at,
+                     expire_at:      expire_at,
+                     attempts:       0,
+                     data:           data
+               }
 
-            write(existing_data + [new_data])
+               write(existing_data + [new_data])
+            end
          end
 
          def update(id, data)
-            existing_data = read
+            file_transaction do
+               existing_data = read
 
-            task_data = existing_data.find do |task|
-               task[:id] == id
+               task_data = existing_data.find do |task|
+                  task[:id] == id
+               end
+
+               task_data&.merge!(data)
+
+               write(existing_data)
             end
-
-            task_data&.merge!(data)
-
-            write(existing_data)
          end
 
          def delete(id)
-            existing_data = read
+            file_transaction do
+               existing_data = read
 
-            existing_data.delete_if do |task|
-               task[:id] == id
+               existing_data.delete_if do |task|
+                  task[:id] == id
+               end
+
+               write(existing_data)
             end
-
-            write(existing_data)
          end
 
          def write(data)
             lines = data.collect do |d|
-               CSV.generate_line(d, headers: HEADERS, force_quotes: true)
+               CSV.generate_line(d, headers: HEADERS, force_quotes: true).strip
             end
 
+            lines.unshift(HEADERS.join(','))
+
             @path.dirname.mkpath
-            @path.open('w') do |f|
-               f.puts HEADERS.join(',')
-               f.puts lines.join
-            end
+            @path.write lines.join("\n") << "\n"
          end
 
          private
+
+         # Completes the given block as an atomic transaction locked using a global mutex table.
+         #
+         # The general idea is that there may be two threads that need to do these actions on the same file:
+         #    thread A:   read
+         #    thread B:   read
+         #    thread A/B: write
+         #    thread A/B: write
+         #
+         # When this sequence happens, the second file write is based on old information and loses the info from
+         # the prior write. Using a global mutex per file path prevents this case.
+         def file_transaction(&block)
+            semaphore = CSVStore.file_transactors[@path.to_s]
+            semaphore.synchronize(&block)
+         end
 
          def ensure_file
             return if @path.exist?
