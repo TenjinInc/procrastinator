@@ -7,34 +7,30 @@ require 'tmpdir'
 module Procrastinator
    module TaskStore
       describe CSVStore do
-         # exclusive && nonblocking (ie. won't wait until success)
-         let(:flock_mask) { File::LOCK_EX | File::LOCK_NB }
-
          describe 'initialize' do
             it 'should accept a path argument' do
-               CSVStore.new('testfile.csv').write([])
-
-               expect(File).to exist('testfile.csv')
+               store = CSVStore.new 'testfile.csv'
+               expect(store.path.to_s).to eq 'testfile.csv'
             end
 
             it 'should provide a default path argument' do
-               CSVStore.new.write([])
+               store = CSVStore.new
 
-               expect(File).to exist(CSVStore::DEFAULT_FILE)
+               expect(store.path.to_s).to eq(CSVStore::DEFAULT_FILE.to_s)
             end
 
             it 'should add a .csv extension to the path if missing extension' do
-               CSVStore.new('plainfile').write([])
+               store = CSVStore.new 'plainfile'
 
-               expect(File).to exist('plainfile.csv')
+               expect(store.path.to_s).to eq('plainfile.csv')
             end
 
             it 'should add a default filename if the provided path is a directory name' do
                slash_end_path = '/some/place/'
 
-               CSVStore.new(slash_end_path).write([])
+               store = CSVStore.new(slash_end_path)
 
-               expect(File).to exist("#{ slash_end_path }/#{ CSVStore::DEFAULT_FILE }")
+               expect(store.path.to_s).to eq("#{ slash_end_path }#{ CSVStore::DEFAULT_FILE }")
             end
 
             it 'should add a default filename if the provided path is an existing directory' do
@@ -103,17 +99,6 @@ module Procrastinator
                path.write('')
 
                expect(store.read.length).to eq 0
-            end
-
-            it 'should ensure the file exists' do
-               [Pathname.new('procrastinator-data.csv'),
-                Pathname.new('some_dir/custom-file.csv')].each do |path|
-                  store = CSVStore.new(path)
-
-                  store.read
-
-                  expect(path).to exist
-               end
             end
 
             context 'serializing JSON data column' do
@@ -356,114 +341,27 @@ module Procrastinator
             end
 
             it 'should keep existing content' do
-               contents = <<~CONTENTS
+               prior_content = <<~CONTENTS
                   id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
                   "1","","2","3","4","5","6","err",""
                   "2","","2","3","4","5","6","err",""
                   "37","","2","3","4","5","6","err",""
                CONTENTS
 
-               path.write(contents)
+               path.write(prior_content)
 
                store.create(required_args)
 
                file_content = path.read || ''
 
                expect(file_content.split("\n").size).to eq 5 # header + 3 existing + new record
-               expect(file_content).to start_with(contents)
+               expect(file_content).to start_with(prior_content)
             end
 
-            context 'multithread' do
-               let(:storage_path) { store.path }
-               let(:lock) { CSVStore.file_mutex[storage_path.to_s] }
+            it 'should perform the create within a file transaction' do
+               expect(FileTransaction).to receive(:new).with(path)
 
-               # thread safety. See CSVStore#file_transaction
-               it 'should perform atomic read and write' do
-                  expect(storage_path).to receive(:read).ordered.and_wrap_original do |meth, *args, &block|
-                     expect(lock).to be_locked
-                     meth.call(*args, &block)
-                  end
-                  expect(storage_path).to receive(:write).ordered.and_wrap_original do |meth, *args, &block|
-                     expect(lock).to be_locked
-                     meth.call(*args, &block)
-                  end
-
-                  store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
-               end
-
-               it 'should release the mutex after normal completion' do
-                  store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
-
-                  expect(lock).to_not be_locked
-               end
-
-               it 'should release the mutex after error' do
-                  allow(storage_path).to receive(:read).and_raise 'stomachache'
-
-                  expect do
-                     store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
-                  end.to raise_error RuntimeError, 'stomachache'
-
-                  expect(lock).to_not be_locked
-               end
-            end
-
-            # multiprocess file lock safety
-            context 'multiprocess' do
-               let(:tmp_dir) { Dir.mktmpdir('procrastinator-test') }
-               let(:store) { CSVStore.new(tmp_dir) }
-               let(:storage_path) { store.path }
-
-               before(:each) do
-                  # FakeFS doesn't currently support file locks
-                  FakeFS.deactivate!
-
-                  storage_path.write <<~CONTENTS
-                     id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
-                     "1","reminders","2","3","4","5","6","err",""
-                     "2","reminders","7","8","9","10","11","err",""
-                     "37","thumbnails","12","13","14","15","16","err","size: 500"
-                  CONTENTS
-               end
-
-               after(:each) do
-                  storage_path.open.flock(File::LOCK_UN)
-                  FileUtils.remove_entry(tmp_dir)
-                  FakeFS.activate!
-               end
-
-               it 'should flock the file before reading and writing' do
-                  expect(storage_path).to receive(:read).and_wrap_original do |meth, *args, &block|
-                     expect(storage_path.open.flock(flock_mask)).to eq(false), "expected #{ storage_path } to be locked"
-                     result = meth.call(*args, &block)
-                     storage_path.open.flock(File::LOCK_UN)
-                     result
-                  end
-                  expect(storage_path).to receive(:write).and_wrap_original do |meth, *args, &block|
-                     expect(storage_path.open.flock(flock_mask)).to eq(false), "expected #{ storage_path } to be locked"
-                     result = meth.call(*args, &block)
-                     storage_path.open.flock(File::LOCK_UN)
-                     result
-                  end
-
-                  store.create(required_args)
-               end
-
-               it 'should unflock the file when done' do
-                  store.create(required_args)
-
-                  expect(storage_path.open.flock(flock_mask)).to(eq(0), "expected #{ storage_path } to be unlocked")
-               end
-
-               it 'should unflock the file when errored' do
-                  allow(storage_path).to receive(:read).and_raise 'vexed'
-
-                  expect do
-                     store.create(required_args)
-                  end.to raise_error RuntimeError, 'vexed'
-
-                  expect(storage_path.open.flock(flock_mask)).to(eq(0), "expected #{ storage_path } to be unlocked")
-               end
+               store.create(required_args)
             end
          end
 
@@ -528,97 +426,10 @@ module Procrastinator
                expect(file_lines[3]).to start_with('"37",')
             end
 
-            context 'multithread' do
-               let(:storage_path) { store.path }
-               let(:lock) { CSVStore.file_mutex[storage_path.to_s] }
+            it 'should perform the update within a file transaction' do
+               expect(FileTransaction).to receive(:new).with(path)
 
-               # thread safety. See CSVStore#file_transaction
-               it 'should perform atomic read and write' do
-                  expect(storage_path).to receive(:read).ordered.and_wrap_original do |meth, *args, &block|
-                     expect(lock).to be_locked
-                     meth.call(*args, &block)
-                  end
-                  expect(storage_path).to receive(:write).ordered.and_wrap_original do |meth, *args, &block|
-                     expect(lock).to be_locked
-                     meth.call(*args, &block)
-                  end
-
-                  store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
-               end
-
-               it 'should release the mutex after normal completion' do
-                  store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
-
-                  expect(lock).to_not be_locked
-               end
-
-               it 'should release the mutex after error' do
-                  allow(storage_path).to receive(:read).and_raise 'stomachache'
-
-                  expect do
-                     store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
-                  end.to raise_error RuntimeError, 'stomachache'
-
-                  expect(lock).to_not be_locked
-               end
-            end
-
-            # multiprocess file lock safety
-            context 'multiprocess' do
-               let(:tmp_dir) { Dir.mktmpdir('procrastinator-test') }
-               let(:store) { CSVStore.new(tmp_dir) }
-               let(:storage_path) { store.path }
-
-               before(:each) do
-                  # FakeFS doesn't currently support file locks
-                  FakeFS.deactivate!
-
-                  storage_path.write <<~CONTENTS
-                     id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
-                     "1","reminders","2","3","4","5","6","err",""
-                     "2","reminders","7","8","9","10","11","err",""
-                     "37","thumbnails","12","13","14","15","16","err","size: 500"
-                  CONTENTS
-               end
-
-               after(:each) do
-                  storage_path.open.flock(File::LOCK_UN)
-                  FileUtils.remove_entry(tmp_dir)
-                  FakeFS.activate!
-               end
-
-               it 'should flock the file before reading and writing' do
-                  expect(storage_path).to receive(:read).and_wrap_original do |meth, *args, &block|
-                     expect(storage_path.open.flock(flock_mask)).to eq(false), "expected #{ storage_path } to be locked"
-                     result = meth.call(*args, &block)
-                     storage_path.open.flock(File::LOCK_UN)
-                     result
-                  end
-                  expect(storage_path).to receive(:write).and_wrap_original do |meth, *args, &block|
-                     expect(storage_path.open.flock(flock_mask)).to eq(false), "expected #{ storage_path } to be locked"
-                     result = meth.call(*args, &block)
-                     storage_path.open.flock(File::LOCK_UN)
-                     result
-                  end
-
-                  store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
-               end
-
-               it 'should unflock the file when done' do
-                  store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
-
-                  expect(storage_path.open.flock(flock_mask)).to(eq(0), "expected #{ storage_path } to be unlocked")
-               end
-
-               it 'should unflock the file when errored' do
-                  allow(storage_path).to receive(:read).and_raise 'vexed'
-
-                  expect do
-                     store.update(37, run_at: 0, data: 'old-douglas-forcett.png')
-                  end.to raise_error RuntimeError, 'vexed'
-
-                  expect(storage_path.open.flock(flock_mask)).to(eq(0), "expected #{ storage_path } to be unlocked")
-               end
+               store.update(2, run_at: 0)
             end
          end
 
@@ -637,12 +448,6 @@ module Procrastinator
                allow_any_instance_of(FakeFS::File).to receive(:flock)
             end
 
-            it 'should remove a line' do
-               store.delete(2)
-
-               expect(path.readlines.size).to eq 3 # header + 2 data rows
-            end
-
             it 'should remove the task' do
                store.delete(2)
 
@@ -653,123 +458,22 @@ module Procrastinator
                CONTENTS
             end
 
-            context 'multithread' do
-               let(:storage_path) { store.path }
-               let(:lock) { CSVStore.file_mutex[storage_path.to_s] }
+            it 'should perform the delete within a file transaction' do
+               expect(FileTransaction).to receive(:new).with(path)
 
-               # thread safety. See CSVStore#file_transaction
-               it 'should perform atomic read and write' do
-                  expect(storage_path).to receive(:read).ordered.and_wrap_original do |meth, *args, &block|
-                     expect(lock).to be_locked
-                     meth.call(*args, &block)
-                  end
-                  expect(storage_path).to receive(:write).ordered.and_wrap_original do |meth, *args, &block|
-                     expect(lock).to be_locked
-                     meth.call(*args, &block)
-                  end
-
-                  store.delete(2)
-               end
-
-               it 'should release the mutex after normal completion' do
-                  store.delete(2)
-
-                  expect(lock).to_not be_locked
-               end
-
-               it 'should release the mutex after error' do
-                  allow(storage_path).to receive(:read).and_raise 'stomachache'
-
-                  expect do
-                     store.delete(2)
-                  end.to raise_error RuntimeError, 'stomachache'
-
-                  expect(lock).to_not be_locked
-               end
-            end
-
-            # multiprocess file lock safety
-            context 'multiprocess' do
-               let(:tmp_dir) { Dir.mktmpdir('procrastinator-test') }
-               let(:store) { CSVStore.new(tmp_dir) }
-               let(:storage_path) { store.path }
-
-               before(:each) do
-                  # FakeFS doesn't currently support file locks
-                  FakeFS.deactivate!
-
-                  storage_path.write <<~CONTENTS
-                     id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
-                     "1","reminders","2","3","4","5","6","err",""
-                     "2","reminders","7","8","9","10","11","err",""
-                     "37","thumbnails","12","13","14","15","16","err","size: 500"
-                  CONTENTS
-               end
-
-               after(:each) do
-                  storage_path.open.flock(File::LOCK_UN)
-                  FileUtils.remove_entry(tmp_dir)
-                  FakeFS.activate!
-               end
-
-               it 'should flock the file before reading and writing' do
-                  expect(storage_path).to receive(:read).and_wrap_original do |meth, *args, &block|
-                     expect(storage_path.open.flock(flock_mask)).to eq(false), "expected #{ storage_path } to be locked"
-                     result = meth.call(*args, &block)
-                     storage_path.open.flock(File::LOCK_UN)
-                     result
-                  end
-                  expect(storage_path).to receive(:write).and_wrap_original do |meth, *args, &block|
-                     expect(storage_path.open.flock(flock_mask)).to eq(false), "expected #{ storage_path } to be locked"
-                     result = meth.call(*args, &block)
-                     storage_path.open.flock(File::LOCK_UN)
-                     result
-                  end
-
-                  store.delete(2)
-               end
-
-               it 'should unflock the file when done' do
-                  store.delete(2)
-
-                  expect(storage_path.open.flock(flock_mask)).to(eq(0), "expected #{ storage_path } to be unlocked")
-               end
-
-               it 'should unflock the file when errored' do
-                  allow(storage_path).to receive(:read).and_raise 'vexed'
-
-                  expect do
-                     store.delete(2)
-                  end.to raise_error RuntimeError, 'vexed'
-
-                  expect(storage_path.open.flock(flock_mask)).to(eq(0), "expected #{ storage_path } to be unlocked")
-               end
+               store.delete(2)
             end
          end
 
-         describe 'write' do
+         describe 'generate' do
             let(:store) { CSVStore.new }
             let(:path) { store.path }
 
-            # TODO: this is redundant now
-            it 'should create a file if it does not exist' do
-               %w[missing-file.csv
-                  /some/other/place/data-file.csv].each do |path|
-                  store = CSVStore.new(path)
-
-                  store.write([])
-
-                  expect(File).to exist(path)
-               end
-            end
-
-            # CSV considers "" as an escaped "
+            # CSV specification (RFC 4180) considers two dquotes in a row ("") as an escaped dquote (")
             it 'should escape double quote characters' do
-               store.write([{data: 'this has "quotes" in it'}])
+               result = store.generate([{data: 'this has "quotes" in it'}])
 
-               file_content = path.readlines
-
-               expect(file_content.last&.strip).to end_with(',"this has ""quotes"" in it"')
+               expect(result.strip).to end_with(',"this has ""quotes"" in it"')
             end
 
             it 'should force quote every field' do
@@ -785,13 +489,138 @@ module Procrastinator
                      data:           'user_id: 5'
                }
 
-               store.write([task_info])
-
-               file_content = path.readlines
+               result = store.generate([task_info])
 
                new_row = task_info.values.collect { |x| %["#{ x }"] }.join(',')
 
-               expect(file_content.last&.strip).to eq new_row
+               expect(result).to eq <<~CONTENT
+                  id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
+                  #{ new_row }
+               CONTENT
+            end
+         end
+      end
+
+      describe FileTransaction do
+         # exclusive && nonblocking (ie. won't wait until success)
+         let(:flock_mask) { File::LOCK_EX | File::LOCK_NB }
+
+         let(:path) { Pathname.new 'procrastinator-data.csv' }
+         let(:store) { CSVStore.new(path) }
+
+         describe 'initialize' do
+            context 'block yielding' do
+               let(:storage_path) { Pathname.new 'test-file.txt' }
+
+               before(:each) do
+                  allow_any_instance_of(FakeFS::File).to receive(:flock)
+               end
+
+               it 'should pass the current file contents to the block' do
+                  content = nil
+                  storage_path.write 'test content'
+                  FileTransaction.new(storage_path) do |current_content|
+                     content = current_content
+                  end
+
+                  expect(content).to eq('test content')
+               end
+
+               it 'should write the block result to the file' do
+                  FileTransaction.new(storage_path) do
+                     'test content'
+                  end
+
+                  expect(storage_path.read).to eq('test content')
+               end
+
+               it 'should overwrite the entire existing file' do
+                  storage_path.write('a' * 10)
+                  FileTransaction.new(storage_path) do
+                     'zzz'
+                  end
+
+                  expect(storage_path.read).to eq('zzz')
+               end
+            end
+
+            context 'thread safety' do
+               let(:storage_path) { Pathname.new 'test-file.txt' }
+               let(:lock) { FileTransaction.file_mutex[storage_path.to_s] }
+
+               before(:each) do
+                  allow_any_instance_of(FakeFS::File).to receive(:flock)
+               end
+
+               it 'should reserve the file before yielding' do
+                  FileTransaction.new(storage_path) do
+                     expect(lock).to be_locked
+                  end
+               end
+
+               it 'should release the mutex after normal completion' do
+                  FileTransaction.new(storage_path) do
+                     # ... do stuff ...
+                  end
+
+                  expect(lock).to_not be_locked
+               end
+
+               it 'should release the mutex after error' do
+                  expect do
+                     FileTransaction.new(storage_path) do
+                        raise 'stomachache'
+                     end
+                  end.to raise_error RuntimeError, 'stomachache'
+
+                  expect(lock).to_not be_locked
+               end
+            end
+
+            # multiprocess file lock safety
+            context 'multiprocess' do
+               let(:tmp_dir) { Pathname.new Dir.mktmpdir('procrastinator-test') }
+               let(:storage_path) { tmp_dir / 'some-file.txt' }
+
+               before(:each) do
+                  # FakeFS doesn't currently support file locks
+                  FakeFS.deactivate!
+
+                  storage_path.write ''
+               end
+
+               after(:each) do
+                  Pathname.new(storage_path).open.flock(File::LOCK_UN)
+                  FileUtils.remove_entry(tmp_dir)
+                  FakeFS.activate!
+               end
+
+               it 'should flock the file before reading and writing' do
+                  FileTransaction.new(storage_path) do
+                     expect(storage_path.open.flock(flock_mask)).to(eq(false),
+                                                                    "expected #{ storage_path } to be locked")
+                  end
+               end
+
+               it 'should unflock the file when done' do
+                  FileTransaction.new(storage_path) do
+                     # ... do stuff ...
+                  end
+
+                  expect(storage_path.open.flock(flock_mask)).to(eq(0),
+                                                                 "expected #{ storage_path } to be unlocked")
+               end
+
+               it 'should unflock the file when errored' do
+                  expect do
+                     FileTransaction.new(storage_path) do
+                        raise 'vexed'
+                     end
+                  end.to raise_error RuntimeError, 'vexed'
+
+                  expect(storage_path.open.flock(flock_mask)).to(eq(0),
+                                                                 "expected #{ storage_path } to be unlocked")
+               end
             end
          end
       end
