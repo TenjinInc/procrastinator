@@ -117,11 +117,23 @@ module Procrastinator
          end
 
          class Fail
+            attr_accessor :data
+
             def run
-               raise('derp')
+               raise('asplode')
             end
 
             def fail(error)
+            end
+         end
+
+         class LogData
+            extend Procrastinator::Task
+
+            attr_accessor :logger, :data
+
+            def run
+               logger.info "Ran with data: #{ data }"
             end
          end
       end

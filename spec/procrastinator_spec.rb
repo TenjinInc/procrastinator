@@ -85,6 +85,73 @@ module Procrastinator
             end.to raise_error(SetupError, SetupError::ERR_NO_QUEUE)
          end
       end
+
+      context 'integration tests' do
+         let(:tmp_dir) { Pathname.new Dir.mktmpdir('procrastinator-test') }
+         let(:tmp_log_dir) { tmp_dir / 'log' }
+         let(:storage_path) { tmp_dir / 'shared-queue-test.csv' }
+
+         let(:scheduler) do
+            Procrastinator.setup do |env|
+               env.with_store csv: storage_path do
+                  env.define_queue(:email, Test::Task::LogData, update_period: 0.1)
+                  env.define_queue(:thumbnail, Test::Task::LogData, update_period: 0.1)
+                  env.define_queue(:crash, Test::Task::Fail, update_period: 0.1, max_attempts: 1)
+               end
+               env.log_with(directory: tmp_log_dir) # only needed to prevent writing files outside tmp dir
+            end
+         end
+
+         before(:each) do
+            # FakeFS doesn't currently support file locks (used in csv storage)
+            FakeFS.deactivate!
+         end
+
+         after(:each) do
+            FileUtils.remove_entry(tmp_dir)
+            FakeFS.activate!
+         end
+
+         it 'should store tasks' do
+            scheduler.delay(:thumbnail, run_at: 100, data: {path: 'doug-forcett.png'})
+            scheduler.delay(:email, run_at: 500, data: 'janet@example.com')
+            scheduler.delay(:thumbnail, run_at: 600, data: {size: 100, path: 'magic-panda.png'})
+
+            expect(storage_path.read).to eq <<~TASKS
+               id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
+               "1","thumbnail","100","100","","0","","","{""path"":""doug-forcett.png""}"
+               "2","email","500","500","","0","","","""janet@example.com"""
+               "3","thumbnail","600","600","","0","","","{""size"":100,""path"":""magic-panda.png""}"
+            TASKS
+         end
+
+         it 'should retry tasks' do
+            scheduler.delay(:thumbnail, run_at: 100, data: {path: 'doug-forcett.png'})
+            scheduler.delay(:email, run_at: 500, data: 'janet@example.com')
+            scheduler.delay(:crash, run_at: 300, data: 'derek@example.com')
+
+            scheduler.work.threaded(timeout: 0.25)
+
+            task_line = storage_path.readlines[1..-1].join("\n").split(',')
+
+            expect(task_line[1]).to eq('"crash"') # queue
+            expect(task_line[2]).to eq('""') # run at
+            expect(task_line[3]).to eq('"300"') # initial run at
+            expect(task_line[5]).to eq('"1"') # attempts
+         end
+
+         it 'should keep a log file per queue' do
+            scheduler.delay(:thumbnail, run_at: 100, data: {path: 'stars/doug-forcett.png'})
+            scheduler.delay(:email, run_at: 500, data: 'janet@example.com')
+
+            scheduler.work.threaded(timeout: 0.25)
+
+            email_log     = tmp_log_dir / 'email-queue-worker.log'
+            thumbnail_log = tmp_log_dir / 'thumbnail-queue-worker.log'
+
+            expect(email_log.read).to include('janet@example.com').once
+            expect(thumbnail_log.read).to include('doug-forcett.png').once
+         end
+      end
    end
 end
-

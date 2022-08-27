@@ -411,7 +411,7 @@ module Procrastinator
                worker.work
 
                expect(worker.last_error).to start_with 'Task failed: '
-               expect(worker.last_error).to include 'derp' # message from the FailTask
+               expect(worker.last_error).to include 'asplode' # message from the FailTask
                expect(worker.last_error).to match(/(.*\n)+/) # poor version of checking for backtrace, but it works for now
             end
 
