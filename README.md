@@ -170,8 +170,7 @@ A task store is required to implement *all* of the following methods or else it 
 Procrastinator comes with a simple CSV file task store by default, but you are encouraged to build one that suits your
 situation.
 
-_Warning_: Task stores shared across queues **must** be thread-safe. The CSV store **is not**, so do not use it for more
-than one queue at a time.
+_Warning_: Task stores shared between queues **must** be thread-safe if using threaded or daemonized work modes.
 
 #### Data Fields
 

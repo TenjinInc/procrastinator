@@ -14,10 +14,10 @@ module Procrastinator
       #
       # @author Robin Miller
       class CSVStore
-         @file_transactors = {}
+         @file_mutex = {}
 
          class << self
-            attr_reader :file_transactors
+            attr_reader :file_mutex
          end
 
          # ordered
@@ -42,8 +42,6 @@ module Procrastinator
          attr_reader :path
 
          def initialize(file_path = DEFAULT_FILE)
-            CSVStore.file_transactors[file_path.to_s] ||= Mutex.new
-
             @path = Pathname.new(file_path)
 
             if @path.directory? || @path.to_s.end_with?('/')
@@ -51,6 +49,8 @@ module Procrastinator
             elsif @path.extname.empty?
                @path = Pathname.new("#{ file_path }.csv")
             end
+
+            CSVStore.file_mutex[@path.to_s] ||= Mutex.new
 
             freeze
          end
@@ -147,9 +147,19 @@ module Procrastinator
          #
          # When this sequence happens, the second file write is based on old information and loses the info from
          # the prior write. Using a global mutex per file path prevents this case.
+         #
+         # It is also possible to have this occur when running multiple daemons on the same data source, so file locking
+         # is also used to ensure unitary access.
          def file_transaction(&block)
-            semaphore = CSVStore.file_transactors[@path.to_s]
-            semaphore.synchronize(&block)
+            ensure_file
+            @path.open do |file|
+               file.flock(File::LOCK_EX)
+               semaphore = CSVStore.file_mutex[@path.to_s]
+               semaphore.synchronize do
+                  # TODO: pass in the file reference so that it is used in write etc
+                  block.call
+               end
+            end
          end
 
          def ensure_file
