@@ -10,7 +10,7 @@ require 'procrastinator/config'
 require 'procrastinator/task'
 require 'procrastinator/scheduler'
 require 'procrastinator/task_store/file_transaction'
-require 'procrastinator/task_store/csv_store'
+require 'procrastinator/task_store/simple_comma_store'
 
 require 'logger'
 require 'pathname'

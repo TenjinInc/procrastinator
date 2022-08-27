@@ -204,7 +204,7 @@ daylight savings.
 Specifying no storage will cause Procrastinator to save tasks using the very basic built-in CSV storage. It is not
 designed for heavy loads, so you should replace it in a production environment.
 
-The file path is defined in `Procrastinator::Store::CSVStore::DEFAULT_FILE`.
+The file path is defined in `Procrastinator::Store::SimpleCommaStore::DEFAULT_FILE`.
 
 ```ruby
 Procrastinator.setup do |config|

@@ -20,8 +20,8 @@ module Procrastinator
 
             created_queue = config.queue(name: :test_queue)
 
-            expect(created_queue.store).to be_a(TaskStore::CSVStore)
-            expect(created_queue.store.path.to_s).to eq TaskStore::CSVStore::DEFAULT_FILE.to_s
+            expect(created_queue.store).to be_a(TaskStore::SimpleCommaStore)
+            expect(created_queue.store.path.to_s).to eq TaskStore::SimpleCommaStore::DEFAULT_FILE.to_s
          end
 
          # immutable to aid with thread-safety and predictability
@@ -51,7 +51,7 @@ module Procrastinator
 
                created_queue = config.queue(name: :test_queue)
 
-               expect(created_queue.store).to be_a(TaskStore::CSVStore)
+               expect(created_queue.store).to be_a(TaskStore::SimpleCommaStore)
                expect(created_queue.store.path).to eq path
             end
 
@@ -66,7 +66,7 @@ module Procrastinator
 
                   created_queue = config.queue(name: :test_queue)
 
-                  expect(created_queue.store).to be_a(TaskStore::CSVStore)
+                  expect(created_queue.store).to be_a(TaskStore::SimpleCommaStore)
                   expect(created_queue.store.path).to eq Pathname.new(path)
                end
             end
@@ -127,7 +127,7 @@ module Procrastinator
                end
 
                expect(config.queue(name: :inner_queue).store.path).to eq(custom_path)
-               expect(config.queue(name: :outer_queue).store.path).to eq(Pathname.new(TaskStore::CSVStore::DEFAULT_FILE))
+               expect(config.queue(name: :outer_queue).store.path).to eq(Pathname.new(TaskStore::SimpleCommaStore::DEFAULT_FILE))
             end
          end
 
@@ -247,7 +247,7 @@ module Procrastinator
 
                   queue = config.queues.first || raise('queue missing')
 
-                  expect(queue.store).to be_a TaskStore::CSVStore
+                  expect(queue.store).to be_a TaskStore::SimpleCommaStore
                   expect(queue.store.path).to eq storage_path
                end
 
@@ -258,7 +258,7 @@ module Procrastinator
 
                   queue = config.queues.first || raise('queue missing')
 
-                  expect(queue.store).to be_a TaskStore::CSVStore
+                  expect(queue.store).to be_a TaskStore::SimpleCommaStore
                   expect(queue.store.path).to eq storage_path
                end
 

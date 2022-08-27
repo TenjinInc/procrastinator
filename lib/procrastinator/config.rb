@@ -41,7 +41,7 @@ module Procrastinator
          @log_shift_age  = DEFAULT_LOG_SHIFT_AGE
          @log_shift_size = DEFAULT_LOG_SHIFT_SIZE
 
-         with_store(csv: TaskStore::CSVStore::DEFAULT_FILE) do
+         with_store(csv: TaskStore::SimpleCommaStore::DEFAULT_FILE) do
             yield(self) if block_given?
          end
 
@@ -125,9 +125,9 @@ module Procrastinator
                raise ArgumentError, "Must pass keyword :#{ store_strategy } if specifying a location for CSV file"
             end
 
-            TaskStore::CSVStore.new(store[store_strategy])
+            TaskStore::SimpleCommaStore.new(store[store_strategy])
          when String, Pathname
-            TaskStore::CSVStore.new(store)
+            TaskStore::SimpleCommaStore.new(store)
          else
             store
          end

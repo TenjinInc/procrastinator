@@ -7,13 +7,13 @@ module Procrastinator
    module TaskStore
       # Simple Task I/O adapter that writes task information (ie. TaskMetaData attributes) to a CSV file.
       #
-      # CSVStore is not designed for efficiency or large loads (10,000+ tasks).
+      # SimpleCommaStore is not designed for efficiency or large loads (10,000+ tasks).
       #
       # For critical production environments, it is strongly recommended to use a more robust storage mechanism like a
       # proper database.
       #
       # @author Robin Miller
-      class CSVStore
+      class SimpleCommaStore
          # ordered
          HEADERS = [:id, :queue, :run_at, :initial_run_at, :expire_at,
                     :attempts, :last_fail_at, :last_error, :data].freeze

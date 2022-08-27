@@ -35,7 +35,7 @@ module Procrastinator
                      max_attempts: DEFAULT_MAX_ATTEMPTS,
                      timeout: DEFAULT_TIMEOUT,
                      update_period: DEFAULT_UPDATE_PERIOD,
-                     store: TaskStore::CSVStore.new)
+                     store: TaskStore::SimpleCommaStore.new)
          raise ArgumentError, ':name cannot be nil' unless name
 
          raise ArgumentError, ':task_class cannot be nil' unless task_class

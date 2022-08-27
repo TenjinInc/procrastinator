@@ -6,21 +6,21 @@ require 'tmpdir'
 
 module Procrastinator
    module TaskStore
-      describe CSVStore do
+      describe SimpleCommaStore do
          describe 'initialize' do
             it 'should accept a path argument' do
-               store = CSVStore.new 'testfile.csv'
+               store = SimpleCommaStore.new 'testfile.csv'
                expect(store.path.to_s).to eq 'testfile.csv'
             end
 
             it 'should provide a default path argument' do
-               store = CSVStore.new
+               store = SimpleCommaStore.new
 
-               expect(store.path.to_s).to eq(CSVStore::DEFAULT_FILE.to_s)
+               expect(store.path.to_s).to eq(SimpleCommaStore::DEFAULT_FILE.to_s)
             end
 
             it 'should add a .csv extension to the path if missing extension' do
-               store = CSVStore.new 'plainfile'
+               store = SimpleCommaStore.new 'plainfile'
 
                expect(store.path.to_s).to eq('plainfile.csv')
             end
@@ -28,30 +28,30 @@ module Procrastinator
             it 'should add a default filename if the provided path is a directory name' do
                slash_end_path = '/some/place/'
 
-               store = CSVStore.new(slash_end_path)
+               store = SimpleCommaStore.new(slash_end_path)
 
-               expect(store.path.to_s).to eq("#{ slash_end_path }#{ CSVStore::DEFAULT_FILE }")
+               expect(store.path.to_s).to eq("#{ slash_end_path }#{ SimpleCommaStore::DEFAULT_FILE }")
             end
 
             it 'should add a default filename if the provided path is an existing directory' do
                existing_dir = Pathname.new 'test_dir'
                existing_dir.mkdir
-               store = CSVStore.new(existing_dir)
+               store = SimpleCommaStore.new(existing_dir)
 
-               expect(store.path.to_s).to eq("#{ existing_dir }/#{ CSVStore::DEFAULT_FILE }")
+               expect(store.path.to_s).to eq("#{ existing_dir }/#{ SimpleCommaStore::DEFAULT_FILE }")
             end
 
             # to encourage thread-safetey
             it 'should be frozen after init' do
-               store = CSVStore.new
+               store = SimpleCommaStore.new
 
                expect(store).to be_frozen
             end
          end
 
          describe 'read' do
-            let(:path) { Pathname.new CSVStore::DEFAULT_FILE }
-            let(:store) { CSVStore.new(path) }
+            let(:path) { Pathname.new SimpleCommaStore::DEFAULT_FILE }
+            let(:store) { SimpleCommaStore.new(path) }
 
             before(:each) do
                contents = <<~CONTENTS
@@ -71,11 +71,11 @@ module Procrastinator
                 Pathname.new('/some/place/some-other-data.csv')].each do |path|
                   path.dirname.mkpath
                   path.write <<~EXISTING
-                     #{ CSVStore::HEADERS.join(',') }
+                     #{ SimpleCommaStore::HEADERS.join(',') }
                      #{ data }
                   EXISTING
 
-                  store = CSVStore.new(path)
+                  store = SimpleCommaStore.new(path)
 
                   expect(store.read.length).to eq 1
                end
@@ -259,8 +259,8 @@ module Procrastinator
          end
 
          describe 'create' do
-            let(:path) { Pathname.new CSVStore::DEFAULT_FILE }
-            let(:store) { CSVStore.new(path) }
+            let(:path) { Pathname.new SimpleCommaStore::DEFAULT_FILE }
+            let(:store) { SimpleCommaStore.new(path) }
 
             let(:required_args) do
                {queue: :some_queue, run_at: 0, initial_run_at: 0, expire_at: nil, data: ''}
@@ -367,7 +367,7 @@ module Procrastinator
 
          describe 'update' do
             let(:path) { Pathname.new 'procrastinator-data.csv' }
-            let(:store) { CSVStore.new(path) }
+            let(:store) { SimpleCommaStore.new(path) }
 
             before(:each) do
                path.write <<~CONTENTS
@@ -435,7 +435,7 @@ module Procrastinator
 
          describe 'delete' do
             let(:path) { Pathname.new 'procrastinator-data.csv' }
-            let(:store) { CSVStore.new(path) }
+            let(:store) { SimpleCommaStore.new(path) }
 
             before(:each) do
                path.write <<~CONTENTS
@@ -466,7 +466,7 @@ module Procrastinator
          end
 
          describe 'generate' do
-            let(:store) { CSVStore.new }
+            let(:store) { SimpleCommaStore.new }
             let(:path) { store.path }
 
             # CSV specification (RFC 4180) considers two dquotes in a row ("") as an escaped dquote (")
@@ -506,7 +506,7 @@ module Procrastinator
          let(:flock_mask) { File::LOCK_EX | File::LOCK_NB }
 
          let(:path) { Pathname.new 'procrastinator-data.csv' }
-         let(:store) { CSVStore.new(path) }
+         let(:store) { SimpleCommaStore.new(path) }
 
          describe 'initialize' do
             context 'block yielding' do
