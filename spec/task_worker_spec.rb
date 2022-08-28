@@ -5,7 +5,7 @@ require 'spec_helper'
 module Procrastinator
    describe TaskWorker do
       let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: Test::Task::AllHooks) }
-      let(:meta) { TaskMetaData.new }
+      let(:meta) { TaskMetaData.new(queue: queue) }
       let(:fail_queue) { Procrastinator::Queue.new(name: :fail_queue, task_class: Test::Task::Fail) }
       let(:final_fail_queue) { Procrastinator::Queue.new(name: :fail_queue, task_class: Test::Task::Fail, max_attempts: 0) }
 
@@ -18,118 +18,30 @@ module Procrastinator
          end
          let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: task_class, store: fake_persister) }
 
-         it 'should complain when no queue is given' do
-            expect do
-               TaskWorker.new(metadata: meta)
-            end.to raise_error(ArgumentError, 'missing keyword: queue')
-         end
+         it 'should remember the given task' do
+            task = double('task')
+            meta = double('meta')
+            worker = TaskWorker.new(metadata: meta, task: task)
 
-         it 'should request a task handler from the queue definition' do
-            task_instance = double('task handler')
-            allow(task_class).to receive(:new).and_return task_instance
-
-            worker = TaskWorker.new(metadata: TaskMetaData.new, queue: queue)
-
-            expect(worker.task).to be task_instance
-         end
-
-         # TODO: I think these 4 can be extracted to the caller
-         it 'should supply the task data to the task handler' do
-            task_class = Class.new do
-               attr_accessor :data
-
-               def run
-               end
-            end
-
-            queue = Queue.new(name: :test_queue, task_class: task_class)
-
-            data   = {some: 'task data'}
-            worker = TaskWorker.new(metadata: TaskMetaData.new(data: JSON.dump(data)),
-                                    queue:    queue)
-
-            expect(worker.task.data).to eq data
-         end
-
-         it 'should supply the logger to the task handler' do
-            task_class = Class.new do
-               attr_accessor :logger
-
-               def run
-               end
-            end
-
-            queue = Queue.new(name: :test_queue, task_class: task_class)
-
-            logger = double('logger')
-            worker = TaskWorker.new(metadata: TaskMetaData.new,
-                                    logger:   logger,
-                                    queue:    queue)
-
-            expect(worker.task.logger).to eq logger
-         end
-
-         it 'should supply the container to the task handler' do
-            task_class = Class.new do
-               attr_accessor :container
-
-               def run
-               end
-            end
-
-            queue = Queue.new(name: :test_queue, task_class: task_class)
-
-            container = double('container')
-            worker    = TaskWorker.new(metadata:  TaskMetaData.new,
-                                       container: container,
-                                       queue:     queue)
-
-            expect(worker.task.container).to eq container
-         end
-
-         it 'should supply the scheduler to the task handler' do
-            task_class = Class.new do
-               attr_accessor :scheduler
-
-               def run
-               end
-            end
-
-            queue = Queue.new(name: :test_queue, task_class: task_class)
-
-            scheduler = double('scheduler')
-            worker    = TaskWorker.new(metadata:  TaskMetaData.new,
-                                       scheduler: scheduler,
-                                       queue:     queue)
-
-            expect(worker.task.scheduler).to eq scheduler
+            expect(worker.task).to eq(task)
          end
       end
 
       describe '#work' do
+         let(:task) { Test::Task::AllHooks.new }
+         let(:fail_task) { Test::Task::Fail.new }
+
          context 'run hook' do
             it 'should call task #run' do
-               task = double('task')
-
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task)
-
                expect(task).to receive(:run)
-               allow(task).to receive(:success)
 
-               worker = TaskWorker.new(metadata: meta, queue: queue)
+               worker = TaskWorker.new(metadata: meta, task: task)
 
                worker.work
             end
 
             it 'should increase number of attempts when #run is called' do
-               task = double('task')
-
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task)
-
-               allow(task).to receive(:run)
-               allow(task).to receive(:success)
-
-               worker = TaskWorker.new(metadata: meta, queue: queue)
+               worker = TaskWorker.new(metadata: meta, task: task)
 
                (1..3).each do |i|
                   worker.work
@@ -138,67 +50,57 @@ module Procrastinator
             end
 
             it 'should NOT call #run when the expiry time has passed' do
-               task = double('task')
-
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task)
-
                expect(task).to_not receive(:run)
 
-               worker = TaskWorker.new(metadata: TaskMetaData.new(expire_at: 0), queue: queue)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(queue:     queue,
+                                                                  expire_at: 0),
+                                       task:     task)
                worker.work
             end
          end
 
          context 'success hook' do
             it 'should call task #success when #run completes without error' do
-               task = double('task')
-
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task)
-
-               allow(task).to receive(:run)
                expect(task).to receive(:success)
 
-               worker = TaskWorker.new(metadata: meta, queue: queue)
+               worker = TaskWorker.new(metadata: meta, task: task)
 
                worker.work
             end
 
             it 'should NOT call task #success when #run errors' do
-               task = Test::Task::Fail.new
+               expect(fail_task).to_not receive(:success)
 
-               expect(task).to_not receive(:success)
-               allow(task).to receive(:fail)
-
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
-
-               worker = TaskWorker.new(metadata: meta, queue: queue)
+               worker = TaskWorker.new(metadata: meta, task: fail_task)
 
                worker.work
             end
 
             it 'should complain to stderr when #success errors' do
-               task = Test::Task::AllHooks.new
-               err  = 'testing success block error handling'
-
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task)
+               err = 'testing success block error handling'
 
                allow(task).to receive(:success).and_raise(err)
 
-               worker = TaskWorker.new(metadata: meta, queue: queue)
+               worker = TaskWorker.new(metadata: meta, task: task)
 
                expect { worker.work }.to output("Success hook error: #{ err }\n").to_stderr
             end
 
             it 'should do nothing if the task does not include #success' do
-               queue = Procrastinator::Queue.new(name: :run_only, task_class: Test::Task::RunOnly)
+               klass = Class.new do
+                  def run
+                  end
+               end
 
-               worker = TaskWorker.new(metadata: meta, queue: queue)
+               worker = TaskWorker.new(metadata: meta, task: klass.new)
 
                expect { worker.work }.to_not output.to_stderr
             end
 
             it 'should blank the error message' do
-               worker = TaskWorker.new(metadata: TaskMetaData.new(last_error: 'derp'), queue: queue)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(last_error: 'asplode',
+                                                                  queue:      queue),
+                                       task:     double('task', run: nil))
 
                worker.work
 
@@ -206,7 +108,9 @@ module Procrastinator
             end
 
             it 'should blank the error time' do
-               worker = TaskWorker.new(metadata: TaskMetaData.new(last_fail_at: double('failtime')), queue: queue)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(last_fail_at: double('failtime'),
+                                                                  queue:        queue),
+                                       task:     double('task', run: nil))
 
                worker.work
 
@@ -214,15 +118,12 @@ module Procrastinator
             end
 
             it 'should pass the result of #run to #success' do
-               task   = double('task')
                result = double('run result')
-
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task)
 
                allow(task).to receive(:run).and_return(result)
                expect(task).to receive(:success).with(result)
 
-               worker = TaskWorker.new(metadata: meta, queue: queue)
+               worker = TaskWorker.new(metadata: meta, task: task)
                worker.work
             end
 
@@ -230,12 +131,13 @@ module Procrastinator
                logger   = double('logger')
                data_str = JSON.dump('some data text')
 
-               worker = TaskWorker.new(queue:    queue,
+               worker = TaskWorker.new(task:     task,
                                        logger:   logger,
                                        metadata: TaskMetaData.new(last_fail_at: double('failtime'),
-                                                                  data:         data_str))
+                                                                  data:         data_str,
+                                                                  queue:        queue))
 
-               expect(logger).to receive(:debug).with("Task completed: #{ Test::Task::AllHooks } [#{ data_str }]")
+               expect(logger).to receive(:debug).with("Task completed: #{ queue.name.to_sym } [#{ data_str }]")
 
                worker.work
             end
@@ -243,60 +145,46 @@ module Procrastinator
 
          context 'fail hook' do
             it 'should #fail when #run errors' do
-               task = Test::Task::Fail.new
+               expect(fail_task).to receive(:fail)
 
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
-
-               expect(task).to receive(:fail)
-
-               worker = TaskWorker.new(metadata: meta, queue: fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: fail_task)
                worker.work
             end
 
             it 'should #fail when #run duration exceeds timeout and provide a timeout error' do
-               task    = Test::Task::Fail.new
                timeout = 0.1 # can't be 0. timeout doesn't actually do timeout stuff if given 0
-               allow(task).to receive(:run) do
+               allow(fail_task).to receive(:run) do
                   sleep(timeout + 0.1)
                end
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
 
-               timeout_queue = Procrastinator::Queue.new(name:       :timeout_queue,
-                                                         task_class: Test::Task::Fail,
-                                                         timeout:    timeout)
+               expect(fail_task).to receive(:fail).with(Timeout::Error)
 
-               expect(task).to receive(:fail).with(Timeout::Error)
-
-               worker = TaskWorker.new(metadata: meta, queue: timeout_queue)
-               worker.work
+               worker = TaskWorker.new(metadata: meta,
+                                       task:     fail_task)
+               worker.work(timeout)
             end
 
             it 'should call #fail if nil max_attempts given and #run errors' do
-               task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
-
-               allow(task).to receive(:run).and_raise('fake error')
-
                unlimited_queue = Procrastinator::Queue.new(name:         :unlimited_queue,
                                                            task_class:   Test::Task::Fail,
                                                            max_attempts: nil)
 
-               expect(task).to receive(:fail)
+               expect(fail_task).to receive(:fail)
 
-               worker = TaskWorker.new(metadata: meta, queue: unlimited_queue)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(queue: unlimited_queue),
+                                       task:     fail_task)
                worker.work
             end
 
             it 'should NOT #fail when #success errors' do
-               task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
+               task = double('bad success')
 
                allow(task).to receive(:run)
-               allow(task).to receive(:success).and_raise('testing success block error handling')
+               allow(task).to receive(:success).and_raise('task failed successfully')
 
                expect(task).to_not receive(:fail)
 
-               worker = TaskWorker.new(metadata: meta, queue: fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: task)
 
                # silence the stdout warning
                expect do
@@ -305,37 +193,36 @@ module Procrastinator
             end
 
             it 'should NOT call #fail if calling #final_fail' do
-               final_queue = Procrastinator::Queue.new(name:         :final_queue,
-                                                       task_class:   Test::Task::Fail,
-                                                       max_attempts: 0)
+               final_queue = Queue.new(name:         :final_queue,
+                                       task_class:   Test::Task::Fail,
+                                       max_attempts: 0)
 
-               task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
+               allow(fail_task).to receive(:final_fail)
+               expect(fail_task).to_not receive(:fail)
 
-               allow(task).to receive(:run).and_raise('fake error')
-               allow(task).to receive(:final_fail)
-               expect(task).to_not receive(:fail)
-
-               worker = TaskWorker.new(metadata: meta, queue: final_queue)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(queue: final_queue), task: fail_task)
                worker.work
             end
 
             it 'should handle errors from task #fail' do
-               task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
+               task = double('exploding fail task')
 
                err = 'fail error'
 
                allow(task).to receive(:run).and_raise('run error')
                allow(task).to receive(:fail).and_raise(err)
 
-               worker = TaskWorker.new(metadata: meta, queue: fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: task)
 
                expect { worker.work }.to output("Fail hook error: #{ err }\n").to_stderr
             end
 
             it 'should do nothing if the task does not include #fail' do
-               worker = TaskWorker.new(metadata: meta, queue: fail_queue)
+               klass  = Class.new do
+                  def run
+                  end
+               end
+               worker = TaskWorker.new(metadata: meta, task: klass.new)
 
                expect { worker.work }.to_not output.to_stderr
             end
@@ -346,15 +233,12 @@ module Procrastinator
                Timecop.freeze(start_time) do
                   delay = 100
 
-                  fail_task = Test::Task::Fail.new
-                  allow(Test::Task::Fail).to receive(:new).and_return(fail_task)
-
                   allow(fail_task).to receive(:run) do
                      Timecop.travel(delay)
                      raise 'fake error'
                   end
 
-                  worker = TaskWorker.new(metadata: meta, queue: fail_queue)
+                  worker = TaskWorker.new(metadata: meta, task: fail_task)
 
                   worker.work
 
@@ -364,8 +248,9 @@ module Procrastinator
 
             it 'should reschedule for the future' do
                worker = TaskWorker.new(metadata: TaskMetaData.new(run_at:         0,
-                                                                  initial_run_at: 0),
-                                       queue:    fail_queue)
+                                                                  initial_run_at: 0,
+                                                                  queue:          fail_queue),
+                                       task:     fail_task)
                worker.work
 
                expect(worker.run_at).to be > worker.initial_run_at
@@ -376,8 +261,9 @@ module Procrastinator
                                                  task_class:   Test::Task::Fail,
                                                  max_attempts: 4)
 
-               worker = TaskWorker.new(metadata: TaskMetaData.new(run_at: 0),
-                                       queue:    queue)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(run_at: 0,
+                                                                  queue:  queue),
+                                       task:     fail_task)
 
                (1..3).each do |i|
                   previous_time = worker.run_at
@@ -393,15 +279,16 @@ module Procrastinator
             end
 
             it 'should NOT reschedule when run_at is nil' do
-               worker = TaskWorker.new(metadata: TaskMetaData.new(run_at: nil),
-                                       queue:    fail_queue)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(run_at: nil,
+                                                                  queue:  fail_queue),
+                                       task:     fail_task)
                worker.work
 
                expect(worker.run_at).to be_nil
             end
 
             it 'should record the error and trace in last_error' do
-               worker = TaskWorker.new(metadata: meta, queue: fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: fail_task)
                worker.work
 
                expect(worker.last_error).to start_with 'Task failed: '
@@ -410,15 +297,12 @@ module Procrastinator
             end
 
             it 'should pass in the error to #fail' do
-               fail_task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(fail_task)
-
                err = StandardError.new('fake error')
                allow(fail_task).to receive(:run).and_raise(err)
 
                expect(fail_task).to receive(:fail).with(err)
 
-               worker = TaskWorker.new(metadata: meta, queue: fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: fail_task)
                worker.work
             end
 
@@ -434,9 +318,10 @@ module Procrastinator
 
                queue = Procrastinator::Queue.new(name: :test, task_class: task_class)
 
-               worker = TaskWorker.new(metadata: TaskMetaData.new(data: JSON.dump(data)),
+               worker = TaskWorker.new(metadata: TaskMetaData.new(data:  JSON.dump(data),
+                                                                  queue: queue),
                                        logger:   logger,
-                                       queue:    queue)
+                                       task:     fail_task)
 
                expect(logger).to receive(:debug).with("Task failed: #{ queue.name } with #{ JSON.dump(data) }")
 
@@ -445,19 +330,19 @@ module Procrastinator
          end
 
          context 'final_fail hook' do
+            let(:meta) { TaskMetaData.new(queue: final_fail_queue) }
+
             it 'should call #final_fail if #run errors more than given max_attempts' do
                max_attempts = 3
 
-               task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
+               overfail_queue = Queue.new(name:         :overfail_queue,
+                                          task_class:   Test::Task::Fail,
+                                          max_attempts: max_attempts)
 
-               overfail_queue = Procrastinator::Queue.new(name:         :overfail_queue,
-                                                          task_class:   Test::Task::Fail,
-                                                          max_attempts: max_attempts)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(queue: overfail_queue),
+                                       task:     fail_task)
 
-               worker = TaskWorker.new(metadata: meta, queue: overfail_queue)
-
-               expect(task).to receive(:final_fail)
+               expect(fail_task).to receive(:final_fail)
 
                max_attempts.times do
                   worker.work
@@ -466,43 +351,36 @@ module Procrastinator
 
             it 'should call #final_fail when the expiry time has passed' do
                (0..3).each do |i|
-                  task = Test::Task::Fail.new
-                  allow(Test::Task::Fail).to receive(:new).and_return(task)
-
-                  expect(task).to receive(:final_fail).with(satisfy do |arg|
+                  expect(fail_task).to receive(:final_fail).with(satisfy do |arg|
                      arg.is_a?(TaskExpiredError) && arg.message == "task is over its expiry time of #{ i }"
                   end)
 
-                  worker = TaskWorker.new(queue:    fail_queue,
-                                          metadata: TaskMetaData.new(expire_at: i))
+                  worker = TaskWorker.new(task:     fail_task,
+                                          metadata: TaskMetaData.new(expire_at: i,
+                                                                     queue:     queue))
                   worker.work
                end
             end
 
             it 'should NOT error or call #final_fail if nil max_attempts given' do
-               task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
-
                unlimited_queue = Procrastinator::Queue.new(name:         :unlimited_queue,
                                                            task_class:   Test::Task::Fail,
                                                            max_attempts: nil)
 
-               worker = TaskWorker.new(metadata: meta, queue: unlimited_queue)
+               worker = TaskWorker.new(metadata: TaskMetaData.new(queue: unlimited_queue),
+                                       task:     fail_task)
 
-               expect(task).to_not receive(:final_fail)
+               expect(fail_task).to_not receive(:final_fail)
 
                worker.work
             end
 
             it 'should handle errors from #final_fail' do
-               task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
-
                err = 'final fail error'
 
-               allow(task).to receive(:final_fail).and_raise(err)
+               allow(fail_task).to receive(:final_fail).and_raise(err)
 
-               worker = TaskWorker.new(metadata: meta, queue: final_fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: fail_task)
 
                expect do
                   worker.work
@@ -510,7 +388,7 @@ module Procrastinator
             end
 
             it 'should do nothing if the task does not include #final_fail' do
-               worker = TaskWorker.new(metadata: meta, queue: final_fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: fail_task)
 
                expect do
                   worker.work
@@ -530,7 +408,7 @@ module Procrastinator
                      raise 'fake error'
                   end
 
-                  worker = TaskWorker.new(metadata: meta, queue: final_fail_queue)
+                  worker = TaskWorker.new(metadata: meta, task: fail_task)
                   worker.work
 
                   expect(worker.last_fail_at).to eq start_time.to_i + delay
@@ -538,14 +416,14 @@ module Procrastinator
             end
 
             it 'should mark the task as permanently failed' do
-               worker = TaskWorker.new(metadata: meta, queue: final_fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: fail_task)
                worker.work
 
                expect(worker.run_at).to be nil
             end
 
             it 'should record that the expiry time has passed with trace' do
-               worker = TaskWorker.new(queue: queue, metadata: TaskMetaData.new(expire_at: 0))
+               worker = TaskWorker.new(task: fail_task, metadata: TaskMetaData.new(expire_at: 0, queue: queue))
                worker.work
 
                expect(worker.last_error).to start_with 'Task expired: '
@@ -553,7 +431,7 @@ module Procrastinator
             end
 
             it 'should record the error and trace in last_error' do
-               worker = TaskWorker.new(metadata: meta, queue: final_fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: fail_task)
                worker.work
 
                expect(worker.last_error).to start_with 'Task failed too many times: '
@@ -561,69 +439,29 @@ module Procrastinator
             end
 
             it 'should pass in the error to #final_fail' do
-               task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
-
                err = StandardError.new('fake error')
-               allow(task).to receive(:run).and_raise(err)
+               allow(fail_task).to receive(:run).and_raise(err)
 
-               expect(task).to receive(:final_fail).with(err)
+               expect(fail_task).to receive(:final_fail).with(err)
 
-               worker = TaskWorker.new(metadata: meta, queue: final_fail_queue)
+               worker = TaskWorker.new(metadata: meta, task: fail_task)
                worker.work
             end
 
             it 'should log #final_fail at debug level' do
-               task = Test::Task::Fail.new
-               allow(Test::Task::Fail).to receive(:new).and_return(task)
-
                err    = StandardError.new('fake error')
                logger = Logger.new(StringIO.new)
 
-               allow(task).to receive(:run).and_raise(err)
+               allow(fail_task).to receive(:run).and_raise(err)
 
                worker = TaskWorker.new(metadata: meta,
                                        logger:   logger,
-                                       queue:    final_fail_queue)
+                                       task:     fail_task)
 
-               expect(logger).to receive(:debug).with("Task failed permanently: #{ JSON.dump(task) }")
+               expect(logger).to receive(:debug).with("Task failed permanently: #{ JSON.dump(fail_task) }")
 
                worker.work
             end
-         end
-      end
-
-      describe '#to_h' do
-         it 'should return the task hash and queue name' do
-            queue          = double(name: :some_queue, task_handler: Test::Task::AllHooks.new)
-            run_at         = double('run_at_i')
-            initial_run_at = double('initial_run_at_i')
-            expire_at      = double('expire_at_i')
-            attempts       = double('attempts')
-            last_fail_at   = double('last_fail_at')
-            last_error     = double('last_error')
-            data           = JSON.dump('one data, please')
-
-            task = TaskMetaData.new(id:             double('id'),
-                                    attempts:       attempts,
-                                    last_fail_at:   last_fail_at,
-                                    last_error:     last_error,
-                                    data:           data,
-                                    initial_run_at: double('initial_run_at', to_i: initial_run_at),
-                                    run_at:         double('run_at', to_i: run_at),
-                                    expire_at:      double('expire_at', to_i: expire_at))
-
-            worker = TaskWorker.new(metadata: task,
-                                    queue:    queue)
-
-            expect(worker.to_h).to include(attempts:       attempts,
-                                           run_at:         run_at,
-                                           last_fail_at:   last_fail_at,
-                                           last_error:     last_error,
-                                           initial_run_at: initial_run_at,
-                                           expire_at:      expire_at,
-                                           queue:          :some_queue,
-                                           data:           data)
          end
       end
    end

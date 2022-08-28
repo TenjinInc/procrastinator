@@ -217,71 +217,6 @@ module Procrastinator
          end
 
          context 'loading and running tasks' do
-            it 'should pass the given queue to its persister' do
-               config.queues.each do |queue|
-                  worker = QueueWorker.new(queue: queue, config: config)
-
-                  expect(persister).to receive(:read).with(queue: queue.name)
-
-                  worker.work_one
-               end
-            end
-
-            it 'should sort tasks by run_at' do
-               job1 = {id: 4, run_at: 1, initial_run_at: 0}
-               job2 = {id: 5, run_at: 2, initial_run_at: 0}
-               job3 = {id: 6, run_at: 3, initial_run_at: 0}
-
-               handler1 = Test::Task::AllHooks.new
-               handler2 = Test::Task::AllHooks.new
-               handler3 = Test::Task::AllHooks.new
-
-               allow(Test::Task::AllHooks).to receive(:new).and_return(handler1, handler2, handler3)
-
-               persister = double('disorganized persister',
-                                  read:   [job2, job1, job3],
-                                  create: nil,
-                                  update: nil,
-                                  delete: nil)
-
-               config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: persister)
-               end
-
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
-
-               expect(handler1).to receive(:run)
-
-               worker.work_one
-            end
-
-            it 'should ignore tasks with nil run_at' do
-               task1 = Test::Task::AllHooks.new
-               task2 = Test::Task::AllHooks.new
-
-               job1 = {id: 4, run_at: nil, initial_run_at: 0}
-               job2 = {id: 5, run_at: 2, initial_run_at: 0}
-
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task2)
-
-               persister = double('disorganized persister',
-                                  read:   [job2, job1],
-                                  create: nil,
-                                  update: nil,
-                                  delete: nil)
-
-               config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: persister)
-               end
-
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
-
-               expect(task1).to_not receive(:run)
-               expect(task2).to receive(:run)
-
-               worker.work_one
-            end
-
             it 'should reload tasks every cycle' do
                task1 = double('task1')
                task2 = double('task2')
@@ -319,166 +254,90 @@ module Procrastinator
                end
             end
 
-            it 'should populate the data into a Task' do
-               task_data = {
-                     id:             double('id'),
-                     run_at:         double('run_at', to_i: 1),
-                     initial_run_at: double('initial', to_i: 1),
-                     expire_at:      double('expiry', to_i: 1),
-                     attempts:       0,
-                     last_error:     double('last error'),
-                     last_fail_at:   double('last fail at'),
-                     data:           '{"some data": 5}'
-               }
-
-               expect(TaskMetaData).to receive(:new).with(task_data).and_call_original
+            it 'should do nothing when no tasks are found' do
+               task_data = {address: 'neutral@example.com'}
+               container = double('container object')
 
                config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
+                  c.define_queue(:email, test_task, store: fake_persister([{run_at: 1, data: JSON.dump(task_data)}]))
+                  c.provide_container container
                end
 
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
+               worker = QueueWorker.new(queue: :email, config: config)
 
-               worker.work_one
-            end
-
-            it 'should convert the read results to hash' do
-               task_data = double('data struct',
-                                  to_h: {
-                                        id:             double('id'),
-                                        run_at:         double('run_at', to_i: 1),
-                                        initial_run_at: double('initial', to_i: 1),
-                                        expire_at:      double('expiry', to_i: 1),
-                                        attempts:       0,
-                                        last_error:     double('last error'),
-                                        last_fail_at:   double('last fail at'),
-                                        data:           '{"some data": 5}'
-                                  })
-
-               expect(TaskMetaData).to receive(:new).with(task_data.to_h).and_call_original
-
-               config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
-               end
-
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
-
-               worker.work_one
-            end
-
-            it 'should ignore any unused or unknown data' do
-               task_data = {id:     1,
-                            queue:  double('queue'),
-                            run_at: double('run_at', to_i: 2),
-                            bogus:  double('bogus')}
-
-               expect(TaskMetaData).to receive(:new)
-                                             .with(id:     task_data[:id],
-                                                   run_at: task_data[:run_at])
-                                             .and_call_original
-
-               config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
-               end
-
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
+               expect(worker).to receive(:next_task).and_return([])
 
                worker.work_one
             end
 
             it 'should run a TaskWorker with the task metadata' do
                task_data = {run_at: 1}
+               config    = Config.new do |c|
+                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
+               end
 
-               meta = TaskMetaData.new(task_data)
-               allow(TaskMetaData).to receive(:new).and_return(meta)
+               queue  = config.queues.first
+               worker = QueueWorker.new(queue: queue, config: config)
+
+               meta = TaskMetaData.new(queue: queue, run_at: 1)
+               allow(worker).to receive(:next_task).and_return([nil, meta])
 
                expect(TaskWorker).to receive(:new).with(hash_including(metadata: meta)).and_call_original
 
-               config = Config.new do |c|
+               worker.work_one
+            end
+
+            it 'should run a TaskWorker with the queue timeout' do
+               task_data = {run_at: 1}
+               config    = Config.new do |c|
                   c.define_queue(:email, test_task, store: fake_persister([task_data]))
                end
 
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
+               queue  = config.queues.first
+               worker = QueueWorker.new(queue: queue, config: config)
+
+               task_worker = double('task worker', successful?: true, id: nil)
+               allow(TaskWorker).to receive(:new).and_return(task_worker)
+
+               expect(task_worker).to receive(:work).with(queue&.timeout)
 
                worker.work_one
             end
 
-            it 'should pass the TaskWorker the task container' do
-               task_data = {run_at: 1}
+            it 'should request a configured task handler' do
+               task_data = {address: 'neutral@example.com'}
                container = double('container object')
 
-               expect(TaskWorker).to receive(:new).with(hash_including(container: container)).and_call_original
-
                config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
+                  c.define_queue(:email, test_task, store: fake_persister([{run_at: 1, data: JSON.dump(task_data)}]))
                   c.provide_container container
                end
 
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
+               worker = QueueWorker.new(queue: :email, config: config)
+
+               expect(worker).to receive(:next_task).with(hash_including(container: container,
+                                                                         scheduler: an_instance_of(Scheduler)))
 
                worker.work_one
             end
 
-            it 'should pass the TaskWorker the queue settings' do
+            it 'should pass the TaskWorker the configured task handler' do
+               task_data = {address: 'neutral@example.com'}
+               container = double('container object')
+               handler   = Test::Task::AllHooks.new
+
                config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([{run_at: 1}]))
+                  c.define_queue(:email, test_task, store: fake_persister([{run_at: 1, data: JSON.dump(task_data)}]))
+                  c.provide_container container
                end
 
-               queue = config.queues.first
+               meta   = TaskMetaData.new(queue: config.queues.first)
+               worker = QueueWorker.new(queue: :email, config: config)
 
-               expect(TaskWorker).to receive(:new).with(hash_including(queue: queue)).and_call_original
-
-               worker = QueueWorker.new(queue: queue, config: config)
+               allow(worker).to receive(:next_task).and_return([handler, meta])
+               expect(TaskWorker).to receive(:new).with(hash_including(task: handler)).and_call_original
 
                worker.work_one
-            end
-
-            it 'should pass the TaskWorker the scheduler' do
-               expect(TaskWorker).to receive(:new).with(hash_including(scheduler: an_instance_of(Scheduler))).and_call_original
-
-               config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([{run_at: 1}]))
-               end
-
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
-
-               worker.work_one
-            end
-
-            it 'should run a TaskWorker for the first ready task' do
-               task_data1 = {run_at: 1}
-               task_data2 = {run_at: 1}
-               task_data3 = {run_at: 1}
-
-               expect(TaskWorker).to receive(:new).once.and_call_original
-
-               config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([task_data1, task_data2, task_data3]))
-               end
-
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
-
-               worker.work_one
-            end
-
-            it 'should not start any TaskWorkers for unready tasks' do
-               now = Time.now
-
-               task_data1 = {run_at: now}
-               task_data2 = {run_at: now + 1}
-
-               expect(TaskWorker).to receive(:new).ordered.and_call_original
-               expect(TaskWorker).to_not receive(:new).ordered.and_call_original
-
-               config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([task_data1, task_data2]))
-               end
-
-               worker = QueueWorker.new(queue: config.queues.first, config: config)
-
-               Timecop.freeze(now) do
-                  worker.work_one
-               end
             end
          end
 
@@ -504,8 +363,7 @@ module Procrastinator
          end
 
          context 'TaskWorker fails for fails For The Last Time' do
-            # Vader:
-            # it 'should promote Captain Piett to Admiral Piett'
+            # context 'darth_vader' { it 'should promote Captain Piett to Admiral Piett' }
 
             it 'should update the task' do
                {queueA: 0, queueB: 1}.each do |name, max_attempts|
@@ -524,8 +382,6 @@ module Procrastinator
                                     max_attempts:  max_attempts)
                   end
 
-                  # allow_any_instance_of(TaskWorker).to receive(:to_h).and_return(task_hash)
-
                   worker = QueueWorker.new(queue: name, config: config)
 
                   expect(persister).to receive(:update).with(id, hash_including(run_at: nil,
@@ -533,6 +389,25 @@ module Procrastinator
 
                   worker.work_one
                end
+            end
+
+            it 'should NOT delete the task' do
+               task_data = {
+                     id:     double('id'),
+                     run_at: 0
+               }
+
+               allow(persister).to receive(:read).and_return([task_data])
+
+               config = Config.new do |c|
+                  c.define_queue(:email, Test::Task::Fail, store: persister)
+               end
+
+               worker = QueueWorker.new(queue: config.queues.first, config: config)
+
+               expect(persister).to_not receive(:delete)
+
+               worker.work_one
             end
          end
       end

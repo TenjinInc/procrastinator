@@ -10,7 +10,7 @@ module Procrastinator
 
       include Loggable
 
-      def_delegators :@queue, :name
+      def_delegators :@queue, :name, :next_task
 
       # expected methods for all persistence strategies
       PERSISTER_METHODS = [:read, :update, :delete].freeze
@@ -28,15 +28,13 @@ module Procrastinator
                   end
 
          @scheduler = Scheduler.new(config)
-
-         # freeze
       end
 
       # Works on jobs forever
       def work!
-         @logger = open_log!("#{ @queue.name }-queue-worker", @config)
+         @logger = open_log!("#{ name }-queue-worker", @config)
 
-         @logger&.info("Started worker thread to consume queue: #{ @queue.name }")
+         @logger&.info("Started worker thread to consume queue: #{ name }")
 
          loop do
             sleep(@queue.update_period)
@@ -51,16 +49,16 @@ module Procrastinator
 
       # Performs exactly one task on the queue
       def work_one
-         metadata = fetch_task
+         handler, metadata = next_task(logger:    @logger,
+                                       container: @config.container,
+                                       scheduler: @scheduler)
          return unless metadata
 
-         worker = TaskWorker.new(metadata:  metadata,
-                                 scheduler: @scheduler,
-                                 container: @config.container,
-                                 queue:     @queue,
-                                 logger:    @logger)
+         worker = TaskWorker.new(metadata: metadata,
+                                 task:     handler,
+                                 logger:   @logger)
 
-         worker.work
+         worker.work(@queue.timeout)
 
          if worker.successful?
             @queue.delete(worker.id)
@@ -74,26 +72,6 @@ module Procrastinator
       def halt
          @logger&.info("Halted worker on queue: #{ name }")
          @logger&.close
-      end
-
-      private
-
-      def fetch_task
-         tasks = @queue.read(queue: name).map(&:to_h).reject { |t| t[:run_at].nil? }
-
-         metas = sort_tasks(tasks).collect do |t|
-            TaskMetaData.new(t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) })
-         end
-
-         metas.find(&:runnable?)
-      end
-
-      def sort_tasks(tasks)
-         # shuffling and re-sorting to avoid worst case O(n^2) when receiving already sorted data
-         # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
-         # results
-         # Ideally, we'd use a better algo than qsort for this, but this will do for now
-         tasks.shuffle.sort_by { |t| t[:run_at] }
       end
    end
 

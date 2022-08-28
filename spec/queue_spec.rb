@@ -5,7 +5,7 @@ require 'spec_helper'
 module Procrastinator
    describe Queue do
       let(:test_task) { Test::Task::AllHooks }
-      let(:persister) { fake_persister([]) }
+      let(:persister) { fake_persister([{id: 1, run_at: 1}]) }
 
       describe '#initialize' do
          let(:basic_queue) do
@@ -225,15 +225,158 @@ module Procrastinator
          end
       end
 
-      describe '#task_handler' do
+      describe 'next_task' do
+         let(:task_class) do
+            Class.new do
+               def run
+               end
+            end
+         end
+
+         it 'should restore the stored scheduling metadata' do
+            saved_metadata = {
+                  id:             double('id'),
+                  run_at:         double('run_at', to_i: 5),
+                  initial_run_at: double('initial', to_i: 6),
+                  expire_at:      double('expiry', to_i: 7),
+            }
+
+            queue = Queue.new(name: :email, task_class: test_task, store: fake_persister([saved_metadata]))
+
+            _task, meta = queue.next_task
+
+            expect(meta.id).to eq saved_metadata[:id]
+            expect(meta.run_at).to eq 5
+            expect(meta.initial_run_at).to eq 6
+            expect(meta.expire_at).to eq 7
+         end
+
+         it 'should restore the stored failure metadata' do
+            # need a nonzero run_at to not be ignored
+            saved_metadata = {
+                  run_at:       10,
+                  attempts:     8,
+                  last_error:   double('last error'),
+                  last_fail_at: double('last fail at')
+            }
+
+            queue = Queue.new(name: :email, task_class: test_task, store: fake_persister([saved_metadata]))
+
+            _task, meta = queue.next_task
+
+            expect(meta.attempts).to eq saved_metadata[:attempts]
+            expect(meta.last_error).to eq saved_metadata[:last_error]
+            expect(meta.last_fail_at).to eq saved_metadata[:last_fail_at]
+         end
+
+         it 'should restore the stored task data' do
+            data = {some_data: 5}
+            # need a nonzero run_at to not be ignored
+            saved_metadata = {
+                  run_at: 10,
+                  data:   JSON.dump(data)
+            }
+
+            queue = Queue.new(name: :email, task_class: test_task, store: fake_persister([saved_metadata]))
+
+            _task, meta = queue.next_task
+
+            expect(meta.data).to eq data
+         end
+
+         it 'should pass the TaskMetaData the queue definition' do
+            queue = Queue.new(name: :email, task_class: task_class, store: fake_persister([{run_at: 1}]))
+
+            _, metadata = queue.next_task
+            expect(metadata.queue).to eq queue
+         end
+
+         it 'should ignore any unused or unknown fields' do
+            task_data = {id:     1,
+                         queue:  double('queue'),
+                         run_at: double('run_at', to_i: 2),
+                         bogus:  double('bogus')}
+
+            queue = Queue.new(name: :email, task_class: task_class, store: fake_persister([task_data]))
+
+            expect { queue.next_task }.to_not raise_error
+         end
+
+         it 'should filter tasks by the queue name' do
+            persister = fake_persister([{id: 1, run_at: 1, queue: :reminder},
+                                        {id: 2, run_at: 2, queue: :email},
+                                        {id: 3, run_at: 3, queue: :welcome}])
+
+            queue = Queue.new(name: :email, task_class: task_class, store: persister)
+
+            expect(persister).to receive(:read).with(queue: queue.name)
+
+            queue.next_task
+         end
+
+         it 'should ignore unready tasks' do
+            now = Time.now
+
+            task_meta1 = {id: 1, run_at: now + 1}
+            task_meta2 = {id: 2, run_at: now}
+            task_meta3 = {id: 1, run_at: now + 3}
+
+            queue = Queue.new(name:       :email,
+                              task_class: task_class,
+                              store:      fake_persister([task_meta1,
+                                                          task_meta2,
+                                                          task_meta3]))
+
+            Timecop.freeze(now) do
+               _, meta = queue.next_task
+               expect(meta.id).to eq 2
+            end
+         end
+
+         it 'should ignore tasks with nil run_at' do
+            job1 = {id: 4, run_at: nil, initial_run_at: 0}
+            job2 = {id: 5, run_at: 2, initial_run_at: 0}
+
+            persister = double('disorganized persister',
+                               read:   [job2, job1],
+                               create: nil,
+                               update: nil,
+                               delete: nil)
+
+            queue = Queue.new(name: :email, task_class: task_class, store: persister)
+
+            _, meta = queue.next_task
+            expect(meta.id).to eq 5
+         end
+
+         it 'should sort tasks by run_at' do
+            job1 = {id: 1, run_at: 70, initial_run_at: 0}
+            job2 = {id: 2, run_at: 60, initial_run_at: 0}
+            job3 = {id: 3, run_at: 90, initial_run_at: 0}
+
+            persister = double('disorganized persister',
+                               read:   [job2, job1, job3],
+                               create: nil,
+                               update: nil,
+                               delete: nil)
+
+            queue = Queue.new(name: :email, task_class: task_class, store: persister)
+
+            _task, meta = queue.next_task
+
+            expect(meta.id).to eq 2
+         end
+
          it 'should create a new task handler instance' do
             klass = Class.new do
                def run
                end
             end
-            queue = Queue.new(name: :test_queue, task_class: klass)
+            queue = Queue.new(name: :test_queue, task_class: klass, store: persister)
 
-            expect(queue.task_handler).to be_a klass
+            task, _meta = queue.next_task
+
+            expect(task).to be_a klass
          end
 
          it 'should provide no arguments to the constructor' do
@@ -241,11 +384,11 @@ module Procrastinator
                def run
                end
             end
-            queue = Queue.new(name: :test_queue, task_class: klass)
+            queue = Queue.new(name: :test_queue, task_class: klass, store: persister)
 
             expect(klass).to receive(:new).with(no_args)
 
-            queue.task_handler
+            queue.next_task
          end
 
          context 'dependency injection' do
@@ -260,20 +403,23 @@ module Procrastinator
 
             let(:task) { task_class.new }
             let(:meta) { TaskMetaData.new }
-            let(:queue) { Queue.new(name: :test_queue, task_class: task_class) }
+            let(:queue) { Queue.new(name: :test_queue, task_class: task_class, store: persister) }
 
             before(:each) do
                allow(task_class).to receive(:new).and_return(task)
             end
 
-            it 'should provide the data to the new task instance if requested' do
+            it 'should provide the data packet to the new task instance if requested' do
                task_class.task_attr :data
 
-               data = JSON.dump('data here')
+               data      = 'data here'
+               persister = fake_persister([{id: 2, run_at: 2, data: JSON.dump(data)}])
+
+               queue = Queue.new(name: :test_queue, task_class: task_class, store: persister)
 
                expect(task).to receive(:data=).with(data)
 
-               queue.task_handler(data: data)
+               queue.next_task
             end
 
             it 'should provide the container to the new task instance if requested' do
@@ -283,7 +429,7 @@ module Procrastinator
 
                expect(task).to receive(:container=).with(container)
 
-               queue.task_handler(container: container)
+               queue.next_task(container: container)
             end
 
             it 'should provide the logger to the new task instance if requested' do
@@ -293,7 +439,7 @@ module Procrastinator
 
                expect(task).to receive(:logger=).with(logger)
 
-               queue.task_handler(logger: logger)
+               queue.next_task(logger: logger)
             end
 
             it 'should provide the scheduler to the new task instance if requested' do
@@ -303,7 +449,7 @@ module Procrastinator
 
                expect(task).to receive(:scheduler=).with(scheduler)
 
-               queue.task_handler(scheduler: scheduler)
+               queue.next_task(scheduler: scheduler)
             end
          end
       end

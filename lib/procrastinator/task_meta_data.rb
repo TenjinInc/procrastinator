@@ -32,9 +32,10 @@ module Procrastinator
       # These are the attributes expected to be in the persistence mechanism
       EXPECTED_DATA = [:id, :run_at, :initial_run_at, :expire_at, :attempts, :last_error, :last_fail_at, :data].freeze
 
-      attr_reader(*EXPECTED_DATA)
+      attr_reader(*EXPECTED_DATA, :queue)
 
       def initialize(id: nil,
+                     queue: nil,
                      run_at: nil,
                      initial_run_at: nil,
                      expire_at: nil,
@@ -43,6 +44,7 @@ module Procrastinator
                      last_fail_at: nil,
                      data: nil)
          @id             = id
+         @queue          = queue || raise(ArgumentError, 'queue cannot be nil')
          @run_at         = run_at.nil? ? nil : run_at.to_i
          @initial_run_at = initial_run_at.to_i
          @expire_at      = expire_at.nil? ? nil : expire_at.to_i
@@ -67,16 +69,16 @@ module Procrastinator
          @run_at       = nil if final
       end
 
-      def final_fail?(queue)
-         too_many_fails?(queue) || expired?
+      def final_fail?
+         too_many_fails? || expired?
       end
 
       def expired?
          !@expire_at.nil? && Time.now.to_i > @expire_at
       end
 
-      def too_many_fails?(queue)
-         !queue.max_attempts.nil? && @attempts >= queue.max_attempts
+      def too_many_fails?
+         !@queue.max_attempts.nil? && @attempts >= @queue.max_attempts
       end
 
       def runnable?
@@ -105,6 +107,7 @@ module Procrastinator
 
       def to_h
          {id:             @id,
+          queue:          @queue&.name&.to_sym,
           run_at:         @run_at,
           initial_run_at: @initial_run_at,
           expire_at:      @expire_at,

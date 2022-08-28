@@ -314,7 +314,8 @@ module Procrastinator
             time      = Time.now
             expire_at = Time.at 0
 
-            allow(persister).to receive(:read).and_return([TaskMetaData.new(expire_at: expire_at.to_i).to_h])
+            allow(persister).to receive(:read).and_return([TaskMetaData.new(expire_at: expire_at.to_i,
+                                                                            queue:     queue).to_h])
 
             expect do
                update_proxy.to(run_at: time)

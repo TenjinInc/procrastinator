@@ -4,15 +4,30 @@ require 'spec_helper'
 
 module Procrastinator
    describe TaskMetaData do
+      let(:queue) { double('queue') }
+
       describe '#inititalize' do
          let(:task) { double('task', run: nil) }
 
          it 'should store id' do
             id = double('id')
 
-            task = TaskMetaData.new(id: id)
+            task = TaskMetaData.new(id: id, queue: queue)
 
             expect(task.id).to eq id
+         end
+
+         it 'should store queue' do
+            task = TaskMetaData.new(queue: queue)
+
+            expect(task.queue).to eq queue
+         end
+
+         it 'should complain when queue is nil' do
+            expect do
+               TaskMetaData.new(queue: nil)
+               task.queue
+            end.to raise_error ArgumentError
          end
 
          it 'should deserialize data parameter' do
@@ -21,7 +36,7 @@ module Procrastinator
 
             allow(JSON).to receive(:load).with(task_str).and_return(task_data)
 
-            task = TaskMetaData.new(data: task_str)
+            task = TaskMetaData.new(data: task_str, queue: queue)
 
             expect(task.data).to eq task_data
          end
@@ -29,7 +44,7 @@ module Procrastinator
          it 'should convert non-nil run_at, initial_run at, and expire_at to ints' do
             now = Time.now
 
-            task = TaskMetaData.new(run_at: now, initial_run_at: now, expire_at: now)
+            task = TaskMetaData.new(run_at: now, initial_run_at: now, expire_at: now, queue: queue)
 
             expect(task.run_at).to eq now.to_i
             expect(task.initial_run_at).to eq now.to_i
@@ -38,51 +53,51 @@ module Procrastinator
 
          # nil run_at means that it should never be run. Used for final_fail marking
          it 'should NOT convert nil run_at to int' do
-            task = TaskMetaData.new(run_at: nil)
+            task = TaskMetaData.new(run_at: nil, queue: queue)
 
             expect(task.run_at).to eq nil
          end
 
          # so that it doesn't insta-expire
          it 'should NOT convert nil expire_at to int' do
-            task = TaskMetaData.new(expire_at: nil)
+            task = TaskMetaData.new(expire_at: nil, queue: queue)
 
             expect(task.expire_at).to eq nil
          end
 
          it 'should default nil attempts to 0' do
-            task = TaskMetaData.new(attempts: nil)
+            task = TaskMetaData.new(attempts: nil, queue: queue)
             expect(task.attempts).to be 0
          end
       end
 
       describe '#successful?' do
          it 'should return true when #run completes without error' do
-            task = TaskMetaData.new(attempts: 1)
+            task = TaskMetaData.new(attempts: 1, queue: queue)
 
             expect(task.successful?).to be true
          end
 
          it 'should return false if a failure is recorded' do
-            task = TaskMetaData.new(attempts: 1, last_fail_at: Time.now, last_error: 'derp')
+            task = TaskMetaData.new(attempts: 1, last_fail_at: Time.now, last_error: 'asplode', queue: queue)
 
             expect(task.successful?).to be false
          end
 
          it 'should return false if the task is expired' do
-            task = TaskMetaData.new(attempts: 1, expire_at: 0)
+            task = TaskMetaData.new(attempts: 1, expire_at: 0, queue: queue)
 
             expect(task.successful?).to be false
          end
 
          it 'should complain if the task has not been run yet' do
-            task = TaskMetaData.new(attempts: 0)
+            task = TaskMetaData.new(attempts: 0, queue: queue)
 
             expect { task.successful? }.to raise_error(RuntimeError, 'you cannot check for success before running #work')
          end
 
          it 'should NOT complain if the task is expired' do
-            task = TaskMetaData.new(attempts: 0, expire_at: 0)
+            task = TaskMetaData.new(attempts: 0, expire_at: 0, queue: queue)
 
             expect { task.successful? }.to_not raise_error
          end
@@ -92,7 +107,7 @@ module Procrastinator
          let(:now) { Time.now }
 
          it 'should return true when the expiry date has passed' do
-            task = TaskMetaData.new(expire_at: now.to_i - 1)
+            task = TaskMetaData.new(expire_at: now.to_i - 1, queue: queue)
 
             Timecop.freeze(now) do
                expect(task.expired?).to be true
@@ -100,7 +115,7 @@ module Procrastinator
          end
 
          it 'should return false when the expiry date is not set' do
-            task = TaskMetaData.new(expire_at: nil)
+            task = TaskMetaData.new(expire_at: nil, queue: queue)
 
             Timecop.freeze(now) do
                expect(task.expired?).to be false
@@ -108,7 +123,7 @@ module Procrastinator
          end
 
          it 'should return false when the expiry date has not passed' do
-            task = TaskMetaData.new(expire_at: now.to_i)
+            task = TaskMetaData.new(expire_at: now.to_i, queue: queue)
 
             Timecop.freeze(now) do
                expect(task.expired?).to be false
@@ -124,13 +139,13 @@ module Procrastinator
          end
 
          it 'should be true if under the limit' do
-            expect(TaskMetaData.new(attempts: 1).too_many_fails?(queue)).to be false
-            expect(TaskMetaData.new(attempts: 2).too_many_fails?(queue)).to be false
+            expect(TaskMetaData.new(attempts: 1, queue: queue).too_many_fails?).to be false
+            expect(TaskMetaData.new(attempts: 2, queue: queue).too_many_fails?).to be false
          end
 
          it 'should be false if at or above the limit' do
-            expect(TaskMetaData.new(attempts: 3).too_many_fails?(queue)).to be true
-            expect(TaskMetaData.new(attempts: 4).too_many_fails?(queue)).to be true
+            expect(TaskMetaData.new(attempts: 3, queue: queue).too_many_fails?).to be true
+            expect(TaskMetaData.new(attempts: 4, queue: queue).too_many_fails?).to be true
          end
 
          it 'should always be false if nil max_attempts is given' do
@@ -139,14 +154,14 @@ module Procrastinator
                                               max_attempts: nil)
 
             (1..100).each do |i|
-               expect(TaskMetaData.new(attempts: i).too_many_fails?(queue)).to be false
+               expect(TaskMetaData.new(attempts: i, queue: queue).too_many_fails?).to be false
             end
          end
       end
 
       describe '#runnable?' do
          it 'should return true if it is after the run_at' do
-            task = TaskMetaData.new(run_at: 0)
+            task = TaskMetaData.new(run_at: 0, queue: queue)
 
             expect(task.runnable?).to be true
          end
@@ -154,7 +169,7 @@ module Procrastinator
          it 'should return false if it is before the run_at' do
             now = Time.now
 
-            task = TaskMetaData.new(run_at: now + 1)
+            task = TaskMetaData.new(run_at: now + 1, queue: queue)
 
             Timecop.freeze(now) do
                expect(task.runnable?).to be false
@@ -162,7 +177,7 @@ module Procrastinator
          end
 
          it 'should return false if it is marked as final failed' do
-            task = TaskMetaData.new(run_at: nil)
+            task = TaskMetaData.new(run_at: nil, queue: queue)
 
             expect(task.runnable?).to be false
          end
@@ -181,14 +196,17 @@ module Procrastinator
             run_at         = double('run_at', to_i: double('run_at_i'))
             initial_run_at = double('initial_run_at', to_i: double('initial_run_at_i'))
             expire_at      = double('expire_at', to_i: double('expire_at_i'))
+            queue          = double('queue', name: :some_queue)
 
             task = TaskMetaData.new(basics.merge(initial_run_at: initial_run_at,
                                                  run_at:         run_at,
-                                                 expire_at:      expire_at))
+                                                 expire_at:      expire_at,
+                                                 queue:          queue))
 
             expect(task.to_h).to eq(basics.merge(initial_run_at: initial_run_at.to_i,
                                                  run_at:         run_at.to_i,
-                                                 expire_at:      expire_at.to_i))
+                                                 expire_at:      expire_at.to_i,
+                                                 queue:          :some_queue))
          end
       end
    end

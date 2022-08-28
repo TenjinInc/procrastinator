@@ -19,44 +19,36 @@ module Procrastinator
       def_delegators :@metadata,
                      :id, :run_at, :initial_run_at, :expire_at,
                      :attempts, :last_fail_at, :last_error,
-                     :data, :successful?
+                     :data, :successful?, :to_h
 
       attr_reader :task
 
-      def initialize(metadata:, queue:, container: nil, scheduler: nil, logger: Logger.new(StringIO.new))
+      def initialize(metadata:, task:, logger: Logger.new(StringIO.new))
          @metadata = metadata
-         @task     = queue.task_handler(data:      metadata.data,
-                                        container: container,
-                                        logger:    logger,
-                                        scheduler: scheduler)
+         @task     = task
          @logger   = logger
-         @queue    = queue
       end
 
-      def work
+      def work(timeout = nil)
          @metadata.add_attempt
 
          @metadata.verify_expiry!
 
-         result = Timeout.timeout(@queue.timeout) do
+         result = Timeout.timeout(timeout) do
             @task.run
          end
 
-         @logger&.debug("Task completed: #{ @task.class } [#{ @metadata.serialized_data }]")
+         @logger&.debug("Task completed: #{ @metadata.queue.name } [#{ @metadata.serialized_data }]")
 
          @metadata.clear_fails
 
          try_hook(:success, result)
       rescue StandardError => e
-         if @metadata.final_fail?(@queue)
+         if @metadata.final_fail?
             handle_final_failure(e)
          else
             handle_failure(e)
          end
-      end
-
-      def to_h
-         @metadata.to_h.merge(queue: @queue.name.to_sym)
       end
 
       private
@@ -69,7 +61,7 @@ module Procrastinator
 
       def handle_failure(error)
          @metadata.fail(%[Task failed: #{ error.message }\n#{ error.backtrace.join("\n") }])
-         @logger&.debug("Task failed: #{ @queue.name } with #{ @metadata.serialized_data }")
+         @logger&.debug("Task failed: #{ @metadata.queue.name } with #{ @metadata.serialized_data }")
 
          @metadata.reschedule
 

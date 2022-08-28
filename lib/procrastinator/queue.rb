@@ -22,7 +22,7 @@ module Procrastinator
       DEFAULT_MAX_ATTEMPTS  = 20
       DEFAULT_UPDATE_PERIOD = 10 # seconds
 
-      attr_reader :name, :max_attempts, :timeout, :update_period, :task_store
+      attr_reader :name, :max_attempts, :timeout, :update_period, :task_store, :task_class
 
       alias store task_store
       alias storage task_store
@@ -55,13 +55,23 @@ module Procrastinator
          freeze
       end
 
-      def task_handler(data: nil, container: nil, logger: nil, scheduler: nil)
-         handler           = @task_class.new
-         handler.data      = data if handler.respond_to?(:data=)
-         handler.container = container if handler.respond_to?(:container=)
-         handler.logger    = logger if handler.respond_to?(:logger=)
-         handler.scheduler = scheduler if handler.respond_to?(:scheduler=)
-         handler
+      def next_task(logger: nil, container: nil, scheduler: nil)
+         tasks = read(queue: @name).reject { |t| t[:run_at].nil? }
+
+         metas = sort_tasks(tasks).collect do |t|
+            TaskMetaData.new(t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) }.merge(queue: self))
+         end
+
+         metadata = metas.find(&:runnable?)
+
+         return [] unless metadata
+
+         handler = task_handler(data:      metadata.data,
+                                container: container,
+                                logger:    logger,
+                                scheduler: scheduler)
+
+         [handler, metadata]
       end
 
       def create(run_at:, initial_run_at:, expire_at:, data:)
@@ -92,6 +102,23 @@ module Procrastinator
       end
 
       private
+
+      def task_handler(data: nil, container: nil, logger: nil, scheduler: nil)
+         handler           = @task_class.new
+         handler.data      = data if handler.respond_to?(:data=)
+         handler.container = container if handler.respond_to?(:container=)
+         handler.logger    = logger if handler.respond_to?(:logger=)
+         handler.scheduler = scheduler if handler.respond_to?(:scheduler=)
+         handler
+      end
+
+      def sort_tasks(tasks)
+         # shuffling and re-sorting to avoid worst case O(n^2) when receiving already sorted data
+         # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
+         # results
+         # Ideally, we'd use a better algo than qsort for this, but this will do for now
+         tasks.shuffle.sort_by { |t| t[:run_at] }
+      end
 
       def verify_task_class(task_class)
          unless task_class.method_defined? :run

@@ -167,7 +167,7 @@ module Procrastinator
                   c.define_queue(:test1, test_task)
                end
 
-               expect(config.queue(name: :test1).task_handler).to be_a test_task
+               expect(config.queue(name: :test1).task_class).to be test_task
             end
 
             it 'should require that the queue task class NOT be nil' do
@@ -201,17 +201,9 @@ module Procrastinator
             it 'should add a queue with the given update_period' do
                config = Config.new do |c|
                   c.define_queue(:test1, test_task, update_period: 4)
-                  c.define_queue(:test2, test_task, update_period: 8)
                end
 
-               queue1 = config.queues.first || raise('queue missing')
-               queue2 = config.queues.last || raise('queue missing')
-
-               expect(queue1.update_period).to eq 4
-               expect(queue1.task_handler).to be_a test_task
-
-               expect(queue2.update_period).to eq 8
-               expect(queue2.task_handler).to be_a test_task
+               expect(config.queue(name: :test1).update_period).to eq 4
             end
 
             context 'storage' do
