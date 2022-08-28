@@ -566,7 +566,7 @@ module Procrastinator
          it 'should NOT close its logger if nil' do
             expect(logger).to_not receive(:close)
 
-            worker = QueueWorker.new(queue: :some_queue, config: config)
+            worker = QueueWorker.new(queue: :reminders, config: config)
             worker.halt
          end
 

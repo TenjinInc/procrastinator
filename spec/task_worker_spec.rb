@@ -10,8 +10,12 @@ module Procrastinator
       let(:final_fail_queue) { Procrastinator::Queue.new(name: :fail_queue, task_class: Test::Task::Fail, max_attempts: 0) }
 
       describe '#inititalize' do
-         let(:task_instance) { double('task', run: nil) }
-         let(:task_class) { double('task class', new: task_instance) }
+         let(:task_class) do
+            Class.new do
+               def run
+               end
+            end
+         end
          let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: task_class, store: fake_persister) }
 
          it 'should complain when no queue is given' do
@@ -20,95 +24,85 @@ module Procrastinator
             end.to raise_error(ArgumentError, 'missing keyword: queue')
          end
 
-         it 'should complain if task does not support #run' do
-            task       = double('task instance')
-            task_class = double('BadTaskClass', new: task)
+         it 'should request a task handler from the queue definition' do
+            task_instance = double('task handler')
+            allow(task_class).to receive(:new).and_return task_instance
 
-            queue = Procrastinator::Queue.new(name:       :test_queue, store: fake_persister,
-                                              task_class: task_class)
+            worker = TaskWorker.new(metadata: TaskMetaData.new, queue: queue)
 
-            expect do
-               TaskWorker.new(metadata: meta, queue: queue)
-            end.to raise_error(MalformedTaskError, "task #{ task.class } does not support #run method")
+            expect(worker.task).to be task_instance
          end
 
-         it 'should build a new task instance using the queue settings' do
-            meta = TaskMetaData.new
+         # TODO: I think these 4 can be extracted to the caller
+         it 'should supply the task data to the task handler' do
+            task_class = Class.new do
+               attr_accessor :data
 
-            expect(task_class).to receive(:new).with(no_args)
-
-            TaskWorker.new(metadata: meta, queue: queue)
-         end
-
-         context 'data injection' do
-            let(:task_class) do
-               Class.new do
-                  include Procrastinator::Task
-
-                  def run
-                  end
+               def run
                end
             end
 
-            let(:task) { task_class.new }
-            let(:meta) { TaskMetaData.new }
+            queue = Queue.new(name: :test_queue, task_class: task_class)
 
-            before(:each) do
-               allow(task_class).to receive(:new).and_return(task)
+            data   = {some: 'task data'}
+            worker = TaskWorker.new(metadata: TaskMetaData.new(data: JSON.dump(data)),
+                                    queue:    queue)
+
+            expect(worker.task.data).to eq data
+         end
+
+         it 'should supply the logger to the task handler' do
+            task_class = Class.new do
+               attr_accessor :logger
+
+               def run
+               end
             end
 
-            it 'should provide the data to the new task instance if requested' do
-               task_class.task_attr :data
+            queue = Queue.new(name: :test_queue, task_class: task_class)
 
-               meta = TaskMetaData.new(data: JSON.dump('data here'))
+            logger = double('logger')
+            worker = TaskWorker.new(metadata: TaskMetaData.new,
+                                    logger:   logger,
+                                    queue:    queue)
 
-               queue = Procrastinator::Queue.new(name:       :test_queue,
-                                                 task_class: task_class, store: fake_persister)
+            expect(worker.task.logger).to eq logger
+         end
 
-               expect(task).to receive(:data=).with(meta.data)
+         it 'should supply the container to the task handler' do
+            task_class = Class.new do
+               attr_accessor :container
 
-               TaskWorker.new(metadata: meta, queue: queue)
+               def run
+               end
             end
 
-            it 'should provide the container to the new task instance if requested' do
-               task_class.task_attr :container
+            queue = Queue.new(name: :test_queue, task_class: task_class)
 
-               container = double('container')
+            container = double('container')
+            worker    = TaskWorker.new(metadata:  TaskMetaData.new,
+                                       container: container,
+                                       queue:     queue)
 
-               queue = Procrastinator::Queue.new(name:       :test_queue,
-                                                 task_class: task_class)
+            expect(worker.task.container).to eq container
+         end
 
-               expect(task).to receive(:container=).with(container)
+         it 'should supply the scheduler to the task handler' do
+            task_class = Class.new do
+               attr_accessor :scheduler
 
-               TaskWorker.new(metadata: meta, queue: queue, container: container)
+               def run
+               end
             end
 
-            it 'should provide the logger to the new task instance if requested' do
-               task_class.task_attr :logger
+            queue = Queue.new(name: :test_queue, task_class: task_class)
 
-               logger = Logger.new(StringIO.new)
+            scheduler = double('scheduler')
+            worker    = TaskWorker.new(metadata:  TaskMetaData.new,
+                                       scheduler: scheduler,
+                                       queue:     queue)
 
-               expect(Logger).to receive(:new).and_return(logger)
-
-               queue = Procrastinator::Queue.new(name:       :test_queue,
-                                                 task_class: task_class)
-
-               expect(task).to receive(:logger=).with(logger)
-
-               TaskWorker.new(metadata: meta, queue: queue)
-            end
-
-            it 'should provide the scheduler to the new task instance if requested' do
-               task_class.task_attr :scheduler
-
-               scheduler = double('scheduler')
-
-               expect(task).to receive(:scheduler=).with(scheduler)
-
-               TaskWorker.new(metadata:  meta,
-                              queue:     queue,
-                              scheduler: scheduler)
-            end
+            expect(worker.task.scheduler).to eq scheduler
          end
       end
 
@@ -430,10 +424,11 @@ module Procrastinator
 
             it 'should log #fail at debug level' do
                data       = 'itsa me, a data-o'
-               task       = double('task')
-               task_class = double('task class', new: task)
-
-               allow(task).to receive(:run).and_raise('derp')
+               task_class = Class.new do
+                  def run
+                     raise 'asplode'
+                  end
+               end
 
                logger = Logger.new(StringIO.new)
 
@@ -600,7 +595,7 @@ module Procrastinator
 
       describe '#to_h' do
          it 'should return the task hash and queue name' do
-            queue          = double(name: :some_queue, task_class: Test::Task::AllHooks)
+            queue          = double(name: :some_queue, task_handler: Test::Task::AllHooks.new)
             run_at         = double('run_at_i')
             initial_run_at = double('initial_run_at_i')
             expire_at      = double('expire_at_i')
@@ -618,7 +613,8 @@ module Procrastinator
                                     run_at:         double('run_at', to_i: run_at),
                                     expire_at:      double('expire_at', to_i: expire_at))
 
-            worker = TaskWorker.new(metadata: task, queue: queue)
+            worker = TaskWorker.new(metadata: task,
+                                    queue:    queue)
 
             expect(worker.to_h).to include(attempts:       attempts,
                                            run_at:         run_at,

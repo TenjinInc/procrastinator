@@ -18,19 +18,16 @@ module Procrastinator
       # @param data [Hash, Array, String, Integer] Optional simple data object to be provided to the task on execution.
       # @param expire_at [Time, Integer] Optional time when the task should be abandoned
       def delay(queue_name = nil, data: nil, run_at: Time.now.to_i, expire_at: nil)
-         verify_queue_arg!(queue_name)
-
-         queue_name = @config.queue.name if @config.single_queue?
-
-         verify_queue_data!(queue_name, data)
+         raise ArgumentError, <<~ERR unless queue_name.nil? || queue_name.is_a?(Symbol)
+            must provide a queue name as the first argument. Received: #{ queue_name }
+         ERR
 
          queue = @config.queue(name: queue_name)
 
-         queue.create(queue:          queue_name.to_s,
-                      run_at:         run_at.to_i,
+         queue.create(run_at:         run_at.to_i,
                       initial_run_at: run_at.to_i,
                       expire_at:      expire_at.nil? ? nil : expire_at.to_i,
-                      data:           JSON.dump(data))
+                      data:           data)
       end
 
       # Alters an existing task to run at a new time, expire at a new time, or both.
@@ -295,36 +292,6 @@ module Procrastinator
       end
 
       private
-
-      def verify_queue_arg!(queue_name)
-         raise ArgumentError, <<~ERR if !queue_name.nil? && !queue_name.is_a?(Symbol)
-            must provide a queue name as the first argument. Received: #{ queue_name }
-         ERR
-
-         raise ArgumentError, <<~ERR if queue_name.nil? && !@config.single_queue?
-            queue must be specified when more than one is registered. Defined queues are: #{ @config.queues_string }
-         ERR
-      end
-
-      def verify_queue_data!(queue_name, data)
-         queue = @config.queue(name: queue_name)
-
-         unless queue
-            queue_list = @config.queues_string
-            raise ArgumentError, "there is no :#{ queue_name } queue registered. Defined queues are: #{ queue_list }"
-         end
-
-         if data.nil?
-            if queue.task_class.method_defined?(:data=)
-               raise ArgumentError, "task #{ queue.task_class } expects to receive :data. Provide :data to #delay."
-            end
-         elsif !queue.task_class.method_defined?(:data=)
-            raise ArgumentError, <<~ERROR
-               task #{ queue.task_class } does not import :data. Add this in your class definition:
-                     task_attr :data
-            ERROR
-         end
-      end
 
       # Find Queues that match the given queue names, or all queues if no names provided.
       # @param :queue_names [Array<String,Symbol>] List of queue names to match. If empty, will return all queues.

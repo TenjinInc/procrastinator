@@ -71,8 +71,6 @@ module Procrastinator
             raise ArgumentError, 'queue name cannot be nil' if name.nil?
             raise ArgumentError, 'queue task class cannot be nil' if task_class.nil?
 
-            verify_task_class(task_class)
-
             properties[:store] = interpret_store(properties[:store]) if properties.key? :store
 
             @queues << Queue.new({name: name, task_class: task_class, store: @default_store}.merge(properties))
@@ -94,26 +92,34 @@ module Procrastinator
 
       include DSL
 
-      def queues_string
-         # it drops the colon if you call #to_s on a symbol, so we need to add it back
-         @queues.map { |queue| ":#{ queue.name }" }.join(', ')
-      end
-
       def single_queue?
          @queues.size == 1
       end
 
       def queue(name: nil)
-         if name
-            @queues.find do |q|
-               q.name == name
-            end
-         else
-            @queues.first
-         end
+         queue = if name
+                    @queues.find do |q|
+                       q.name == name
+                    end
+                 else
+                    if name.nil? && @queues.length > 1
+                       raise ArgumentError,
+                             "queue must be specified when more than one is defined. #{ known_queues }"
+                    end
+
+                    @queues.first
+                 end
+
+         raise ArgumentError, "there is no :#{ name } queue registered. #{ known_queues }" unless queue
+
+         queue
       end
 
       private
+
+      def known_queues
+         "Known queues are: #{ @queues.map { |queue| ":#{ queue.name }" }.join(', ') }"
+      end
 
       def interpret_store(store)
          raise(ArgumentError, 'task store cannot be nil') if store.nil?
@@ -130,32 +136,6 @@ module Procrastinator
             TaskStore::SimpleCommaStore.new(store)
          else
             store
-         end
-      end
-
-      def verify_task_class(task_class)
-         unless task_class.method_defined? :run
-            raise MalformedTaskError, "task #{ task_class } does not support #run method"
-         end
-
-         # Checking the interface compliance on init because it's one of those rare cases where you'd want to know early
-         # Otherwise, you wouldn't know until task execution, which could be far in the future.
-         # Always nice to catch errors when you can predict them because UX is important for devs, too. - retm
-         if task_class.method_defined?(:run) && task_class.instance_method(:run).arity.positive?
-            err = "task #{ task_class } cannot require parameters to its #run method"
-
-            raise MalformedTaskError, err
-         end
-
-         expected_arity = 1
-
-         [:success, :fail, :final_fail].each do |method_name|
-            next unless task_class.method_defined?(method_name)
-            next if task_class.instance_method(method_name).arity == expected_arity
-
-            err = "task #{ task_class } must accept #{ expected_arity } parameter to its ##{ method_name } method"
-
-            raise MalformedTaskError, err
          end
       end
    end

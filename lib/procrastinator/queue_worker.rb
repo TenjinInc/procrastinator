@@ -55,9 +55,9 @@ module Procrastinator
          return unless metadata
 
          worker = TaskWorker.new(metadata:  metadata,
-                                 queue:     @queue,
                                  scheduler: @scheduler,
                                  container: @config.container,
+                                 queue:     @queue,
                                  logger:    @logger)
 
          worker.work

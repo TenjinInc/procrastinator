@@ -168,33 +168,6 @@ module Procrastinator
          end
       end
 
-      describe '#init_task' do
-         it 'should pass no parameters if no data' do
-            meta       = TaskMetaData.new(data: nil)
-            task_class = double('klass')
-
-            expect(task_class).to receive(:new).with(no_args)
-
-            queue = double('queue', task_class: task_class)
-
-            meta.init_task(queue)
-         end
-
-         it 'should pass in the data to the task initialization if data' do
-            data = 'task data'
-            allow(JSON).to receive(:load).and_return(data)
-
-            meta       = TaskMetaData.new(data: JSON.dump(data))
-            task_class = double('klass')
-
-            expect(task_class).to receive(:new).with(data)
-
-            queue = double('queue', task_class: task_class)
-
-            meta.init_task(queue)
-         end
-      end
-
       describe '#to_h' do
          it 'should return the properties as a hash' do
             basics = {

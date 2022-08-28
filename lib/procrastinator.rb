@@ -36,7 +36,7 @@ module Procrastinator
 
       raise SetupError, SetupError::ERR_NO_QUEUE if config.queues.empty?
 
-      if config.container && config.queues.none? { |queue| queue.task_class.method_defined?(:container=) }
+      if config.container && config.queues.none? { |queue| queue.expects_container? }
          raise SetupError, SetupError::ERR_UNUSED_CONTAINER
       end
 

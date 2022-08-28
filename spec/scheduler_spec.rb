@@ -44,30 +44,6 @@ module Procrastinator
             scheduler.delay(:reminders, expire_at: double('time_object', to_i: expire_stamp))
          end
 
-         it 'should record a task with serialized task data' do
-            task_with_data = Class.new do
-               include Task
-
-               task_attr :data
-
-               def run
-               end
-            end
-
-            config = Config.new do |c|
-               c.define_queue(:data_queue, task_with_data, store: persister)
-            end
-
-            scheduler = Scheduler.new(config)
-
-            data = double('some_data')
-
-            # these are, at the moment, all of the arguments the dev can pass in
-            expect(persister).to receive(:create).with(include(data: JSON.dump(data)))
-
-            scheduler.delay(:data_queue, data: data)
-         end
-
          it 'should complain if they provide NO :data but the task expects it' do
             test_task = Class.new do
                include Procrastinator::Task
@@ -87,28 +63,6 @@ module Procrastinator
             err = %[task #{ test_task } expects to receive :data. Provide :data to #delay.]
 
             expect { scheduler.delay(:data_queue) }.to raise_error(ArgumentError, err)
-         end
-
-         it 'should complain if they provide :data but the task does NOT import it' do
-            test_task = Class.new do
-               include Procrastinator::Task
-
-               def run
-               end
-            end
-
-            config = Config.new do |c|
-               c.define_queue(:data_queue, test_task, store: persister)
-            end
-
-            scheduler = Scheduler.new(config)
-
-            err = <<~ERROR
-               task #{ test_task } does not import :data. Add this in your class definition:
-                     task_attr :data
-            ERROR
-
-            expect { scheduler.delay(:data_queue, data: 'some data') }.to raise_error(ArgumentError, err)
          end
 
          it 'should default run_at to now' do
@@ -152,52 +106,6 @@ module Procrastinator
                expect do
                   scheduler.delay(:reminders)
                end.to_not raise_error
-            end
-         end
-
-         context 'only one queue' do
-            let(:config) do
-               Config.new do |c|
-                  c.define_queue(:the_only_queue, test_task, store: persister)
-               end
-            end
-
-            it 'should NOT require queue be provided if only one queue is defined' do
-               expect { scheduler.delay(:reminders) }.to_not raise_error
-            end
-
-            it 'should assume the queue name if only one queue is defined' do
-               expect(persister).to receive(:create).with(hash_including(queue: :the_only_queue.to_s))
-
-               scheduler.delay(:reminders)
-            end
-         end
-         context 'multiple queues' do
-            let(:config) do
-               Config.new do |c|
-                  c.with_store persister do
-                     c.define_queue(:first_queue, test_task)
-                     c.define_queue(:second_queue, test_task)
-                     c.define_queue(:third_queue, test_task)
-                  end
-               end
-            end
-
-            it 'should require queue be provided' do
-               expect { scheduler.delay(run_at: 0) }.to raise_error ArgumentError, <<~ERR
-                  queue must be specified when more than one is registered. Defined queues are: :first_queue, :second_queue, :third_queue
-               ERR
-
-               # also test the negative
-               expect { scheduler.delay(:first_queue, run_at: 0) }.to_not raise_error
-            end
-         end
-
-         it 'should complain when the given queue is not registered' do
-            [:bogus, :other_bogus].each do |name|
-               err = %[there is no :#{ name } queue registered. Defined queues are: :emails, :reminders]
-
-               expect { scheduler.delay(name) }.to raise_error(ArgumentError, err)
             end
          end
 
@@ -722,8 +630,7 @@ module Procrastinator
       # (useful for normal background operations in production)
       context '#daemonized!' do
          let(:worker_proxy) do
-            Scheduler::WorkProxy.new([QueueWorker.new(queue:  :test_queue,
-                                                      config: config)])
+            Scheduler::WorkProxy.new([QueueWorker.new(queue: :second, config: config)])
          end
 
          before(:each) do

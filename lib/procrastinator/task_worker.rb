@@ -21,46 +21,37 @@ module Procrastinator
                      :attempts, :last_fail_at, :last_error,
                      :data, :successful?
 
-      def initialize(metadata:,
-                     queue:,
-                     logger: Logger.new(StringIO.new),
-                     container: nil,
-                     scheduler: nil)
-         @queue = queue
+      attr_reader :task
 
+      def initialize(metadata:, queue:, container: nil, scheduler: nil, logger: Logger.new(StringIO.new))
          @metadata = metadata
-         @task     = queue.task_class.new
-
-         @logger    = logger
-         @container = container
-         @scheduler = scheduler
-
-         assign_task_variables
-
-         raise MalformedTaskError, "task #{ @task.class } does not support #run method" unless @task.respond_to? :run
+         @task     = queue.task_handler(data:      metadata.data,
+                                        container: container,
+                                        logger:    logger,
+                                        scheduler: scheduler)
+         @logger   = logger
+         @queue    = queue
       end
 
       def work
          @metadata.add_attempt
 
-         begin
-            @metadata.verify_expiry!
+         @metadata.verify_expiry!
 
-            result = Timeout.timeout(@queue.timeout) do
-               @task.run
-            end
+         result = Timeout.timeout(@queue.timeout) do
+            @task.run
+         end
 
-            @logger&.debug("Task completed: #{ @task.class } [#{ @metadata.serialized_data }]")
+         @logger&.debug("Task completed: #{ @task.class } [#{ @metadata.serialized_data }]")
 
-            @metadata.clear_fails
+         @metadata.clear_fails
 
-            try_hook(:success, result)
-         rescue StandardError => e
-            if @metadata.final_fail?(@queue)
-               handle_final_failure(e)
-            else
-               handle_failure(e)
-            end
+         try_hook(:success, result)
+      rescue StandardError => e
+         if @metadata.final_fail?(@queue)
+            handle_final_failure(e)
+         else
+            handle_failure(e)
          end
       end
 
@@ -69,13 +60,6 @@ module Procrastinator
       end
 
       private
-
-      def assign_task_variables
-         @task.data      = @metadata.data if @task.respond_to?(:data=)
-         @task.container = @container if @task.respond_to?(:container=)
-         @task.logger    = @logger if @task.respond_to?(:logger=)
-         @task.scheduler = @scheduler if @task.respond_to?(:scheduler=)
-      end
 
       def try_hook(method, *params)
          @task.send(method, *params) if @task.respond_to? method
@@ -102,8 +86,5 @@ module Procrastinator
 
          try_hook(:final_fail, error)
       end
-   end
-
-   class MalformedTaskError < StandardError
    end
 end

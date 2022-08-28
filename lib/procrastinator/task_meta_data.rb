@@ -52,10 +52,6 @@ module Procrastinator
          @data           = data ? JSON.parse(data, symbolize_names: true) : nil
       end
 
-      def init_task(queue)
-         @data ? queue.task_class.new(@data) : queue.task_class.new
-      end
-
       def add_attempt
          @attempts += 1
       end

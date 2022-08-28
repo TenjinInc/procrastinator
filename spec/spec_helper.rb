@@ -35,7 +35,7 @@ module Procrastinator
       end
 
       module Task
-         module MissingParam
+         module Malformed
             class ArgRun
                def run(_params)
                end

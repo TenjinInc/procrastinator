@@ -167,9 +167,7 @@ module Procrastinator
                   c.define_queue(:test1, test_task)
                end
 
-               queue = config.queues.first
-
-               expect(queue&.task_class).to eq test_task
+               expect(config.queue(name: :test1).task_handler).to be_a test_task
             end
 
             it 'should require that the queue task class NOT be nil' do
@@ -210,10 +208,10 @@ module Procrastinator
                queue2 = config.queues.last || raise('queue missing')
 
                expect(queue1.update_period).to eq 4
-               expect(queue1.task_class).to eq test_task
+               expect(queue1.task_handler).to be_a test_task
 
                expect(queue2.update_period).to eq 8
-               expect(queue2.task_class).to eq test_task
+               expect(queue2.task_handler).to be_a test_task
             end
 
             context 'storage' do
@@ -268,73 +266,6 @@ module Procrastinator
                         c.define_queue(:test1, test_task, store: nil)
                      end
                   end.to raise_error(ArgumentError, 'task store cannot be nil')
-               end
-            end
-
-            context 'task requirements' do
-               it 'should complain if the task class does NOT support #run' do
-                  klass = double('bad_task_class')
-
-                  allow(klass).to receive(:method_defined?) do |name|
-                     name != :run
-                  end
-
-                  expect do
-                     Config.new do |c|
-                        c.define_queue(:test_queue, klass)
-                     end
-                  end.to raise_error(MalformedTaskError, "task #{ klass } does not support #run method")
-               end
-
-               it 'should complain if task #run expects parameters' do
-                  klass = Procrastinator::Test::Task::MissingParam::ArgRun
-
-                  err = "task #{ klass } cannot require parameters to its #run method"
-
-                  expect do
-                     Config.new do |c|
-                        c.define_queue(:test_queue, klass)
-                     end
-                  end.to raise_error(MalformedTaskError, err)
-               end
-
-               it 'should complain if task does NOT accept 1 parameter to #success' do
-                  [Procrastinator::Test::Task::MissingParam::NoArgSuccess,
-                   Procrastinator::Test::Task::MissingParam::MultiArgSuccess].each do |klass|
-                     err = "task #{ klass } must accept 1 parameter to its #success method"
-
-                     expect do
-                        Config.new do |c|
-                           c.define_queue(:test_queue, klass)
-                        end
-                     end.to raise_error(MalformedTaskError, err)
-                  end
-               end
-
-               it 'should complain if task does NOT accept 1 parameter in #fail' do
-                  [Procrastinator::Test::Task::MissingParam::NoArgFail,
-                   Procrastinator::Test::Task::MissingParam::MultiArgFail].each do |klass|
-                     err = "task #{ klass } must accept 1 parameter to its #fail method"
-
-                     expect do
-                        Config.new do |c|
-                           c.define_queue(:test_queue, klass)
-                        end
-                     end.to raise_error(MalformedTaskError, err)
-                  end
-               end
-
-               it 'should complain if task does NOT accept 1 parameter in #final_fail' do
-                  [Procrastinator::Test::Task::MissingParam::NoArgFinalFail,
-                   Procrastinator::Test::Task::MissingParam::MultiArgFinalFail].each do |klass|
-                     err = "task #{ klass } must accept 1 parameter to its #final_fail method"
-
-                     expect do
-                        Config.new do |c|
-                           c.define_queue(:test_queue, klass)
-                        end
-                     end.to raise_error(MalformedTaskError, err)
-                  end
                end
             end
          end
@@ -409,23 +340,59 @@ module Procrastinator
          end
       end
 
-      describe '#queues_string' do
-         it 'should return queue names with symbol formatting' do
+      describe 'queue' do
+         it 'should return the queue matching the given name' do
             config = Config.new do |c|
-               c.define_queue(:test1, test_task)
+               c.define_queue(:reminder, test_task)
+               c.define_queue(:thumbnail, test_task)
+               c.define_queue(:welcome, test_task)
             end
 
-            expect(config.queues_string).to eq ':test1'
+            queue = config.queue(name: :thumbnail)
+            expect(queue).to_not be_nil
+            expect(queue.name).to eq :thumbnail
          end
 
-         it 'should return queue names in a comma list' do
+         it 'should no require the name be specified when only one queue' do
             config = Config.new do |c|
-               c.define_queue(:test1, test_task)
-               c.define_queue(:test2, test_task)
-               c.define_queue(:test3, test_task)
+               c.define_queue(:thumbnail, test_task)
             end
 
-            expect(config.queues_string).to eq ':test1, :test2, :test3'
+            queue = config.queue
+            expect(queue).to_not be_nil
+            expect(queue.name).to eq :thumbnail
+         end
+
+         it 'should complain when it is ambiguous' do
+            [[:email, :thumbnail],
+             [:reminder, :welcome]].each do |queues|
+               config = Config.new do |c|
+                  c.define_queue(queues.first, test_task)
+                  c.define_queue(queues.last, test_task)
+               end
+
+               err = "queue must be specified when more than one is defined. Known queues are: :#{ queues.first }, :#{ queues.last }"
+
+               expect { config.queue }.to raise_error ArgumentError, err
+            end
+         end
+
+         it 'should complain when the requested queue is not registered' do
+            [[:email, :thumbnail],
+             [:reminder, :welcome]].each do |queues|
+               config = Config.new do |c|
+                  c.define_queue(queues.first, test_task)
+                  c.define_queue(queues.last, test_task)
+               end
+
+               defined_str = "Known queues are: :#{ queues.first }, :#{ queues.last }"
+
+               err = %[there is no :bogus queue registered. #{ defined_str }]
+               expect { config.queue(name: :bogus) }.to raise_error(ArgumentError, err)
+
+               err = %[there is no :other_bogus queue registered. #{ defined_str }]
+               expect { config.queue(name: :other_bogus) }.to raise_error(ArgumentError, err)
+            end
          end
       end
 
