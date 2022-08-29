@@ -164,7 +164,7 @@ module Procrastinator
             expect(basic_queue.update_period).to eq Queue::DEFAULT_UPDATE_PERIOD
          end
 
-         context 'task class' do
+         context 'task class interface' do
             it 'should complain if task does not support #run' do
                task_class = Class.new do
                   # bad task
@@ -176,7 +176,10 @@ module Procrastinator
             end
 
             it 'should complain if task #run expects parameters' do
-               klass = Procrastinator::Test::Task::Malformed::ArgRun
+               klass = Class.new do
+                  def run(_params)
+                  end
+               end
 
                err = "task #{ klass } cannot require parameters to its #run method"
 
@@ -185,9 +188,90 @@ module Procrastinator
                end.to raise_error(MalformedTaskError, err)
             end
 
+            # Data is verified on calls to #delay and is therefore optional in the duck-typing interface
+            it 'should NOT complain if task does not accept a data packet' do
+               task_class = Class.new do
+                  attr_accessor :scheduler, :container, :logger
+
+                  def run
+                  end
+               end
+
+               expect do
+                  Queue.new(name: :test_queue, task_class: task_class)
+               end.to_not raise_error
+            end
+
+            it 'should complain if task does not accept a logger' do
+               task_class = Class.new do
+                  attr_accessor :data, :scheduler, :container
+
+                  def run
+                  end
+               end
+
+               expect do
+                  Queue.new(name: :test_queue, task_class: task_class)
+               end.to raise_error MalformedTaskError, <<~ERR
+                  Task handler is missing a logger accessor. Add this to the #{ task_class } class definition:
+                     attr_accessor :logger, :container, :scheduler
+               ERR
+            end
+
+            it 'should complain if task does not accept a scheduler' do
+               task_class = Class.new do
+                  attr_accessor :data, :container, :logger
+
+                  def run
+                  end
+               end
+
+               expect do
+                  Queue.new(name: :test_queue, task_class: task_class)
+               end.to raise_error MalformedTaskError, <<~ERR
+                  Task handler is missing a scheduler accessor. Add this to the #{ task_class } class definition:
+                     attr_accessor :logger, :container, :scheduler
+               ERR
+            end
+
+            it 'should complain if task does not accept a container' do
+               task_class = Class.new do
+                  attr_accessor :data, :scheduler, :logger
+
+                  def run
+                  end
+               end
+
+               expect do
+                  Queue.new(name: :test_queue, task_class: task_class)
+               end.to raise_error MalformedTaskError, <<~ERR
+                  Task handler is missing a container accessor. Add this to the #{ task_class } class definition:
+                     attr_accessor :logger, :container, :scheduler
+               ERR
+            end
+
             it 'should complain if task does NOT accept 1 parameter to #success' do
-               [Procrastinator::Test::Task::Malformed::NoArgSuccess,
-                Procrastinator::Test::Task::Malformed::MultiArgSuccess].each do |klass|
+               no_arg_success = Class.new do
+                  attr_accessor :container, :logger, :scheduler
+
+                  def run
+                  end
+
+                  def success
+                  end
+               end
+
+               multi_arg_success = Class.new do
+                  attr_accessor :container, :logger, :scheduler
+
+                  def run
+                  end
+
+                  def success(_arg1, _arg2)
+                  end
+               end
+
+               [no_arg_success, multi_arg_success].each do |klass|
                   err = "task #{ klass } must accept 1 parameter to its #success method"
 
                   expect do
@@ -197,8 +281,27 @@ module Procrastinator
             end
 
             it 'should complain if task does NOT accept 1 parameter in #fail' do
-               [Procrastinator::Test::Task::Malformed::NoArgFail,
-                Procrastinator::Test::Task::Malformed::MultiArgFail].each do |klass|
+               no_arg_fail = Class.new do
+                  attr_accessor :container, :logger, :scheduler
+
+                  def run
+                  end
+
+                  def fail
+                  end
+               end
+
+               multi_arg_fail = Class.new do
+                  attr_accessor :container, :logger, :scheduler
+
+                  def run
+                  end
+
+                  def fail(_arg1, _arg2)
+                  end
+               end
+
+               [no_arg_fail, multi_arg_fail].each do |klass|
                   err = "task #{ klass } must accept 1 parameter to its #fail method"
 
                   expect do
@@ -208,8 +311,27 @@ module Procrastinator
             end
 
             it 'should complain if task does NOT accept 1 parameter in #final_fail' do
-               [Procrastinator::Test::Task::Malformed::NoArgFinalFail,
-                Procrastinator::Test::Task::Malformed::MultiArgFinalFail].each do |klass|
+               no_arg_final_fail = Class.new do
+                  attr_accessor :container, :logger, :scheduler
+
+                  def run
+                  end
+
+                  def final_fail
+                  end
+               end
+
+               multi_arg_final_fail = Class.new do
+                  attr_accessor :container, :logger, :scheduler
+
+                  def run
+                  end
+
+                  def final_fail(_arg1, _arg2)
+                  end
+               end
+
+               [no_arg_final_fail, multi_arg_final_fail].each do |klass|
                   err = "task #{ klass } must accept 1 parameter to its #final_fail method"
 
                   expect do
@@ -228,6 +350,8 @@ module Procrastinator
       describe 'next_task' do
          let(:task_class) do
             Class.new do
+               attr_accessor :container, :logger, :scheduler
+
                def run
                end
             end
@@ -238,17 +362,17 @@ module Procrastinator
                   id:             double('id'),
                   run_at:         double('run_at', to_i: 5),
                   initial_run_at: double('initial', to_i: 6),
-                  expire_at:      double('expiry', to_i: 7),
+                  expire_at:      double('expiry', to_i: 7)
             }
 
             queue = Queue.new(name: :email, task_class: test_task, store: fake_persister([saved_metadata]))
 
-            _task, meta = queue.next_task
+            task = queue.next_task
 
-            expect(meta.id).to eq saved_metadata[:id]
-            expect(meta.run_at).to eq 5
-            expect(meta.initial_run_at).to eq 6
-            expect(meta.expire_at).to eq 7
+            expect(task&.id).to eq saved_metadata[:id]
+            expect(task&.run_at).to eq 5
+            expect(task&.initial_run_at).to eq 6
+            expect(task&.expire_at).to eq 7
          end
 
          it 'should restore the stored failure metadata' do
@@ -262,11 +386,11 @@ module Procrastinator
 
             queue = Queue.new(name: :email, task_class: test_task, store: fake_persister([saved_metadata]))
 
-            _task, meta = queue.next_task
+            task = queue.next_task
 
-            expect(meta.attempts).to eq saved_metadata[:attempts]
-            expect(meta.last_error).to eq saved_metadata[:last_error]
-            expect(meta.last_fail_at).to eq saved_metadata[:last_fail_at]
+            expect(task&.attempts).to eq saved_metadata[:attempts]
+            expect(task&.last_error).to eq saved_metadata[:last_error]
+            expect(task&.last_fail_at).to eq saved_metadata[:last_fail_at]
          end
 
          it 'should restore the stored task data' do
@@ -279,16 +403,16 @@ module Procrastinator
 
             queue = Queue.new(name: :email, task_class: test_task, store: fake_persister([saved_metadata]))
 
-            _task, meta = queue.next_task
+            task = queue.next_task
 
-            expect(meta.data).to eq data
+            expect(task&.data).to eq data
          end
 
          it 'should pass the TaskMetaData the queue definition' do
             queue = Queue.new(name: :email, task_class: task_class, store: fake_persister([{run_at: 1}]))
 
-            _, metadata = queue.next_task
-            expect(metadata.queue).to eq queue
+            task = queue.next_task
+            expect(task&.queue).to eq queue
          end
 
          it 'should ignore any unused or unknown fields' do
@@ -328,8 +452,8 @@ module Procrastinator
                                                           task_meta3]))
 
             Timecop.freeze(now) do
-               _, meta = queue.next_task
-               expect(meta.id).to eq 2
+               task = queue.next_task
+               expect(task&.id).to eq 2
             end
          end
 
@@ -345,8 +469,8 @@ module Procrastinator
 
             queue = Queue.new(name: :email, task_class: task_class, store: persister)
 
-            _, meta = queue.next_task
-            expect(meta.id).to eq 5
+            task = queue.next_task
+            expect(task&.id).to eq 5
          end
 
          it 'should sort tasks by run_at' do
@@ -362,45 +486,28 @@ module Procrastinator
 
             queue = Queue.new(name: :email, task_class: task_class, store: persister)
 
-            _task, meta = queue.next_task
+            task = queue.next_task
 
-            expect(meta.id).to eq 2
+            expect(task&.id).to eq 2
          end
 
          it 'should create a new task handler instance' do
-            klass = Class.new do
-               def run
-               end
-            end
-            queue = Queue.new(name: :test_queue, task_class: klass, store: persister)
+            queue = Queue.new(name: :test_queue, task_class: task_class, store: persister)
 
-            task, _meta = queue.next_task
+            expect(Task).to receive(:new).with(instance_of(TaskMetaData), instance_of(task_class))
 
-            expect(task).to be_a klass
+            queue.next_task
          end
 
          it 'should provide no arguments to the constructor' do
-            klass = Class.new do
-               def run
-               end
-            end
-            queue = Queue.new(name: :test_queue, task_class: klass, store: persister)
+            queue = Queue.new(name: :test_queue, task_class: task_class, store: persister)
 
-            expect(klass).to receive(:new).with(no_args)
+            expect(task_class).to receive(:new).with(no_args).and_call_original
 
             queue.next_task
          end
 
          context 'dependency injection' do
-            let(:task_class) do
-               Class.new do
-                  include Procrastinator::Task
-
-                  def run
-                  end
-               end
-            end
-
             let(:task) { task_class.new }
             let(:meta) { TaskMetaData.new }
             let(:queue) { Queue.new(name: :test_queue, task_class: task_class, store: persister) }
@@ -410,7 +517,16 @@ module Procrastinator
             end
 
             it 'should provide the data packet to the new task instance if requested' do
-               task_class.task_attr :data
+               task_class = Class.new do
+                  attr_accessor :data, :logger, :container, :scheduler
+
+                  def run
+                  end
+               end
+
+               task = task_class.new
+
+               allow(task_class).to receive(:new).and_return(task)
 
                data      = 'data here'
                persister = fake_persister([{id: 2, run_at: 2, data: JSON.dump(data)}])
@@ -422,9 +538,7 @@ module Procrastinator
                queue.next_task
             end
 
-            it 'should provide the container to the new task instance if requested' do
-               task_class.task_attr :container
-
+            it 'should provide the container to the new task instance' do
                container = double('container')
 
                expect(task).to receive(:container=).with(container)
@@ -432,9 +546,7 @@ module Procrastinator
                queue.next_task(container: container)
             end
 
-            it 'should provide the logger to the new task instance if requested' do
-               task_class.task_attr :logger
-
+            it 'should provide the logger to the new task instance' do
                logger = Logger.new(StringIO.new)
 
                expect(task).to receive(:logger=).with(logger)
@@ -442,9 +554,7 @@ module Procrastinator
                queue.next_task(logger: logger)
             end
 
-            it 'should provide the scheduler to the new task instance if requested' do
-               task_class.task_attr :scheduler
-
+            it 'should provide the scheduler to the new task instance' do
                scheduler = double('scheduler')
 
                expect(task).to receive(:scheduler=).with(scheduler)
@@ -457,7 +567,7 @@ module Procrastinator
       describe 'create' do
          let(:task_with_data) do
             Class.new do
-               attr_accessor :data
+               attr_accessor :data, :logger, :container, :scheduler
 
                def run
                end
@@ -466,6 +576,8 @@ module Procrastinator
 
          let(:task_without_data) do
             Class.new do
+               attr_accessor :logger, :container, :scheduler
+
                def run
                end
             end
@@ -496,8 +608,9 @@ module Procrastinator
             queue = Queue.new(name: :test_queue, task_class: task_without_data)
 
             err = <<~ERROR
-               task #{ task_without_data } does not import :data. Add this in your class definition:
-                     task_attr :data
+               found unexpected :data argument. Either do not provide :data when scheduling a task,
+               or add this in the #{ task_without_data } class definition:
+                     attr_accessor :data
             ERROR
 
             expect do

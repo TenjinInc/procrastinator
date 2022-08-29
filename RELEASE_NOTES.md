@@ -30,6 +30,7 @@
 * Data is now stored as JSON instead of YAML
 * Added with_store that applies its settings to its block
     * `load_with` has been removed
+* Removed `task_attr` and `Procrastinator::Task` module. Tasks is now duck-type checked for accessors instead.
 
 ### Minor Changes
 

@@ -41,9 +41,6 @@ module Procrastinator
          raise ArgumentError, ':task_class cannot be nil' unless task_class
          raise ArgumentError, 'Task class must be initializable' unless task_class.respond_to? :new
 
-         verify_task_class(task_class)
-         verify_task_store(store)
-
          raise ArgumentError, ':timeout cannot be negative' if timeout&.negative?
 
          @name          = name.to_s.strip.gsub(/[^A-Za-z0-9]+/, '_').to_sym
@@ -52,6 +49,10 @@ module Procrastinator
          @max_attempts  = max_attempts
          @timeout       = timeout
          @update_period = update_period
+
+         verify_task_class!
+         verify_task_store!
+
          freeze
       end
 
@@ -64,14 +65,12 @@ module Procrastinator
 
          metadata = metas.find(&:runnable?)
 
-         return [] unless metadata
+         return nil unless metadata
 
-         handler = task_handler(data:      metadata.data,
-                                container: container,
-                                logger:    logger,
-                                scheduler: scheduler)
-
-         [handler, metadata]
+         Task.new(metadata, task_handler(data:      metadata.data,
+                                         container: container,
+                                         logger:    logger,
+                                         scheduler: scheduler))
       end
 
       def create(run_at:, initial_run_at:, expire_at:, data:)
@@ -81,8 +80,9 @@ module Procrastinator
 
          unless data.nil? || expects_data?
             raise MalformedTaskError, <<~ERROR
-               task #{ @task_class } does not import :data. Add this in your class definition:
-                     task_attr :data
+               found unexpected :data argument. Either do not provide :data when scheduling a task,
+               or add this in the #{ @task_class } class definition:
+                     attr_accessor :data
             ERROR
          end
 
@@ -106,9 +106,9 @@ module Procrastinator
       def task_handler(data: nil, container: nil, logger: nil, scheduler: nil)
          handler           = @task_class.new
          handler.data      = data if handler.respond_to?(:data=)
-         handler.container = container if handler.respond_to?(:container=)
-         handler.logger    = logger if handler.respond_to?(:logger=)
-         handler.scheduler = scheduler if handler.respond_to?(:scheduler=)
+         handler.container = container
+         handler.logger    = logger
+         handler.scheduler = scheduler
          handler
       end
 
@@ -120,39 +120,58 @@ module Procrastinator
          tasks.shuffle.sort_by { |t| t[:run_at] }
       end
 
-      def verify_task_class(task_class)
-         unless task_class.method_defined? :run
-            raise MalformedTaskError, "task #{ task_class } does not support #run method"
+      def verify_task_class!
+         verify_run_method!
+         verify_accessors!
+         verify_hooks!
+      end
+
+      def verify_run_method!
+         unless @task_class.method_defined? :run
+            raise MalformedTaskError, "task #{ @task_class } does not support #run method"
          end
 
          # It checks the interface compliance on init because it's one of those rare cases where you want to know early;
          # otherwise, you wouldn't know until task execution and that could be far in the future.
          # UX is important for devs, too.
          #    - R
-         if task_class.method_defined?(:run) && task_class.instance_method(:run).arity.positive?
-            err = "task #{ task_class } cannot require parameters to its #run method"
-
-            raise MalformedTaskError, err
-         end
-
-         expected_arity = 1
-
-         [:success, :fail, :final_fail].each do |method_name|
-            next unless task_class.method_defined?(method_name)
-            next if task_class.instance_method(method_name).arity == expected_arity
-
-            err = "task #{ task_class } must accept #{ expected_arity } parameter to its ##{ method_name } method"
+         if @task_class.method_defined?(:run) && @task_class.instance_method(:run).arity.positive?
+            err = "task #{ @task_class } cannot require parameters to its #run method"
 
             raise MalformedTaskError, err
          end
       end
 
-      def verify_task_store(store)
-         raise ArgumentError, ':store cannot be nil' if store.nil?
+      def verify_accessors!
+         [:logger, :container, :scheduler].each do |method_name|
+            next if @task_class.method_defined?(method_name) && @task_class.method_defined?("#{ method_name }=")
+
+            raise MalformedTaskError, <<~ERR
+               Task handler is missing a #{ method_name } accessor. Add this to the #{ @task_class } class definition:
+                  attr_accessor :logger, :container, :scheduler
+            ERR
+         end
+      end
+
+      def verify_hooks!
+         expected_arity = 1
+
+         [:success, :fail, :final_fail].each do |method_name|
+            next unless @task_class.method_defined?(method_name)
+            next if @task_class.instance_method(method_name).arity == expected_arity
+
+            err = "task #{ @task_class } must accept #{ expected_arity } parameter to its ##{ method_name } method"
+
+            raise MalformedTaskError, err
+         end
+      end
+
+      def verify_task_store!
+         raise ArgumentError, ':store cannot be nil' if @task_store.nil?
 
          [:read, :create, :update, :delete].each do |method|
-            unless store.respond_to? method
-               raise MalformedTaskStoreError, "task store #{ store.class } must respond to ##{ method }"
+            unless @task_store.respond_to? method
+               raise MalformedTaskStoreError, "task store #{ @task_store.class } must respond to ##{ method }"
             end
          end
       end

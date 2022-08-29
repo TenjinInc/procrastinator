@@ -16,35 +16,31 @@ module Procrastinator
    class TaskWorker
       extend Forwardable
 
-      def_delegators :@metadata,
-                     :id, :run_at, :initial_run_at, :expire_at,
-                     :attempts, :last_fail_at, :last_error,
-                     :data, :successful?, :to_h
+      def_delegators :@task, :successful?, :to_h, :id, :attempts
 
       attr_reader :task
 
-      def initialize(metadata:, task:, logger: Logger.new(StringIO.new))
-         @metadata = metadata
-         @task     = task
-         @logger   = logger
+      def initialize(task, logger: Logger.new(StringIO.new))
+         @task   = task
+         @logger = logger
       end
 
       def work(timeout = nil)
-         @metadata.add_attempt
+         @task.add_attempt
 
-         @metadata.verify_expiry!
+         @task.verify_expiry!
 
          result = Timeout.timeout(timeout) do
             @task.run
          end
 
-         @logger&.debug("Task completed: #{ @metadata.queue.name } [#{ @metadata.serialized_data }]")
+         @logger&.debug("Task completed: #{  @task.queue.name } [#{  @task.serialized_data }]")
 
-         @metadata.clear_fails
+         @task.clear_fails
 
-         try_hook(:success, result)
+         @task.try_hook(:success, result)
       rescue StandardError => e
-         if @metadata.final_fail?
+         if @task.final_fail?
             handle_final_failure(e)
          else
             handle_failure(e)
@@ -53,30 +49,24 @@ module Procrastinator
 
       private
 
-      def try_hook(method, *params)
-         @task.send(method, *params) if @task.respond_to? method
-      rescue StandardError => e
-         warn "#{ method.to_s.capitalize } hook error: #{ e.message }"
-      end
-
       def handle_failure(error)
-         @metadata.fail(%[Task failed: #{ error.message }\n#{ error.backtrace.join("\n") }])
-         @logger&.debug("Task failed: #{ @metadata.queue.name } with #{ @metadata.serialized_data }")
+         @task.fail(%[Task failed: #{ error.message }\n#{ error.backtrace.join("\n") }])
+         @logger&.debug("Task failed: #{  @task.queue.name } with #{  @task.serialized_data }")
 
-         @metadata.reschedule
+         @task.reschedule
 
-         try_hook(:fail, error)
+         @task.try_hook(:fail, error)
       end
 
       def handle_final_failure(error)
          trace = error.backtrace.join("\n")
-         msg   = "#{ @metadata.expired? ? 'Task expired' : 'Task failed too many times' }: #{ trace }"
+         msg   = "#{  @task.expired? ? 'Task expired' : 'Task failed too many times' }: #{ trace }"
 
-         @metadata.fail(msg, final: true)
+         @task.fail(msg, final: true)
 
          @logger&.debug("Task failed permanently: #{ JSON.dump(@task) }")
 
-         try_hook(:final_fail, error)
+         @task.try_hook(:final_fail, error)
       end
    end
 end

@@ -35,62 +35,9 @@ module Procrastinator
       end
 
       module Task
-         module Malformed
-            class ArgRun
-               def run(_params)
-               end
-            end
-
-            class NoArgSuccess
-               def run
-               end
-
-               def success
-               end
-            end
-
-            class MultiArgSuccess
-               def run
-               end
-
-               def success(_arg1, _arg2)
-               end
-            end
-
-            class NoArgFail
-               def run
-               end
-
-               def fail
-               end
-            end
-
-            class MultiArgFail
-               def run
-               end
-
-               def fail(_arg1, _arg2)
-               end
-            end
-
-            class NoArgFinalFail
-               def run
-               end
-
-               def final_fail
-               end
-            end
-
-            class MultiArgFinalFail
-               def run
-               end
-
-               def final_fail(_arg1, _arg2)
-               end
-            end
-         end
-
          class AllHooks
+            attr_accessor :container, :logger, :scheduler
+
             def run
             end
 
@@ -104,20 +51,8 @@ module Procrastinator
             end
          end
 
-         class ExpectingTask
-            extend Procrastinator::Task
-
-            def run
-            end
-         end
-
-         class RunOnly
-            def run
-            end
-         end
-
          class Fail
-            attr_accessor :data
+            attr_accessor :logger, :container, :scheduler
 
             def run
                raise('asplode')
@@ -128,9 +63,7 @@ module Procrastinator
          end
 
          class LogData
-            extend Procrastinator::Task
-
-            attr_accessor :logger, :data
+            attr_accessor :logger, :container, :scheduler, :data
 
             def run
                logger.info "Ran with data: #{ data }"

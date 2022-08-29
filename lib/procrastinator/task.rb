@@ -1,46 +1,35 @@
 # frozen_string_literal: true
 
 module Procrastinator
-   # Module to be included by user-defined task classes. It provides some extra error checking and a convenient way
-   # for the task class to access additional information (data, logger, etc) from Procrastinator.
-   #
-   # If you are averse to including this in your task class, you can just declare an attr_accessor for the
-   # information you want Procrastinator to feed your task.
+   # Wraps a task handler and task metadata
    #
    # @author Robin Miller
-   module Task
-      KNOWN_ATTRIBUTES = [:logger, :container, :data, :scheduler].freeze
+   class Task
+      extend Forwardable
 
-      def self.included(base)
-         base.extend(TaskClassMethods)
+      def_delegators :@metadata,
+                     :id, :run_at, :initial_run_at, :expire_at,
+                     :attempts, :last_fail_at, :last_error,
+                     :data, :successful?, :to_h, :final_fail?,
+                     :fail, :serialized_data, :queue, :reschedule, :add_attempt, :expired?,
+                     :clear_fails
+
+      def_delegators :@handler,
+                     :run
+
+      def initialize(metadata, handler)
+         @metadata = metadata
+         @handler  = handler
       end
 
-      def respond_to_missing?(name, include_private)
-         super
+      def try_hook(method, *params)
+         @handler.send(method, *params) if @handler.respond_to? method
+      rescue StandardError => e
+         warn "#{ method.to_s.capitalize } hook error: #{ e.message }"
       end
 
-      def method_missing(method_name, *args, &block)
-         if KNOWN_ATTRIBUTES.include?(method_name)
-            raise NameError, "To access Procrastinator::Task attribute :#{ method_name }, " \
-                             "call task_attr(:#{ method_name }) in your class definition."
-         end
-
-         super
-      end
-
-      # Module that provides the task_attr class method for task definitions to declare their expected information.
-      module TaskClassMethods
-         def task_attr(*fields)
-            attr_list = KNOWN_ATTRIBUTES.collect { |a| ":#{ a }" }.join(', ')
-
-            fields.each do |field|
-               err = "Unknown Procrastinator::Task attribute :#{ field }. " \
-                     "Importable attributes are: #{ attr_list }"
-               raise ArgumentError, err unless KNOWN_ATTRIBUTES.include?(field)
-            end
-
-            attr_accessor(*fields)
-         end
+      def verify_expiry!
+         raise TaskExpiredError, "task is over its expiry time of #{ @metadata.expire_at }" if expired?
       end
    end
 end

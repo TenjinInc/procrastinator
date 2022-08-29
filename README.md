@@ -247,9 +247,7 @@ end
 
 # ... and in your task ...
 class LunchTask
-   include Procrastinator::Task
-
-   task_attr :container
+   attr_accessor :logger, :scheduler, :container
 
    def run
       logger.info("Today's Lunch is: #{ container[:lunch] }")
@@ -259,15 +257,13 @@ end
 
 ## Tasks
 
-Your task class is what actually gets run on the task queue. They'll look like:
+Your task class is what actually gets run on the task queue. They'll look like this:
 
 ```ruby
 
 class MyTask
-   include Procrastinator::Task
-
-   # Give any of these symbols to task_attr and they will become available as methods
-   # task_attr :data, :logger, :container, :scheduler
+   # These attributes will be assigned by Procrastinator when the task is run.
+   attr_accessor :logger, :scheduler, :container, :data
 
    # Performs the core work of the task. 
    def run
@@ -307,43 +303,19 @@ class MyTask
 end
 ```
 
-### Accessing Task Attributes
+### Attribute Accessors
 
-Include `Procrastinator::Task` in your task class and then use `task_attr` to register which task attributes your task
-needs.
+Tasks must provide accessors for `:logger`, `:container`, and `:scheduler`, while the `:data` accessor is semi-optional
+(see below). This is to prevent the tasks from referencing unknown variables once they actually get run.
 
-```ruby
+* `:data`  The data you provided in the call to `#delay`. Any task with a `:data` accessor will require data be passed
+  to `#delay`, and vice versa. See [Task Data](#task-data) for more.
 
-class MyTask
-   include Procrastinator::Task
+* `:container` The container you've provided in your setup. See [Task Container](#task-container) for more.
 
-   # declare the task attributes you care about by calling task_attr. 
-   # You can use any of these symbols: 
-   #             :data, :logger, :container, :scheduler
-   task_attr :data, :logger
+* `:logger` The queue's Logger object. See [Logging](#logging) for more.
 
-   def run
-      # the attributes listed in task_attr become methods like attr_accessor
-      logger.info("The data for this task is #{ data }")
-   end
-end
-```
-
-* `:data`
-  This is the data that you provided in the call to `#delay`. Any task that registers `:data` as a task attribute will
-  require data be passed to `#delay`. See [Task Data](#task-data) for more.
-
-* `:container`
-
-  The container you've provided in your setup. See [Task Container](#task-container) for more.
-
-* `:logger`
-
-  The queue's Logger object. See [Logging](#logging) for more.
-
-* `:scheduler`
-
-  A scheduler object that you can use to schedule new tasks (eg. with `#delay`).
+* `:scheduler` A scheduler object that you can use to schedule new tasks (eg. with `#delay`).
 
 ### Errors & Logging
 
@@ -367,15 +339,12 @@ scheduler = Procrastinator.setup do |env|
 end
 ```
 
-The logger can be accessed in your tasks by including Procrastinator::Task in your task class and then calling
-`task_attr :logger`.
+The logger can be accessed in your tasks by calling `logger` or `@logger`.
 
 ```ruby
 
 class MyTask
-   include Procrastinator::Task
-
-   task_attr :logger
+   attr_accessor :logger, :scheduler, :container
 
    def run
       logger.info('This task got run. Hooray!')
@@ -383,7 +352,7 @@ class MyTask
 end
 ```
 
-Some events are already logged for you:
+Some events are always logged by default:
 
 |event               |level  |
 |--------------------|-------|

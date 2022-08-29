@@ -113,7 +113,7 @@ module Procrastinator
                c.define_queue(:fast_queue, test_task, update_period: 0, store: fake_persister([{run_at: 1}]))
             end
 
-            expect(TaskWorker).to receive(:new).with(hash_including(logger: logger)).and_call_original
+            expect(TaskWorker).to receive(:new).with(anything, hash_including(logger: logger)).and_call_original
             worker = QueueWorker.new(queue: :fast_queue, config: config)
             allow(worker).to receive(:loop).and_yield
 
@@ -218,8 +218,8 @@ module Procrastinator
 
          context 'loading and running tasks' do
             it 'should reload tasks every cycle' do
-               task1 = double('task1')
-               task2 = double('task2')
+               task1 = double('task1', :container= => nil, :logger= => nil, :scheduler= => nil)
+               task2 = double('task2', :container= => nil, :logger= => nil, :scheduler= => nil)
 
                task1_duration = 4
                task2_duration = 6
@@ -265,7 +265,7 @@ module Procrastinator
 
                worker = QueueWorker.new(queue: :email, config: config)
 
-               expect(worker).to receive(:next_task).and_return([])
+               expect(worker).to receive(:next_task).and_return(nil)
 
                worker.work_one
             end
@@ -279,10 +279,10 @@ module Procrastinator
                queue  = config.queues.first
                worker = QueueWorker.new(queue: queue, config: config)
 
-               meta = TaskMetaData.new(queue: queue, run_at: 1)
-               allow(worker).to receive(:next_task).and_return([nil, meta])
+               task = Task.new(TaskMetaData.new(queue: queue, run_at: 1), nil)
+               allow(worker).to receive(:next_task).and_return(task)
 
-               expect(TaskWorker).to receive(:new).with(hash_including(metadata: meta)).and_call_original
+               expect(TaskWorker).to receive(:new).with(task, anything).and_call_original
 
                worker.work_one
             end
@@ -332,10 +332,11 @@ module Procrastinator
                end
 
                meta   = TaskMetaData.new(queue: config.queues.first)
+               task   = Task.new(meta, handler)
                worker = QueueWorker.new(queue: :email, config: config)
 
-               allow(worker).to receive(:next_task).and_return([handler, meta])
-               expect(TaskWorker).to receive(:new).with(hash_including(task: handler)).and_call_original
+               allow(worker).to receive(:next_task).and_return(task)
+               expect(TaskWorker).to receive(:new).with(task, anything).and_call_original
 
                worker.work_one
             end

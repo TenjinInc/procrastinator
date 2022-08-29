@@ -49,14 +49,12 @@ module Procrastinator
 
       # Performs exactly one task on the queue
       def work_one
-         handler, metadata = next_task(logger:    @logger,
-                                       container: @config.container,
-                                       scheduler: @scheduler)
-         return unless metadata
+         task = next_task(logger:    @logger,
+                          container: @config.container,
+                          scheduler: @scheduler)
+         return unless task
 
-         worker = TaskWorker.new(metadata: metadata,
-                                 task:     handler,
-                                 logger:   @logger)
+         worker = TaskWorker.new(task, logger: @logger)
 
          worker.work(@queue.timeout)
 

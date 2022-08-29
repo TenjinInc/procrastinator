@@ -50,33 +50,6 @@ module Procrastinator
             end.to raise_error(SetupError, 'setup block must call #define_queue on the environment')
          end
 
-         it 'should complain if provide_container was called but no queues import container' do
-            task_class = Class.new do
-               def run
-               end
-            end
-
-            expect do
-               Procrastinator.setup do |config|
-                  config.define_queue(:setup_test, task_class, store: persister)
-                  config.provide_container(double('some container'))
-               end
-            end.to raise_error(SetupError, SetupError::ERR_UNUSED_CONTAINER)
-         end
-
-         it 'should NOT complain if provide_container was NOT called and no queues import container' do
-            task_class = Class.new do
-               def run
-               end
-            end
-
-            expect do
-               Procrastinator.setup do |config|
-                  config.define_queue(:setup_test, task_class)
-               end
-            end.to_not raise_error
-         end
-
          it 'should complain if it does not have any queues defined' do
             expect do
                Procrastinator.setup do |_config|
@@ -90,13 +63,22 @@ module Procrastinator
          let(:tmp_dir) { Pathname.new Dir.mktmpdir('procrastinator-test') }
          let(:tmp_log_dir) { tmp_dir / 'log' }
          let(:storage_path) { tmp_dir / 'shared-queue-test.csv' }
+         let(:fail_data_task) do
+            Class.new do
+               attr_accessor :logger, :scheduler, :container, :data
+
+               def run
+                  raise 'snap'
+               end
+            end
+         end
 
          let(:scheduler) do
             Procrastinator.setup do |env|
                env.with_store csv: storage_path do
                   env.define_queue(:email, Test::Task::LogData, update_period: 0.1)
                   env.define_queue(:thumbnail, Test::Task::LogData, update_period: 0.1)
-                  env.define_queue(:crash, Test::Task::Fail, update_period: 0.1, max_attempts: 1)
+                  env.define_queue(:crash, fail_data_task, update_period: 0.1, max_attempts: 1)
                end
                env.log_with(directory: tmp_log_dir) # only needed to prevent writing files outside tmp dir
             end

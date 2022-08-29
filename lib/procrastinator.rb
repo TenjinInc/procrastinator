@@ -44,15 +44,6 @@ module Procrastinator
    end
 
    class SetupError < RuntimeError
-      ERR_NO_QUEUE         = 'setup block must call #define_queue on the environment'
-      ERR_UNUSED_CONTAINER = <<~ERROR
-         setup block called #provide_container, but no queue task classes import :container.
-
-         Either remove the call to #provide_container or add this to relevant Task class definitions:
-
-            include Procrastinator::Task
-
-            task_attr :container
-      ERROR
+      ERR_NO_QUEUE = 'setup block must call #define_queue on the environment'
    end
 end

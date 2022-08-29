@@ -46,9 +46,7 @@ module Procrastinator
 
          it 'should complain if they provide NO :data but the task expects it' do
             test_task = Class.new do
-               include Procrastinator::Task
-
-               task_attr :data
+               attr_accessor :data, :logger, :container, :scheduler
 
                def run
                end

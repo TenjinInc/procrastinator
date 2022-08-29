@@ -3,8 +3,8 @@
 module Procrastinator
    # TaskMetaData objects are State Patterns that record information about the work done on a particular task.
    #
-   # It contains the specific information needed to run a task instance. Users define a task class, which describes
-   # the "how" of a task and TaskMetaData represents the "what" and "when".
+   # It contains the specific information needed to run a task instance. Users define a task handler class, which
+   # describes the "how" of a task and TaskMetaData represents the "what" and "when".
    #
    # It contains task-specific data, timing information, and error records.
    #
@@ -99,10 +99,6 @@ module Procrastinator
 
       def serialized_data
          JSON.dump(@data)
-      end
-
-      def verify_expiry!
-         raise TaskExpiredError, "task is over its expiry time of #{ @expire_at }" if expired?
       end
 
       def to_h
