@@ -177,27 +177,25 @@ _Warning_: Task stores shared between queues **must** be thread-safe if using th
 These are the data fields for each individual scheduled task. When using the built-in task store, these are the field
 names. If you have a database, use this to inform your table schema.
 
-|  Hash Key         | Type   | Description                                                                             |
-|-------------------|--------| ----------------------------------------------------------------------------------------|
-| `:id`             | int    | Unique identifier for this exact task                                                   |
-| `:queue`          | symbol | Name of the queue the task is inside                                                    | 
-| `:run_at`         | int    | Unix timestamp of when to next attempt running the task. ¹                              |
-| `:initial_run_at` | int    | Unix timestamp of the originally requested run                                          |
-| `:expire_at`      | int    | Unix timestamp of when to permanently fail the task because it is too late to be useful |
-| `:attempts`       | int    | Number of times the task has tried to run; this should only be > 0 if the task fails    |
-| `:last_fail_at`   | int    | Unix timestamp of when the most recent failure happened                                 |
-| `:last_error`     | string | Error message + bracktrace of the most recent failure. May be very long.                |
-| `:data`           | string | Serialized data accessible in the task instance.²                                       |
+|  Hash Key         | Type    | Description                                                                             |
+|-------------------|---------| ----------------------------------------------------------------------------------------|
+| `:id`             | int     | Unique identifier for this exact task                                                   |
+| `:queue`          | symbol  | Name of the queue the task is inside                                                    | 
+| `:run_at`         | iso8601 | Time to attempt running the task next. ¹                                      |
+| `:initial_run_at` | iso8601 | Originally requested run_at. Reset when rescheduled.                                    |
+| `:expire_at`      | iso8601 | Time to permanently fail the task because it is too late to be useful |
+| `:attempts`       | int     | Number of times the task has tried to run; this should only be > 0 if the task fails    |
+| `:last_fail_at`   | iso8601 | Unix timestamp of when the most recent failure happened                                 |
+| `:last_error`     | string  | Error message + bracktrace of the most recent failure. May be very long.                |
+| `:data`           | string  | Serialized data accessible in the task instance.                                      |
 
-> ¹ If `nil`, that indicates that it is permanently failed and will never run, either due to expiry or too many attempts.
+> ¹ `nil` indicates that it is permanently failed and will never run, either due to expiry or too many attempts.
 
-> ² Serialized using JSON.dump and JSON.parse with symbolized keys
+Data is serialized using `JSON.dump` and `JSON.parse` with **symbolized keys**. It is strongly recommended to only
+supply simple data types (eg. id numbers) to reduce storage space, eliminate redundancy, and reduce the chance of a
+serialization error.
 
-Strongly recommended to keep to simple data types (eg. id numbers) to reduce storage space, eliminate redundancy, and
-reduce the chance of a serialization error.
-
-Times are all stored as unix epoch integer timestamps. This is to avoid confusion or conversion errors with timezones or
-daylight savings.
+Times are all handled as [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) formatted strings.
 
 #### Default Task Store
 

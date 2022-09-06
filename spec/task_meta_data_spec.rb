@@ -4,7 +4,7 @@ require 'spec_helper'
 
 module Procrastinator
    describe TaskMetaData do
-      let(:queue) { double('queue') }
+      let(:queue) { double('queue object', name: :test_queue, update: nil) }
 
       describe '#inititalize' do
          let(:task) { double('task', run: nil) }
@@ -41,33 +41,108 @@ module Procrastinator
             expect(task.data).to eq task_data
          end
 
-         it 'should convert non-nil run_at, initial_run at, and expire_at to ints' do
+         it 'should parse string time fields' do
+            run_at         = '2022-01-01T01:01:01-01:00'
+            initial_run_at = '2022-02-02T02:02:02-02:00'
+            expire_at      = '2022-03-03T03:03:03-03:00'
+            last_fail_at   = '2022-04-04T04:04:04-04:00'
+
+            task = TaskMetaData.new(queue:          queue,
+                                    run_at:         run_at,
+                                    initial_run_at: initial_run_at,
+                                    expire_at:      expire_at,
+                                    last_fail_at:   last_fail_at)
+
+            expect(task.run_at&.iso8601).to eq run_at
+            expect(task.initial_run_at&.iso8601).to eq initial_run_at
+            expect(task.expire_at&.iso8601).to eq expire_at
+            expect(task.last_fail_at&.iso8601).to eq last_fail_at
+         end
+
+         it 'should parse integer time fields' do
+            task = TaskMetaData.new(queue:          queue,
+                                    run_at:         1,
+                                    initial_run_at: 2,
+                                    expire_at:      3,
+                                    last_fail_at:   4)
+
+            expect(task.run_at).to eq Time.at(1)
+            expect(task.initial_run_at).to eq Time.at(2)
+            expect(task.expire_at).to eq Time.at(3)
+            expect(task.last_fail_at).to eq Time.at(4)
+         end
+
+         # Time. Tiiime time time time. Timetime? Time.
+         it 'should parse Time time fields' do
             now = Time.now
 
-            task = TaskMetaData.new(run_at: now, initial_run_at: now, expire_at: now, queue: queue)
+            task = TaskMetaData.new(queue:          queue,
+                                    run_at:         now,
+                                    initial_run_at: now,
+                                    expire_at:      now,
+                                    last_fail_at:   now)
 
-            expect(task.run_at).to eq now.to_i
-            expect(task.initial_run_at).to eq now.to_i
-            expect(task.expire_at).to eq now.to_i
+            expect(task.run_at).to eq now
+            expect(task.initial_run_at).to eq now
+            expect(task.expire_at).to eq now
+            expect(task.last_fail_at).to eq now
+         end
+
+         it 'should parse to_time responding time fields' do
+            now  = Time.now
+            time = double('something timey wimey', to_time: now)
+
+            task = TaskMetaData.new(queue:          queue,
+                                    run_at:         time,
+                                    initial_run_at: time,
+                                    expire_at:      time,
+                                    last_fail_at:   time)
+
+            expect(task.run_at).to eq now
+            expect(task.initial_run_at).to eq now
+            expect(task.expire_at).to eq now
+            expect(task.last_fail_at).to eq now
+         end
+
+         it 'should complain when a time is not understood' do
+            [['some type', 'data'],
+             ['other Type', 'bloop']].each do |klass, desc|
+               expect do
+                  TaskMetaData.new(queue:  queue,
+                                   run_at: double('something', class: klass, to_s: desc))
+               end.to raise_error ArgumentError, "Unknown data type: #{ klass } (#{ desc })"
+            end
          end
 
          # nil run_at means that it should never be run. Used for final_fail marking
-         it 'should NOT convert nil run_at to int' do
+         it 'should NOT parse nil run_at' do
             task = TaskMetaData.new(run_at: nil, queue: queue)
 
             expect(task.run_at).to eq nil
          end
 
          # so that it doesn't insta-expire
-         it 'should NOT convert nil expire_at to int' do
+         it 'should NOT parse nil expire_at' do
             task = TaskMetaData.new(expire_at: nil, queue: queue)
 
             expect(task.expire_at).to eq nil
          end
 
+         it 'should default initial_run_at to run_at' do
+            task = TaskMetaData.new(queue: queue, run_at: 0, initial_run_at: nil)
+
+            expect(task.run_at).to eq Time.at 0
+            expect(task.initial_run_at).to eq Time.at 0
+         end
+
          it 'should default nil attempts to 0' do
             task = TaskMetaData.new(attempts: nil, queue: queue)
             expect(task.attempts).to be 0
+         end
+
+         it 'should convert attempts to integer' do
+            task = TaskMetaData.new(attempts: double('attempts', to_i: 5), queue: queue)
+            expect(task.attempts).to eq 5
          end
       end
 
@@ -123,7 +198,7 @@ module Procrastinator
          end
 
          it 'should return false when the expiry date has not passed' do
-            task = TaskMetaData.new(expire_at: now.to_i, queue: queue)
+            task = TaskMetaData.new(expire_at: now.to_i + 1, queue: queue)
 
             Timecop.freeze(now) do
                expect(task.expired?).to be false
@@ -160,13 +235,13 @@ module Procrastinator
       end
 
       describe '#runnable?' do
-         it 'should return true if it is after the run_at' do
+         it 'should return true if the run_at is in the past' do
             task = TaskMetaData.new(run_at: 0, queue: queue)
 
             expect(task.runnable?).to be true
          end
 
-         it 'should return false if it is before the run_at' do
+         it 'should return false if run_at is in the future' do
             now = Time.now
 
             task = TaskMetaData.new(run_at: now + 1, queue: queue)
@@ -183,30 +258,168 @@ module Procrastinator
          end
       end
 
+      describe '#reschedule' do
+         # TODO: reschedule based on a Queue settings proc calculator
+         it 'should reschedule it exponentially when unspecified' do
+            now  = Time.now
+            task = TaskMetaData.new(queue: queue, run_at: now)
+            task.reschedule
+            expect(task.run_at).to eq now + 30
+
+            task = TaskMetaData.new(queue: queue, run_at: now, attempts: 1)
+            task.reschedule
+            expect(task.run_at).to eq now + 31
+
+            task = TaskMetaData.new(queue: queue, run_at: now, attempts: 4)
+            task.reschedule
+            expect(task.run_at).to eq now + 286
+         end
+
+         it 'should reschedule it to the given time' do
+            now  = Time.now
+            task = TaskMetaData.new(queue: queue, run_at: now, initial_run_at: now)
+
+            new_time = Time.at(0)
+            task.reschedule(run_at: new_time)
+
+            expect(task.run_at).to eq new_time
+            expect(task.initial_run_at).to eq new_time
+         end
+
+         it 'should complain if the given run_at would be after original expire_at' do
+            run_at    = Time.now + 1
+            expire_at = Time.now
+            task      = TaskMetaData.new(queue: queue, expire_at: expire_at)
+
+            expect do
+               task.reschedule(run_at: run_at)
+            end.to raise_error ArgumentError,
+                               "new run_at (#{ run_at }) is later than existing expire_at (#{ expire_at })"
+         end
+
+         it 'should complain if the new run_at would be after new expire_at' do
+            run_at    = Time.now + 1
+            expire_at = Time.now
+            task      = TaskMetaData.new(queue: queue)
+
+            expect do
+               task.reschedule(run_at: run_at, expire_at: expire_at)
+            end.to raise_error ArgumentError, "new run_at (#{ run_at }) is later than new expire_at (#{ expire_at })"
+         end
+
+         it 'should reset the initial run and attempts and failures when run_at specified' do
+            task = TaskMetaData.new(queue:          queue,
+                                    initial_run_at: 0,
+                                    attempts:       5,
+                                    last_fail_at:   Time.at(1000),
+                                    last_error:     'some error')
+
+            now = Time.now
+            task.reschedule(run_at: now)
+
+            expect(task.attempts).to eq 0
+            expect(task.last_error).to be_nil
+            expect(task.last_fail_at).to be_nil
+         end
+
+         it 'should NOT reset the attempts and failures when run_at unspecified' do
+            last_fail = Time.at(1000)
+            task      = TaskMetaData.new(queue:        queue,
+                                         attempts:     5,
+                                         last_fail_at: last_fail,
+                                         last_error:   'some error')
+
+            task.reschedule
+
+            expect(task.attempts).to eq 5
+            expect(task.last_error).to eq 'some error'
+            expect(task.last_fail_at).to eq last_fail
+         end
+
+         it 'should NOT update run_at and initial_run_at if run_at is not provided' do
+            task = TaskMetaData.new(queue: queue, run_at: 0)
+
+            task.reschedule(expire_at: Time.now)
+
+            expect(task.run_at).to eq Time.at(0)
+            expect(task.initial_run_at).to eq Time.at(0)
+         end
+
+         it 'should update expire_at to the given time' do
+            expire_at = Time.now + 10
+
+            task = TaskMetaData.new(queue: queue, expire_at: 0)
+
+            task.reschedule(expire_at: expire_at)
+
+            expect(task.expire_at).to eq expire_at
+         end
+
+         it 'should NOT update expire_at when only run_at is provided' do
+            expire = Time.now + 1000
+            task   = TaskMetaData.new(queue: queue, expire_at: expire)
+
+            task.reschedule(run_at: Time.now)
+
+            expect(task.expire_at).to eq expire
+         end
+      end
+
       describe '#to_h' do
+         let(:queue) { double('queue', name: :some_queue) }
+
          it 'should return the properties as a hash' do
-            basics = {
-                  id:           double('id'),
-                  attempts:     double('attempts'),
-                  last_fail_at: double('last_fail_at'),
-                  last_error:   double('last_error'),
-                  data:         JSON.dump('some data')
-            }
+            task = TaskMetaData.new(queue: queue)
 
-            run_at         = double('run_at', to_i: double('run_at_i'))
-            initial_run_at = double('initial_run_at', to_i: double('initial_run_at_i'))
-            expire_at      = double('expire_at', to_i: double('expire_at_i'))
-            queue          = double('queue', name: :some_queue)
+            expect(task.to_h).to be_a Hash
+         end
 
-            task = TaskMetaData.new(basics.merge(initial_run_at: initial_run_at,
-                                                 run_at:         run_at,
-                                                 expire_at:      expire_at,
-                                                 queue:          queue))
+         it 'should include the queue name symbol' do
+            task = TaskMetaData.new(queue: queue)
 
-            expect(task.to_h).to eq(basics.merge(initial_run_at: initial_run_at.to_i,
-                                                 run_at:         run_at.to_i,
-                                                 expire_at:      expire_at.to_i,
-                                                 queue:          :some_queue))
+            expect(task.to_h).to include(queue: :some_queue)
+         end
+
+         it 'should include the serialized data' do
+            data_str = JSON.dump('some data')
+            task     = TaskMetaData.new(queue: queue, data: data_str)
+
+            expect(task.to_h).to include(queue: :some_queue, data: data_str)
+         end
+
+         it 'should include the id' do
+            id = double('id')
+
+            task = TaskMetaData.new(id: id, queue: queue)
+
+            expect(task.to_h).to include(id: id)
+         end
+
+         it 'should include the run information in iso8601' do
+            run_at         = '2022-03-04T00:01:20-06:00'
+            initial_run_at = '2022-03-04T00:01:20-06:00'
+            expire_at      = '2022-03-04T00:01:20-06:00'
+
+            task = TaskMetaData.new(queue:          queue,
+                                    initial_run_at: initial_run_at,
+                                    run_at:         run_at,
+                                    expire_at:      expire_at)
+
+            expect(task.to_h).to include(initial_run_at: initial_run_at,
+                                         run_at:         run_at,
+                                         expire_at:      expire_at)
+         end
+
+         it 'should include the attempts and failure information' do
+            attempts   = 37
+            fail_time  = '2022-03-04T00:01:20-06:00'
+            last_error = double('last_error')
+
+            task = TaskMetaData.new(queue: queue, attempts: attempts, last_error: last_error, last_fail_at: fail_time)
+
+            expect(task.to_h).to include(attempts:     attempts,
+                                         last_fail_at: fail_time,
+                                         last_error:   last_error)
          end
       end
    end

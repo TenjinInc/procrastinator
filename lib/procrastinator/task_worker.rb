@@ -16,7 +16,7 @@ module Procrastinator
    class TaskWorker
       extend Forwardable
 
-      def_delegators :@task, :successful?, :to_h, :id, :attempts
+      def_delegators :@task, :successful?, :id, :attempts, :to_h
 
       attr_reader :task
 
@@ -34,9 +34,9 @@ module Procrastinator
             @task.run
          end
 
-         @logger&.debug("Task completed: #{  @task.queue.name } [#{  @task.serialized_data }]")
-
          @task.clear_fails
+
+         @logger&.debug("Task completed: #{ @task }")
 
          @task.try_hook(:success, result)
       rescue StandardError => e
@@ -51,7 +51,7 @@ module Procrastinator
 
       def handle_failure(error)
          @task.fail(%[Task failed: #{ error.message }\n#{ error.backtrace.join("\n") }])
-         @logger&.debug("Task failed: #{  @task.queue.name } with #{  @task.serialized_data }")
+         @logger&.debug("Task failed: #{ @task }")
 
          @task.reschedule
 
@@ -60,11 +60,11 @@ module Procrastinator
 
       def handle_final_failure(error)
          trace = error.backtrace.join("\n")
-         msg   = "#{  @task.expired? ? 'Task expired' : 'Task failed too many times' }: #{ trace }"
+         msg   = "#{ @task.expired? ? 'Task expired' : 'Task failed too many times' }: #{ trace }"
 
          @task.fail(msg, final: true)
 
-         @logger&.debug("Task failed permanently: #{ JSON.dump(@task) }")
+         @logger&.debug("Task failed permanently: #{ @task }")
 
          @task.try_hook(:final_fail, error)
       end

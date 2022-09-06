@@ -114,7 +114,7 @@ module Procrastinator
             end
 
             it 'should blank the error time' do
-               meta   = TaskMetaData.new(last_fail_at: double('failtime'),
+               meta   = TaskMetaData.new(last_fail_at: Time.now,
                                          queue:        queue)
                task   = Task.new(meta, double('task', run: nil))
                worker = TaskWorker.new(task)
@@ -251,7 +251,7 @@ module Procrastinator
 
                   worker.work
 
-                  expect(meta.last_fail_at).to eq start_time.to_i + delay
+                  expect(meta.last_fail_at.to_i).to eq start_time.to_i + delay
                end
             end
 
@@ -321,14 +321,14 @@ module Procrastinator
 
                worker = TaskWorker.new(fail_task, logger: logger)
 
-               expect(logger).to receive(:debug).with("Task failed: #{ queue.name } with #{ data_str }")
+               expect(logger).to receive(:debug).with("Task failed: #{ queue.name } [#{ data_str }]")
 
                worker.work
             end
          end
 
          context 'final_fail hook' do
-            let(:meta) { TaskMetaData.new(queue: final_fail_queue) }
+            let(:meta) { TaskMetaData.new(queue: final_fail_queue, data: data_str) }
 
             it 'should call #final_fail if #run errors more than given max_attempts' do
                max_attempts = 3
@@ -348,12 +348,12 @@ module Procrastinator
             end
 
             it 'should call #final_fail when the expiry time has passed' do
-               (0..3).each do |i|
+               %w[2022-04-01T12:15:00-06:00 2021-02-07T16:25:00-06:00].each do |time|
                   expect(fail_handler).to receive(:final_fail).with(satisfy do |arg|
-                     arg.is_a?(TaskExpiredError) && arg.message == "task is over its expiry time of #{ i }"
+                     arg.is_a?(TaskExpiredError) && arg.message == "task is over its expiry time of #{ time }"
                   end)
 
-                  meta = TaskMetaData.new(expire_at: i, queue: queue)
+                  meta = TaskMetaData.new(queue: queue, expire_at: time)
 
                   task   = Task.new(meta, fail_handler)
                   worker = TaskWorker.new(task)
@@ -408,7 +408,7 @@ module Procrastinator
                   worker = TaskWorker.new(fail_task)
                   worker.work
 
-                  expect(meta.last_fail_at).to eq start_time.to_i + delay
+                  expect(meta.last_fail_at.to_i).to eq start_time.to_i + delay
                end
             end
 
@@ -455,7 +455,7 @@ module Procrastinator
 
                worker = TaskWorker.new(fail_task, logger: logger)
 
-               expect(logger).to receive(:debug).with("Task failed permanently: #{ JSON.dump(fail_task) }")
+               expect(logger).to receive(:debug).with("Task failed permanently: #{ final_fail_queue.name } [#{ data_str }]")
 
                worker.work
             end

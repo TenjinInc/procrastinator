@@ -22,26 +22,26 @@ module Procrastinator
       describe '#delay' do
          it 'should record a task on the given queue' do
             [:emails, :reminders].each do |queue_name|
-               expect(persister).to receive(:create).with(include(queue: queue_name.to_s))
+               expect(persister).to receive(:create).with(hash_including(queue: queue_name))
 
                scheduler.delay(queue_name)
             end
          end
 
          it 'should record a task with given run_at' do
-            run_stamp = double('run stamp')
+            run_stamp = '2022-12-25T06:01:00-07:00'
 
-            expect(persister).to receive(:create).with(include(run_at: run_stamp))
+            expect(persister).to receive(:create).with(hash_including(run_at: run_stamp))
 
-            scheduler.delay(:reminders, run_at: double('time_object', to_i: run_stamp))
+            scheduler.delay(:reminders, run_at: run_stamp)
          end
 
          it 'should record a task with given expire_at' do
-            expire_stamp = double('expire stamp')
+            expire_stamp = '2022-12-31T23:59:59-04:00'
 
-            expect(persister).to receive(:create).with(include(expire_at: expire_stamp))
+            expect(persister).to receive(:create).with(hash_including(expire_at: expire_stamp))
 
-            scheduler.delay(:reminders, expire_at: double('time_object', to_i: expire_stamp))
+            scheduler.delay(:reminders, expire_at: expire_stamp)
          end
 
          it 'should complain if they provide NO :data but the task expects it' do
@@ -67,7 +67,7 @@ module Procrastinator
             now = Time.now
 
             Timecop.freeze(now) do
-               expect(persister).to receive(:create).with(include(run_at: now.to_i))
+               expect(persister).to receive(:create).with(hash_including(run_at: now.iso8601))
 
                scheduler.delay(:reminders)
             end
@@ -76,17 +76,10 @@ module Procrastinator
          it 'should record initial_run_at and run_at to be equal' do
             time = Time.now
 
-            expect(persister).to receive(:create).with(include(run_at: time.to_i, initial_run_at: time.to_i))
+            expect(persister).to receive(:create).with(hash_including(run_at:         time.iso8601,
+                                                                      initial_run_at: time.iso8601))
 
             scheduler.delay(:reminders, run_at: time)
-         end
-
-         it 'should convert run_at, initial_run_at, expire_at to ints' do
-            expect(persister).to receive(:create).with(include(run_at: 0, initial_run_at: 0, expire_at: 1))
-
-            scheduler.delay(:reminders,
-                            run_at:    double('time', to_i: 0),
-                            expire_at: double('time', to_i: 1))
          end
 
          it 'should default expire_at to nil' do
@@ -257,7 +250,7 @@ module Procrastinator
             [{id: 5}, {data: {user_id: 5, appointment_id: 2}}].each do |identifier|
                update_proxy = Scheduler::UpdateProxy.new(queue, identifier: identifier)
 
-               expect(persister).to receive(:read).with(identifier).and_return([double('task', '[]': 6)])
+               expect(persister).to receive(:read).with(identifier).and_return([{id: 1, run_at: 2}])
 
                update_proxy.to(run_at: 0)
             end
@@ -268,7 +261,7 @@ module Procrastinator
 
             update_proxy = Scheduler::UpdateProxy.new(queue, identifier: {data: data})
 
-            expect(persister).to receive(:read).with(data: JSON.dump(data)).and_return([double('task', '[]': 6)])
+            expect(persister).to receive(:read).with(data: JSON.dump(data)).and_return([{id: 1, run_at: 2}])
 
             update_proxy.to(run_at: 0)
          end
@@ -299,28 +292,6 @@ module Procrastinator
             end
          end
 
-         it 'should complain if the given run_at would be after given expire_at' do
-            time      = Time.now
-            expire_at = Time.at 0
-
-            expect do
-               update_proxy.to(run_at: time, expire_at: expire_at)
-            end.to raise_error(RuntimeError, "given run_at (#{ time }) is later than given expire_at (#{ expire_at })")
-         end
-
-         it 'should complain if the given run_at would be after original expire_at' do
-            time      = Time.now
-            expire_at = Time.at 0
-
-            allow(persister).to receive(:read).and_return([TaskMetaData.new(expire_at: expire_at.to_i,
-                                                                            queue:     queue).to_h])
-
-            expect do
-               update_proxy.to(run_at: time)
-            end.to raise_error(RuntimeError,
-                               "given run_at (#{ time }) is later than saved expire_at (#{ expire_at.to_i })")
-         end
-
          it 'should update the found task' do
             id = double('id')
 
@@ -332,18 +303,12 @@ module Procrastinator
          end
 
          it 'should update run_at and initial_run_at to the given time' do
-            time = Time.now
+            time = '2022-05-01T05:40:00-06:00'
 
-            expect(persister).to receive(:update).with(anything, hash_including(run_at:         time.to_i,
-                                                                                initial_run_at: time.to_i))
+            expect(persister).to receive(:update).with(anything, hash_including(run_at:         time,
+                                                                                initial_run_at: time))
 
-            update_proxy.to(run_at: time)
-         end
-
-         it 'should NOT update run_at and initial_run_at if run_at is not provided' do
-            expect(persister).to receive(:update).with(anything, hash_excluding(:run_at, :initial_run_at))
-
-            update_proxy.to(expire_at: Time.now)
+            update_proxy.to(run_at: Time.parse(time))
          end
 
          it 'should complain if run_at nor expire_at are provided' do
@@ -352,36 +317,14 @@ module Procrastinator
             end.to raise_error(ArgumentError, 'you must provide at least :run_at or :expire_at')
          end
 
-         it 'should update expire_at to the given time' do
-            expire_at = Time.now + 10
-
-            expect(persister).to receive(:update).with(anything, hash_including(expire_at: expire_at.to_i))
-
-            update_proxy.to(run_at: Time.now, expire_at: expire_at)
-         end
-
-         it 'should NOT update expire_at if none is provided' do
-            expect(persister).to receive(:update).with(anything, hash_excluding(:expire_at))
-
-            update_proxy.to(run_at: Time.now)
-         end
-
          it 'should not change id, queue, or data' do
-            expect(persister).to receive(:update).with(anything, hash_excluding(:id, :data, :queue))
+            expect(persister).to receive(:update).with(5, hash_excluding(:id, :data, :queue))
 
             update_proxy.to(run_at: Time.now)
          end
 
-         it 'should reset attempts' do
-            expect(persister).to receive(:update).with(anything, hash_including(attempts: 0))
-
-            update_proxy.to(run_at: Time.now)
-         end
-
-         it 'should reset last_error and last_error_at' do
-            expect(persister).to receive(:update).with(anything, hash_including(last_error:    nil,
-                                                                                last_error_at: nil))
-
+         # TODO: this can probably replace some of the above tests
+         it 'should save the updated task' do
             update_proxy.to(run_at: Time.now)
          end
       end

@@ -357,12 +357,15 @@ module Procrastinator
             end
          end
 
+         # need a nonzero run_at to not be ignored when loading tasks
+         let(:dummy_run_at) { '2022-09-03T09:37:00-06:00' }
+
          it 'should restore the stored scheduling metadata' do
             saved_metadata = {
                   id:             double('id'),
-                  run_at:         double('run_at', to_i: 5),
-                  initial_run_at: double('initial', to_i: 6),
-                  expire_at:      double('expiry', to_i: 7)
+                  run_at:         '2022-09-03T09:37:00-06:00',
+                  initial_run_at: '2022-09-01T08:30:00-06:00',
+                  expire_at:      '2022-12-15T12:00:00-06:00'
             }
 
             queue = Queue.new(name: :email, task_class: test_task, store: fake_persister([saved_metadata]))
@@ -370,18 +373,17 @@ module Procrastinator
             task = queue.next_task
 
             expect(task&.id).to eq saved_metadata[:id]
-            expect(task&.run_at).to eq 5
-            expect(task&.initial_run_at).to eq 6
-            expect(task&.expire_at).to eq 7
+            expect(task&.run_at).to eq Time.parse(saved_metadata[:run_at])
+            expect(task&.initial_run_at).to eq Time.parse(saved_metadata[:initial_run_at])
+            expect(task&.expire_at).to eq Time.parse(saved_metadata[:expire_at])
          end
 
          it 'should restore the stored failure metadata' do
-            # need a nonzero run_at to not be ignored
             saved_metadata = {
-                  run_at:       10,
+                  run_at:       dummy_run_at,
                   attempts:     8,
                   last_error:   double('last error'),
-                  last_fail_at: double('last fail at')
+                  last_fail_at: Time.now
             }
 
             queue = Queue.new(name: :email, task_class: test_task, store: fake_persister([saved_metadata]))
@@ -395,9 +397,9 @@ module Procrastinator
 
          it 'should restore the stored task data' do
             data = {some_data: 5}
-            # need a nonzero run_at to not be ignored
+
             saved_metadata = {
-                  run_at: 10,
+                  run_at: dummy_run_at,
                   data:   JSON.dump(data)
             }
 
@@ -409,7 +411,7 @@ module Procrastinator
          end
 
          it 'should pass the TaskMetaData the queue definition' do
-            queue = Queue.new(name: :email, task_class: task_class, store: fake_persister([{run_at: 1}]))
+            queue = Queue.new(name: :email, task_class: task_class, store: fake_persister([{run_at: dummy_run_at}]))
 
             task = queue.next_task
             expect(task&.queue).to eq queue
@@ -417,8 +419,8 @@ module Procrastinator
 
          it 'should ignore any unused or unknown fields' do
             task_data = {id:     1,
-                         queue:  double('queue'),
-                         run_at: double('run_at', to_i: 2),
+                         queue:  'some_queue',
+                         run_at: dummy_run_at,
                          bogus:  double('bogus')}
 
             queue = Queue.new(name: :email, task_class: task_class, store: fake_persister([task_data]))
@@ -427,9 +429,9 @@ module Procrastinator
          end
 
          it 'should filter tasks by the queue name' do
-            persister = fake_persister([{id: 1, run_at: 1, queue: :reminder},
-                                        {id: 2, run_at: 2, queue: :email},
-                                        {id: 3, run_at: 3, queue: :welcome}])
+            persister = fake_persister([{id: 1, run_at: dummy_run_at, queue: :reminder},
+                                        {id: 2, run_at: dummy_run_at, queue: :email},
+                                        {id: 3, run_at: dummy_run_at, queue: :welcome}])
 
             queue = Queue.new(name: :email, task_class: task_class, store: persister)
 
@@ -458,8 +460,8 @@ module Procrastinator
          end
 
          it 'should ignore tasks with nil run_at' do
-            job1 = {id: 4, run_at: nil, initial_run_at: 0}
-            job2 = {id: 5, run_at: 2, initial_run_at: 0}
+            job1 = {id: 4, run_at: nil, initial_run_at: dummy_run_at}
+            job2 = {id: 5, run_at: dummy_run_at, initial_run_at: dummy_run_at}
 
             persister = double('disorganized persister',
                                read:   [job2, job1],
@@ -474,9 +476,9 @@ module Procrastinator
          end
 
          it 'should sort tasks by run_at' do
-            job1 = {id: 1, run_at: 70, initial_run_at: 0}
-            job2 = {id: 2, run_at: 60, initial_run_at: 0}
-            job3 = {id: 3, run_at: 90, initial_run_at: 0}
+            job1 = {id: 1, run_at: '2022-09-01T00:00:30-06:00', initial_run_at: 0}
+            job2 = {id: 2, run_at: '2022-09-01T00:00:00-06:00', initial_run_at: 0}
+            job3 = {id: 3, run_at: '2022-09-01T00:00:50-06:00', initial_run_at: 0}
 
             persister = double('disorganized persister',
                                read:   [job2, job1, job3],
@@ -583,7 +585,7 @@ module Procrastinator
             end
          end
 
-         let(:required_args) { {run_at: nil, initial_run_at: nil, expire_at: nil, data: nil} }
+         let(:required_args) { {run_at: nil, expire_at: nil, data: nil} }
 
          it 'should forward the call to the storage' do
             queue = Queue.new(name: :test_queue, task_class: task_without_data, store: persister)

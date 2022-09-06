@@ -279,7 +279,7 @@ module Procrastinator
                queue  = config.queues.first
                worker = QueueWorker.new(queue: queue, config: config)
 
-               task = Task.new(TaskMetaData.new(queue: queue, run_at: 1), nil)
+               task = Task.new(TaskMetaData.new(queue: queue, run_at: 1), test_task.new)
                allow(worker).to receive(:next_task).and_return(task)
 
                expect(TaskWorker).to receive(:new).with(task, anything).and_call_original

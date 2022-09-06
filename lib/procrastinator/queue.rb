@@ -30,8 +30,7 @@ module Procrastinator
       def_delegators :@task_store, :read, :update, :delete
 
       # Timeout is in seconds
-      def initialize(name:,
-                     task_class:,
+      def initialize(name:, task_class:,
                      max_attempts: DEFAULT_MAX_ATTEMPTS,
                      timeout: DEFAULT_TIMEOUT,
                      update_period: DEFAULT_UPDATE_PERIOD,
@@ -59,9 +58,9 @@ module Procrastinator
       def next_task(logger: nil, container: nil, scheduler: nil)
          tasks = read(queue: @name).reject { |t| t[:run_at].nil? }
 
-         metas = sort_tasks(tasks).collect do |t|
+         metas = sort_tasks(tasks.collect do |t|
             TaskMetaData.new(t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) }.merge(queue: self))
-         end
+         end)
 
          metadata = metas.find(&:runnable?)
 
@@ -73,7 +72,16 @@ module Procrastinator
                                          scheduler: scheduler))
       end
 
-      def create(run_at:, initial_run_at:, expire_at:, data:)
+      def fetch_task(identifier)
+         tasks = read(identifier)
+
+         raise "no task found matching #{ identifier }" if tasks.nil? || tasks.empty?
+         raise "too many (#{ tasks.size }) tasks match #{ identifier }. Found: #{ tasks }" if tasks.size > 1
+
+         TaskMetaData.new(tasks.first.merge(queue: self))
+      end
+
+      def create(run_at:, expire_at:, data:)
          if data.nil? && expects_data?
             raise ArgumentError, "task #{ @task_class } expects to receive :data. Provide :data to #delay."
          end
@@ -86,11 +94,18 @@ module Procrastinator
             ERROR
          end
 
-         @task_store.create(queue:          @name.to_s,
-                            run_at:         run_at,
-                            initial_run_at: initial_run_at,
-                            expire_at:      expire_at,
-                            data:           JSON.dump(data))
+         meta = TaskMetaData.new(queue:          self,
+                                 run_at:         run_at,
+                                 initial_run_at: run_at,
+                                 expire_at:      expire_at,
+                                 data:           JSON.dump(data))
+         # TODO: shorten to slice once updated to Ruby 2.5+
+         create_data = meta.to_h
+         create_data.delete(:id)
+         create_data.delete(:attempts)
+         create_data.delete(:last_fail_at)
+         create_data.delete(:last_error)
+         @task_store.create(create_data)
       end
 
       def expects_container?
@@ -113,11 +128,12 @@ module Procrastinator
       end
 
       def sort_tasks(tasks)
+         # TODO: improve this
          # shuffling and re-sorting to avoid worst case O(n^2) when receiving already sorted data
          # on quicksort (which is default ruby sort). It is not unreasonable that the persister could return sorted
          # results
          # Ideally, we'd use a better algo than qsort for this, but this will do for now
-         tasks.shuffle.sort_by { |t| t[:run_at] }
+         tasks.shuffle.sort_by(&:run_at)
       end
 
       def verify_task_class!
@@ -126,20 +142,18 @@ module Procrastinator
          verify_hooks!
       end
 
+      # The interface compliance is checked on init because it's one of those rare cases where you want to know early;
+      # otherwise, you wouldn't know until task execution and that could be far in the future.
+      # UX is important for devs, too.
+      #    - R
       def verify_run_method!
          unless @task_class.method_defined? :run
             raise MalformedTaskError, "task #{ @task_class } does not support #run method"
          end
 
-         # It checks the interface compliance on init because it's one of those rare cases where you want to know early;
-         # otherwise, you wouldn't know until task execution and that could be far in the future.
-         # UX is important for devs, too.
-         #    - R
-         if @task_class.method_defined?(:run) && @task_class.instance_method(:run).arity.positive?
-            err = "task #{ @task_class } cannot require parameters to its #run method"
+         return unless @task_class.instance_method(:run).arity.positive?
 
-            raise MalformedTaskError, err
-         end
+         raise MalformedTaskError, "task #{ @task_class } cannot require parameters to its #run method"
       end
 
       def verify_accessors!

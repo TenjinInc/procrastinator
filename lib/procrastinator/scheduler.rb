@@ -17,17 +17,14 @@ module Procrastinator
       # @param run_at [Time, Integer] Optional time when this task should be executed. Defaults to the current time.
       # @param data [Hash, Array, String, Integer] Optional simple data object to be provided to the task on execution.
       # @param expire_at [Time, Integer] Optional time when the task should be abandoned
-      def delay(queue_name = nil, data: nil, run_at: Time.now.to_i, expire_at: nil)
+      def delay(queue_name = nil, data: nil, run_at: Time.now, expire_at: nil)
          raise ArgumentError, <<~ERR unless queue_name.nil? || queue_name.is_a?(Symbol)
             must provide a queue name as the first argument. Received: #{ queue_name }
          ERR
 
          queue = @config.queue(name: queue_name)
 
-         queue.create(run_at:         run_at.to_i,
-                      initial_run_at: run_at.to_i,
-                      expire_at:      expire_at.nil? ? nil : expire_at.to_i,
-                      data:           data)
+         queue.create(run_at: run_at, expire_at: expire_at, data: data)
       end
 
       # Alters an existing task to run at a new time, expire at a new time, or both.
@@ -91,51 +88,25 @@ module Procrastinator
          end
 
          def to(run_at: nil, expire_at: nil)
-            task = fetch_task(@identifier)
+            task = @queue.fetch_task(@identifier)
 
-            verify_time_provided(run_at, expire_at)
-            validate_run_at(run_at, task[:expire_at], expire_at)
+            raise ArgumentError, 'you must provide at least :run_at or :expire_at' if run_at.nil? && expire_at.nil?
 
-            new_data = {
-                  attempts:      0,
-                  last_error:    nil,
-                  last_error_at: nil
-            }
+            if run_at && expire_at
+               task.reschedule(run_at: run_at, expire_at: expire_at)
+            elsif run_at
+               task.reschedule(run_at: run_at)
+            elsif expire_at
+               task.reschedule(expire_at: expire_at)
+            end
 
-            new_data = new_data.merge(run_at: run_at.to_i, initial_run_at: run_at.to_i) if run_at
-            new_data = new_data.merge(expire_at: expire_at.to_i) if expire_at
-
-            @queue.update(task[:id], new_data)
+            new_data = task.to_h
+            new_data.delete(:queue)
+            new_data.delete(:data)
+            @queue.update(new_data.delete(:id), new_data)
          end
 
          alias at to
-
-         private
-
-         def verify_time_provided(run_at, expire_at)
-            raise ArgumentError, 'you must provide at least :run_at or :expire_at' if run_at.nil? && expire_at.nil?
-         end
-
-         def validate_run_at(run_at, saved_expire_at, expire_at)
-            return unless run_at
-
-            after_new_expire = expire_at && run_at.to_i > expire_at.to_i
-
-            raise "given run_at (#{ run_at }) is later than given expire_at (#{ expire_at })" if after_new_expire
-
-            after_old_expire = saved_expire_at && run_at.to_i > saved_expire_at
-
-            raise "given run_at (#{ run_at }) is later than saved expire_at (#{ saved_expire_at })" if after_old_expire
-         end
-
-         def fetch_task(identifier)
-            tasks = @queue.read(identifier)
-
-            raise "no task found matching #{ identifier }" if tasks.nil? || tasks.empty?
-            raise "too many (#{ tasks.size }) tasks match #{ identifier }. Found: #{ tasks }" if tasks.size > 1
-
-            tasks.first
-         end
       end
 
       # Provides a more natural chained syntax for kicking off the queue working process

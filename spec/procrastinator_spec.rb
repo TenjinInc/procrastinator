@@ -95,22 +95,25 @@ module Procrastinator
          end
 
          it 'should store tasks' do
-            scheduler.delay(:thumbnail, run_at: 100, data: {path: 'doug-forcett.png'})
-            scheduler.delay(:email, run_at: 500, data: 'janet@example.com')
-            scheduler.delay(:thumbnail, run_at: 600, data: {size: 100, path: 'magic-panda.png'})
+            scheduler.delay(:thumbnail, run_at: '2016-09-19T00:01:02-09:00', data: {path: 'doug-forcett.png'})
+            scheduler.delay(:email, run_at: '2016-09-19T00:01:00-07:00', data: 'janet@example.com')
+            scheduler.delay(:thumbnail,
+                            run_at:    '2018-01-04T00:12:00-09:00',
+                            expire_at: '2018-01-04T00:13:00-09:00',
+                            data:      {size: 100, path: 'magic-panda.png'})
 
             expect(storage_path.read).to eq <<~TASKS
                id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
-               "1","thumbnail","100","100","","0","","","{""path"":""doug-forcett.png""}"
-               "2","email","500","500","","0","","","""janet@example.com"""
-               "3","thumbnail","600","600","","0","","","{""size"":100,""path"":""magic-panda.png""}"
+               "1","thumbnail","2016-09-19T00:01:02-09:00","2016-09-19T00:01:02-09:00","","0","","","{""path"":""doug-forcett.png""}"
+               "2","email","2016-09-19T00:01:00-07:00","2016-09-19T00:01:00-07:00","","0","","","""janet@example.com"""
+               "3","thumbnail","2018-01-04T00:12:00-09:00","2018-01-04T00:12:00-09:00","2018-01-04T00:13:00-09:00","0","","","{""size"":100,""path"":""magic-panda.png""}"
             TASKS
          end
 
          it 'should retry tasks' do
-            scheduler.delay(:thumbnail, run_at: 100, data: {path: 'doug-forcett.png'})
-            scheduler.delay(:email, run_at: 500, data: 'janet@example.com')
-            scheduler.delay(:crash, run_at: 300, data: 'derek@example.com')
+            scheduler.delay(:thumbnail, run_at: '2016-09-19T00:01:02-09:00', data: {path: 'doug-forcett.png'})
+            scheduler.delay(:email, run_at: '2016-09-19T00:01:00-07:00', data: 'janet@example.com')
+            scheduler.delay(:crash, run_at: '2017-10-26T00:00:00-07:00', data: 'derek@example.com')
 
             scheduler.work.threaded(timeout: 0.25)
 
@@ -118,7 +121,7 @@ module Procrastinator
 
             expect(task_line[1]).to eq('"crash"') # queue
             expect(task_line[2]).to eq('""') # run at
-            expect(task_line[3]).to eq('"300"') # initial run at
+            expect(task_line[3]).to eq('"2017-10-26T00:00:00-07:00"') # initial run at
             expect(task_line[5]).to eq('"1"') # attempts
          end
 
