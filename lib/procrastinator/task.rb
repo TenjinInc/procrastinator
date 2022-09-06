@@ -11,14 +11,19 @@ module Procrastinator
                      :id, :run_at, :initial_run_at, :expire_at,
                      :attempts, :last_fail_at, :last_error,
                      :data, :successful?, :to_h, :final_fail?,
-                     :fail, :serialized_data, :queue, :reschedule, :add_attempt, :expired?, :reset, :clear_fails
-
-      def_delegators :@handler,
-                     :run
+                     :fail, :serialized_data, :queue, :reschedule, :expired?
 
       def initialize(metadata, handler)
          @metadata = metadata
          @handler  = handler
+      end
+
+      def run
+         raise ExpiredError, "task is over its expiry time of #{ @metadata.expire_at.iso8601 }" if expired?
+
+         @metadata.add_attempt
+         @handler.run
+         @metadata.clear_fails
       end
 
       def try_hook(method, *params)
@@ -27,12 +32,11 @@ module Procrastinator
          warn "#{ method.to_s.capitalize } hook error: #{ e.message }"
       end
 
-      def verify_expiry!
-         raise TaskExpiredError, "task is over its expiry time of #{ @metadata.expire_at.iso8601 }" if expired?
+      def to_s
+         "#{ @metadata.queue.name }##{ id } [#{ serialized_data }]"
       end
 
-      def to_s
-         "#{ @metadata.queue.name } [#{ serialized_data }]"
+      class ExpiredError < RuntimeError
       end
    end
 end

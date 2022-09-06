@@ -165,7 +165,4 @@ module Procrastinator
          raise ArgumentError, "new run_at (#{ run_at }) is later than existing expire_at (#{ @expire_at })"
       end
    end
-
-   class TaskExpiredError < StandardError
-   end
 end

@@ -16,7 +16,7 @@ module Procrastinator
    class TaskWorker
       extend Forwardable
 
-      def_delegators :@task, :successful?, :id, :attempts, :to_h
+      def_delegators :@task, :successful?, :id, :to_h
 
       attr_reader :task
 
@@ -26,15 +26,9 @@ module Procrastinator
       end
 
       def work(timeout = nil)
-         @task.add_attempt
-
-         @task.verify_expiry!
-
          result = Timeout.timeout(timeout) do
             @task.run
          end
-
-         @task.clear_fails
 
          @logger&.debug("Task completed: #{ @task }")
 
