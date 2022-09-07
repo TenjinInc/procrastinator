@@ -18,7 +18,7 @@ module Procrastinator
       #
       # def_delegators :@task, :id, :to_h
 
-      attr_reader :task, :logger
+      attr_reader :logger
 
       alias task __getobj__
 

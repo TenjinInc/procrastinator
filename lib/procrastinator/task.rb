@@ -10,8 +10,8 @@ module Procrastinator
       def_delegators :@metadata,
                      :id, :run_at, :initial_run_at, :expire_at,
                      :attempts, :last_fail_at, :last_error,
-                     :data, :successful?, :to_h,
-                     :serialized_data, :queue, :reschedule, :expired?
+                     :data, :to_h, :serialized_data,
+                     :queue, :reschedule
 
       def initialize(metadata, handler)
          @metadata = metadata
@@ -19,7 +19,7 @@ module Procrastinator
       end
 
       def run
-         raise ExpiredError, "task is over its expiry time of #{ @metadata.expire_at.iso8601 }" if expired?
+         raise ExpiredError, "task is over its expiry time of #{ @metadata.expire_at.iso8601 }" if @metadata.expired?
 
          @metadata.add_attempt
          result = Timeout.timeout(queue.timeout) do
