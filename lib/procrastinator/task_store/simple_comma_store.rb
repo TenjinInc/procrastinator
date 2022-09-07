@@ -48,15 +48,19 @@ module Procrastinator
          end
 
          def read(filter = {})
-            parse(@path.read).select do |row|
-               filter.keys.all? do |key|
-                  row[key] == filter[key]
+            data = nil
+            FileTransaction.new(@path) do |existing_data|
+               data = parse(existing_data).select do |row|
+                  filter.keys.all? do |key|
+                     row[key] == filter[key]
+                  end
                end
             end
+            data
          end
 
          def create(queue:, run_at:, initial_run_at:, expire_at:, data: '')
-            FileTransaction.new(@path) do |existing_data|
+            FileTransaction.new(@path, read_only: false) do |existing_data|
                tasks  = parse(existing_data)
                max_id = tasks.collect { |task| task[:id] }.max || 0
 
@@ -75,7 +79,7 @@ module Procrastinator
          end
 
          def update(id, data)
-            FileTransaction.new(@path) do |existing_data|
+            FileTransaction.new(@path, read_only: false) do |existing_data|
                tasks     = parse(existing_data)
                task_data = tasks.find do |task|
                   task[:id] == id
@@ -87,7 +91,7 @@ module Procrastinator
          end
 
          def delete(id)
-            FileTransaction.new(@path) do |file_content|
+            FileTransaction.new(@path, read_only: false) do |file_content|
                existing_data = parse(file_content)
                generate(existing_data.reject { |task| task[:id] == id })
             end

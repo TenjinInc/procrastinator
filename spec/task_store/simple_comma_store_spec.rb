@@ -62,6 +62,8 @@ module Procrastinator
                CONTENTS
 
                path.write(contents)
+
+               allow_any_instance_of(FakeFS::File).to receive(:flock)
             end
 
             it 'should read from a specific csv file' do
@@ -83,6 +85,15 @@ module Procrastinator
 
             it 'should read the whole file' do
                expect(store.read.length).to eq 3
+            end
+
+            # this is needed to prevent reading files that are partially written. It might be possible to do a
+            # write-tmp-and-swap instead, but it would need to be evaluated first vs multithreading and multiprocessing
+            # (ie. multiple daemons)
+            it 'should perform the read within a file transaction' do
+               expect(FileTransaction).to receive(:new).with(path)
+
+               store.read
             end
 
             it 'should handle a file with no tasks' do
@@ -359,7 +370,7 @@ module Procrastinator
             end
 
             it 'should perform the create within a file transaction' do
-               expect(FileTransaction).to receive(:new).with(path)
+               expect(FileTransaction).to receive(:new).with(path, read_only: false)
 
                store.create(required_args)
             end
@@ -427,7 +438,7 @@ module Procrastinator
             end
 
             it 'should perform the update within a file transaction' do
-               expect(FileTransaction).to receive(:new).with(path)
+               expect(FileTransaction).to receive(:new).with(path, read_only: false)
 
                store.update(2, run_at: 0)
             end
@@ -459,7 +470,7 @@ module Procrastinator
             end
 
             it 'should perform the delete within a file transaction' do
-               expect(FileTransaction).to receive(:new).with(path)
+               expect(FileTransaction).to receive(:new).with(path, read_only: false)
 
                store.delete(2)
             end
@@ -526,21 +537,37 @@ module Procrastinator
                   expect(content).to eq('test content')
                end
 
-               it 'should write the block result to the file' do
-                  FileTransaction.new(storage_path) do
-                     'test content'
-                  end
+               context 'reading' do
+                  let(:reading_mode) { true }
+                  it 'should NOT overwrite the existing file' do
+                     orig = 'a' * 10
+                     storage_path.write(orig)
+                     FileTransaction.new(storage_path, read_only: reading_mode) do
+                        'zzz'
+                     end
 
-                  expect(storage_path.read).to eq('test content')
+                     expect(storage_path.read).to eq orig
+                  end
                end
 
-               it 'should overwrite the entire existing file' do
-                  storage_path.write('a' * 10)
-                  FileTransaction.new(storage_path) do
-                     'zzz'
+               context 'writing' do
+                  let(:reading_mode) { false }
+                  it 'should write the block result to the file' do
+                     FileTransaction.new(storage_path, read_only: reading_mode) do
+                        'test content'
+                     end
+
+                     expect(storage_path.read).to eq('test content')
                   end
 
-                  expect(storage_path.read).to eq('zzz')
+                  it 'should overwrite the entire existing file' do
+                     storage_path.write('a' * 10)
+                     FileTransaction.new(storage_path, read_only: reading_mode) do
+                        'zzz'
+                     end
+
+                     expect(storage_path.read).to eq('zzz')
+                  end
                end
             end
 
