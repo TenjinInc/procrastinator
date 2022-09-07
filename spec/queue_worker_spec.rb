@@ -104,22 +104,6 @@ module Procrastinator
             worker.work!
          end
 
-         it 'should pass the TaskWorker the logger' do
-            logger = Logger.new(StringIO.new)
-
-            allow(Logger).to receive(:new).and_return(logger)
-
-            config = Config.new do |c|
-               c.define_queue(:fast_queue, test_task, update_period: 0, store: fake_persister([{run_at: 1}]))
-            end
-
-            expect(TaskWorker).to receive(:new).with(anything, hash_including(logger: logger)).and_call_original
-            worker = QueueWorker.new(queue: :fast_queue, config: config)
-            allow(worker).to receive(:loop).and_yield
-
-            worker.work!
-         end
-
          it 'should log starting a queue worker' do
             [:test1, :test2].each do |queue_name|
                config = Config.new do |c|
@@ -207,15 +191,6 @@ module Procrastinator
       end
 
       describe '#work_one' do
-         let(:config) do
-            Config.new do |c|
-               c.with_store(persister) do
-                  c.define_queue(:email, test_task, update_period: 0.01)
-                  c.define_queue(:cleanup, test_task, update_period: 0.01)
-               end
-            end
-         end
-
          context 'loading and running tasks' do
             it 'should reload tasks every cycle' do
                task1 = double('task1', :container= => nil, :logger= => nil, :scheduler= => nil)
@@ -270,40 +245,6 @@ module Procrastinator
                worker.work_one
             end
 
-            it 'should run a TaskWorker with the task metadata' do
-               task_data = {run_at: 1}
-               config    = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
-               end
-
-               queue  = config.queues.first
-               worker = QueueWorker.new(queue: queue, config: config)
-
-               task = Task.new(TaskMetaData.new(queue: queue, run_at: 1), test_task.new)
-               allow(worker).to receive(:next_task).and_return(task)
-
-               expect(TaskWorker).to receive(:new).with(task, anything).and_call_original
-
-               worker.work_one
-            end
-
-            it 'should run a TaskWorker with the queue timeout' do
-               task_data = {run_at: 1}
-               config    = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([task_data]))
-               end
-
-               queue  = config.queues.first
-               worker = QueueWorker.new(queue: queue, config: config)
-
-               task_worker = double('task worker', successful?: true, id: nil)
-               allow(TaskWorker).to receive(:new).and_return(task_worker)
-
-               expect(task_worker).to receive(:work).with(queue&.timeout)
-
-               worker.work_one
-            end
-
             it 'should request a configured task handler' do
                task_data = {address: 'neutral@example.com'}
                container = double('container object')
@@ -320,29 +261,9 @@ module Procrastinator
 
                worker.work_one
             end
-
-            it 'should pass the TaskWorker the configured task handler' do
-               task_data = {address: 'neutral@example.com'}
-               container = double('container object')
-               handler   = Test::Task::AllHooks.new
-
-               config = Config.new do |c|
-                  c.define_queue(:email, test_task, store: fake_persister([{run_at: 1, data: JSON.dump(task_data)}]))
-                  c.provide_container container
-               end
-
-               meta   = TaskMetaData.new(queue: config.queues.first)
-               task   = Task.new(meta, handler)
-               worker = QueueWorker.new(queue: :email, config: config)
-
-               allow(worker).to receive(:next_task).and_return(task)
-               expect(TaskWorker).to receive(:new).with(task, anything).and_call_original
-
-               worker.work_one
-            end
          end
 
-         context 'TaskWorker succeeds' do
+         context 'task succeeds' do
             it 'should delete the task' do
                task_data = {
                      id:     double('id'),
@@ -436,13 +357,6 @@ module Procrastinator
             worker = QueueWorker.new(queue: :email, config: config)
             allow(worker).to receive(:loop).and_yield
             worker.work!
-            worker.halt
-         end
-
-         it 'should NOT close its logger if nil' do
-            expect(logger).to_not receive(:close)
-
-            worker = QueueWorker.new(queue: :reminders, config: config)
             worker.halt
          end
 

@@ -55,7 +55,7 @@ module Procrastinator
          freeze
       end
 
-      def next_task(logger: nil, container: nil, scheduler: nil)
+      def next_task(logger: Logger.new(StringIO.new), container: nil, scheduler: nil)
          tasks = read(queue: @name).reject { |t| t[:run_at].nil? }
 
          metas = sort_tasks(tasks.collect do |t|
@@ -66,13 +66,17 @@ module Procrastinator
 
          return nil unless metadata
 
-         Task.new(metadata, task_handler(data:      metadata.data,
-                                         container: container,
-                                         logger:    logger,
-                                         scheduler: scheduler))
+         task = Task.new(metadata, task_handler(data:      metadata.data,
+                                                container: container,
+                                                logger:    logger,
+                                                scheduler: scheduler))
+
+         LoggedTask.new(task, logger: logger)
       end
 
       def fetch_task(identifier)
+         identifier[:data] = JSON.dump(identifier[:data]) if identifier[:data]
+
          tasks = read(identifier)
 
          raise "no task found matching #{ identifier }" if tasks.nil? || tasks.empty?
@@ -106,10 +110,6 @@ module Procrastinator
          create_data.delete(:last_fail_at)
          create_data.delete(:last_error)
          @task_store.create(create_data)
-      end
-
-      def expects_container?
-         @task_class.method_defined?(:container=)
       end
 
       def expects_data?

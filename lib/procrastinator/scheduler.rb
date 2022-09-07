@@ -81,8 +81,6 @@ module Procrastinator
       # @see Scheduler#reschedule
       class UpdateProxy
          def initialize(queue, identifier:)
-            identifier[:data] = JSON.dump(identifier[:data]) if identifier[:data]
-
             @queue      = queue
             @identifier = identifier
          end
@@ -92,13 +90,8 @@ module Procrastinator
 
             raise ArgumentError, 'you must provide at least :run_at or :expire_at' if run_at.nil? && expire_at.nil?
 
-            if run_at && expire_at
-               task.reschedule(run_at: run_at, expire_at: expire_at)
-            elsif run_at
-               task.reschedule(run_at: run_at)
-            elsif expire_at
-               task.reschedule(expire_at: expire_at)
-            end
+            task.reschedule(expire_at: expire_at) if expire_at
+            task.reschedule(run_at: run_at) if run_at
 
             new_data = task.to_h
             new_data.delete(:queue)

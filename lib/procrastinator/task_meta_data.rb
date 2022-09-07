@@ -55,25 +55,37 @@ module Procrastinator
       end
 
       def add_attempt
+         raise Task::AttemptsExhaustedError unless attempts_left?
+
          @attempts += 1
       end
 
-      def fail(msg, final: false)
+      # Records a failure on this task
+      #
+      # @param error [StandardError] The error to record
+      def failure(error)
          @last_fail_at = Time.now
-         @last_error   = msg
-         @run_at       = nil if final
+         @last_error   = %[Task failed: #{ error.message }\n#{ error.backtrace&.join("\n") }]
+
+         if retryable?
+            reschedule
+            :fail
+         else
+            @run_at = nil
+            :final_fail
+         end
       end
 
-      def final_fail?
-         too_many_fails? || expired?
+      def retryable?
+         attempts_left? && !expired?
       end
 
       def expired?
          !@expire_at.nil? && @expire_at < Time.now
       end
 
-      def too_many_fails?
-         !@queue.max_attempts.nil? && @attempts >= @queue.max_attempts
+      def attempts_left?
+         @queue.max_attempts.nil? || @attempts < @queue.max_attempts
       end
 
       def runnable?

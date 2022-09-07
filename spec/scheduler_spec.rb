@@ -230,74 +230,25 @@ module Procrastinator
    end
 
    describe Scheduler::UpdateProxy do
-      let(:test_task) { Test::Task::AllHooks }
-      let(:persister) { Test::Persister.new }
-      let(:config) do
-         Config.new do |c|
-            c.define_queue(:test_queue, test_task, store: persister)
-         end
+      let(:task_id) { double('task id') }
+      let(:identifier) { {id: task_id} }
+      let(:task) do
+         Task.new(TaskMetaData.new(queue: Queue.new(name: :test_queue, task_class: Test::Task::AllHooks), id: task_id),
+                  Test::Task::AllHooks.new)
       end
-      let(:identifier) { {id: 'id'} }
-      let(:queue) { config.queue(name: :test_queue) }
+      # need a queue double bc queues are frozen and can't be stubbed
+      let(:queue) { double('queue', update: nil, fetch_task: task) }
       let(:update_proxy) { Scheduler::UpdateProxy.new(queue, identifier: identifier) }
 
       describe '#to' do
-         before(:each) do
-            allow(persister).to receive(:read).and_return([{id: 5}])
-         end
+         it 'should ask the queue for the task' do
+            expect(queue).to receive(:fetch_task).with(identifier)
 
-         it 'should find the task matching the given information' do
-            [{id: 5}, {data: {user_id: 5, appointment_id: 2}}].each do |identifier|
-               update_proxy = Scheduler::UpdateProxy.new(queue, identifier: identifier)
-
-               expect(persister).to receive(:read).with(identifier).and_return([{id: 1, run_at: 2}])
-
-               update_proxy.to(run_at: 0)
-            end
-         end
-
-         it 'should find the task matching the given serialized :data' do
-            data = {user_id: 5, appointment_id: 2}
-
-            update_proxy = Scheduler::UpdateProxy.new(queue, identifier: {data: data})
-
-            expect(persister).to receive(:read).with(data: JSON.dump(data)).and_return([{id: 1, run_at: 2}])
-
-            update_proxy.to(run_at: 0)
-         end
-
-         it 'should complain if no task matches the given information' do
-            identifier = {bogus: 66}
-
-            update_proxy = Scheduler::UpdateProxy.new(queue, identifier: identifier)
-
-            [[], nil].each do |ret|
-               allow(persister).to receive(:read).and_return(ret)
-
-               expect do
-                  update_proxy.to(run_at: 0)
-               end.to raise_error(RuntimeError, "no task found matching #{ identifier }")
-            end
-         end
-
-         it 'should complain if multiple tasks match the given information' do
-            (3..5).each do |n|
-               tasks = Array.new(n) { |i| double("task#{ i }") }
-
-               allow(persister).to receive(:read).and_return(tasks)
-
-               expect do
-                  update_proxy.to(run_at: 0)
-               end.to raise_error(RuntimeError, "too many (#{ n }) tasks match #{ identifier }. Found: #{ tasks }")
-            end
+            update_proxy.to(run_at: Time.now)
          end
 
          it 'should update the found task' do
-            id = double('id')
-
-            allow(persister).to receive(:read).and_return([{id: id}])
-
-            expect(persister).to receive(:update).with(id, anything)
+            expect(queue).to receive(:update).with(task_id, anything)
 
             update_proxy.to(run_at: Time.now)
          end
@@ -305,10 +256,34 @@ module Procrastinator
          it 'should update run_at and initial_run_at to the given time' do
             time = '2022-05-01T05:40:00-06:00'
 
-            expect(persister).to receive(:update).with(anything, hash_including(run_at:         time,
-                                                                                initial_run_at: time))
+            expect(queue).to receive(:update).with(anything, hash_including(run_at:         time,
+                                                                            initial_run_at: time))
 
             update_proxy.to(run_at: Time.parse(time))
+         end
+
+         it 'should reschedule the run_at' do
+            expect(task).to receive(:reschedule).with(run_at: 1234)
+
+            update_proxy.to(run_at: 1234)
+         end
+
+         it 'should NOT reschedule run_at to nil' do
+            expect(task).to_not receive(:reschedule).with(run_at: nil)
+
+            update_proxy.to(run_at: nil, expire_at: 0)
+         end
+
+         it 'should reschedule the expire_at' do
+            expect(task).to receive(:reschedule).with(expire_at: 4567)
+
+            update_proxy.to(expire_at: 4567)
+         end
+
+         it 'should NOT reschedule expire_at to nil' do
+            expect(task).to_not receive(:reschedule).with(expire_at: nil)
+
+            update_proxy.to(run_at: 0, expire_at: nil)
          end
 
          it 'should complain if run_at nor expire_at are provided' do
@@ -318,13 +293,8 @@ module Procrastinator
          end
 
          it 'should not change id, queue, or data' do
-            expect(persister).to receive(:update).with(5, hash_excluding(:id, :data, :queue))
+            expect(queue).to receive(:update).with(task_id, hash_excluding(:id, :data, :queue))
 
-            update_proxy.to(run_at: Time.now)
-         end
-
-         # TODO: this can probably replace some of the above tests
-         it 'should save the updated task' do
             update_proxy.to(run_at: Time.now)
          end
       end

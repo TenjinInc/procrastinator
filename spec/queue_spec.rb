@@ -509,6 +509,22 @@ module Procrastinator
             queue.next_task
          end
 
+         it 'should create a logged task' do
+            logger = Logger.new(StringIO.new)
+
+            allow(Logger).to receive(:new).and_return(logger)
+
+            config = Config.new do |c|
+               c.define_queue(:fast_queue, test_task, update_period: 0, store: fake_persister([{run_at: 1}]))
+            end
+
+            expect(LoggedTask).to receive(:new).with(instance_of(Task),
+                                                     hash_including(logger: logger)).and_call_original
+            worker = QueueWorker.new(queue: :fast_queue, config: config)
+
+            worker.work_one
+         end
+
          context 'dependency injection' do
             let(:task) { task_class.new }
             let(:meta) { TaskMetaData.new }
@@ -626,6 +642,51 @@ module Procrastinator
             err = "task #{ task_with_data } expects to receive :data. Provide :data to #delay."
 
             expect { queue.create(required_args.merge(data: nil)) }.to raise_error(ArgumentError, err)
+         end
+      end
+
+      describe '#fetch_task' do
+         let(:queue) { Queue.new(name: :test_queue, task_class: Test::Task::AllHooks, store: persister) }
+
+         it 'should request the task matching the given information' do
+            [{id: 5}, {data: {user_id: 5, appointment_id: 2}}].each do |identifier|
+               expect(persister).to receive(:read).with(identifier).and_return([{id: 1, run_at: 2}])
+
+               queue.fetch_task(identifier)
+            end
+         end
+
+         it 'should find the task matching the given serialized :data' do
+            data = {user_id: 5, appointment_id: 2}
+
+            expect(persister).to receive(:read).with(data: JSON.dump(data)).and_return([{id: 1, run_at: 2}])
+
+            queue.fetch_task(data: data)
+         end
+
+         it 'should complain if no task matches the given information' do
+            identifier = {bogus: 66}
+
+            [[], nil].each do |ret|
+               allow(persister).to receive(:read).and_return(ret)
+
+               expect do
+                  queue.fetch_task(identifier)
+               end.to raise_error(RuntimeError, "no task found matching #{ identifier }")
+            end
+         end
+
+         it 'should complain if multiple tasks match the given information' do
+            identifier = {id: 'id'}
+            (3..5).each do |n|
+               tasks = Array.new(n) { |i| double("task#{ i }") }
+
+               allow(persister).to receive(:read).and_return(tasks)
+
+               expect do
+                  queue.fetch_task(identifier)
+               end.to raise_error(RuntimeError, "too many (#{ n }) tasks match #{ identifier }. Found: #{ tasks }")
+            end
          end
       end
    end

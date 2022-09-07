@@ -10,8 +10,8 @@ module Procrastinator
       def_delegators :@metadata,
                      :id, :run_at, :initial_run_at, :expire_at,
                      :attempts, :last_fail_at, :last_error,
-                     :data, :successful?, :to_h, :final_fail?,
-                     :fail, :serialized_data, :queue, :reschedule, :expired?
+                     :data, :successful?, :to_h,
+                     :serialized_data, :queue, :reschedule, :expired?
 
       def initialize(metadata, handler)
          @metadata = metadata
@@ -22,8 +22,24 @@ module Procrastinator
          raise ExpiredError, "task is over its expiry time of #{ @metadata.expire_at.iso8601 }" if expired?
 
          @metadata.add_attempt
-         @handler.run
+         result = Timeout.timeout(queue.timeout) do
+            @handler.run
+         end
          @metadata.clear_fails
+
+         try_hook(:success, result)
+      end
+
+      alias call run
+
+      # Records a failure in metadata and attempts to run the handler's #fail hook if present.
+      #
+      # @param error [StandardError] - the error that caused the failure
+      def fail(error)
+         hook = @metadata.failure(error)
+
+         try_hook(hook, error)
+         hook
       end
 
       def try_hook(method, *params)
@@ -37,6 +53,9 @@ module Procrastinator
       end
 
       class ExpiredError < RuntimeError
+      end
+
+      class AttemptsExhaustedError < RuntimeError
       end
    end
 end

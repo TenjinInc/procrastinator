@@ -134,8 +134,8 @@ module Procrastinator
             email_log     = tmp_log_dir / 'email-queue-worker.log'
             thumbnail_log = tmp_log_dir / 'thumbnail-queue-worker.log'
 
-            expect(email_log.read).to include('janet@example.com').once
-            expect(thumbnail_log.read).to include('doug-forcett.png').once
+            expect(email_log.read).to include('Ran with data: janet@example.com').once
+            expect(thumbnail_log.read).to include('Ran with data: {:path=>"stars/doug-forcett.png"}').once
          end
       end
    end

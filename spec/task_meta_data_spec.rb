@@ -4,7 +4,7 @@ require 'spec_helper'
 
 module Procrastinator
    describe TaskMetaData do
-      let(:queue) { double('queue object', name: :test_queue, update: nil) }
+      let(:queue) { double('queue object', name: :test_queue, update: nil, max_attempts: nil) }
 
       describe '#inititalize' do
          let(:task) { double('task', run: nil) }
@@ -26,7 +26,6 @@ module Procrastinator
          it 'should complain when queue is nil' do
             expect do
                TaskMetaData.new(queue: nil)
-               task.queue
             end.to raise_error ArgumentError
          end
 
@@ -136,13 +135,29 @@ module Procrastinator
          end
 
          it 'should default nil attempts to 0' do
-            task = TaskMetaData.new(attempts: nil, queue: queue)
-            expect(task.attempts).to be 0
+            meta = TaskMetaData.new(attempts: nil, queue: queue)
+            expect(meta.attempts).to be 0
          end
 
          it 'should convert attempts to integer' do
-            task = TaskMetaData.new(attempts: double('attempts', to_i: 5), queue: queue)
-            expect(task.attempts).to eq 5
+            meta = TaskMetaData.new(attempts: double('attempts', to_i: 5), queue: queue)
+            expect(meta.attempts).to eq 5
+         end
+      end
+
+      describe '#add_attempt' do
+         let(:queue) { double('queue object', name: :test_queue, update: nil, max_attempts: 1) }
+
+         it 'should increase the attempts' do
+            meta = TaskMetaData.new(queue: queue, attempts: 0)
+            meta.add_attempt
+            expect(meta.attempts).to be 1
+         end
+
+         it 'should complain when so more attempts are available' do
+            meta = TaskMetaData.new(queue: queue, attempts: 1)
+
+            expect { meta.add_attempt }.to raise_error Task::AttemptsExhaustedError
          end
       end
 
@@ -206,7 +221,93 @@ module Procrastinator
          end
       end
 
-      describe '#too_many_fails?' do
+      describe '#failure' do
+         let(:fake_error) do
+            err = StandardError.new('asplode')
+            err.set_backtrace ['first line', 'second line']
+            err
+         end
+
+         context 'normal failure' do
+            let(:meta) { TaskMetaData.new(queue: queue, run_at: 0) }
+
+            it 'should record the failure time' do
+               now = Time.now
+
+               Timecop.freeze(now) do
+                  meta.failure(fake_error)
+               end
+
+               expect(meta.last_fail_at).to eq now
+            end
+
+            it 'should record the failure cause' do
+               meta.failure(fake_error)
+
+               recorded_err = meta.last_error
+               expect(recorded_err).to start_with 'Task failed: '
+               expect(recorded_err).to include fake_error.message # error message
+               expect(recorded_err).to include 'first line' # backtrace lines
+               expect(recorded_err).to include 'second line'
+            end
+
+            it 'should reschedule' do
+               meta.failure(fake_error)
+
+               expect(meta.run_at.to_i).to be > 0
+            end
+
+            it 'should return :fail' do
+               expect(meta.failure(fake_error)).to be :fail
+            end
+         end
+
+         context 'final failure' do
+            let(:queue) { Queue.new(name: :final_queue, task_class: Test::Task::Fail, max_attempts: 1) }
+            let(:meta) { TaskMetaData.new(queue: queue, run_at: 0, expire_at: 0, attempts: 0) }
+
+            before(:each) do
+               allow(meta).to receive(:retryable?).and_return false
+            end
+
+            it 'should NOT reschedule' do
+               meta.failure(fake_error)
+
+               expect(meta.run_at.to_i).to eq 0
+            end
+
+            it 'should set run_at to nil' do
+               meta.failure(fake_error)
+
+               expect(meta.run_at).to be_nil
+            end
+
+            it 'should return :final_fail' do
+               expect(meta.failure(fake_error)).to be :final_fail
+            end
+         end
+      end
+
+      describe '#retryable?' do
+         let(:queue) { Queue.new(name: :final_queue, task_class: Test::Task::Fail, max_attempts: 1) }
+
+         it 'should return true when not expired and attempts remain' do
+            meta = TaskMetaData.new(queue: queue, run_at: 0, expire_at: nil, attempts: 0)
+            expect(meta.retryable?).to be true
+         end
+
+         it 'should return false when expired' do
+            meta = TaskMetaData.new(queue: queue, run_at: 0, expire_at: Time.now, attempts: 0)
+            expect(meta.retryable?).to be false
+         end
+
+         it 'should return false when out of attempts' do
+            meta = TaskMetaData.new(queue: queue, run_at: 0, expire_at: nil, attempts: 1)
+            expect(meta.retryable?).to be false
+         end
+      end
+
+      describe '#attempts_left?' do
          let(:queue) do
             Procrastinator::Queue.new(name:         :queue,
                                       task_class:   Test::Task::Fail,
@@ -214,13 +315,13 @@ module Procrastinator
          end
 
          it 'should be true if under the limit' do
-            expect(TaskMetaData.new(attempts: 1, queue: queue).too_many_fails?).to be false
-            expect(TaskMetaData.new(attempts: 2, queue: queue).too_many_fails?).to be false
+            expect(TaskMetaData.new(attempts: 1, queue: queue).attempts_left?).to be true
+            expect(TaskMetaData.new(attempts: 2, queue: queue).attempts_left?).to be true
          end
 
          it 'should be false if at or above the limit' do
-            expect(TaskMetaData.new(attempts: 3, queue: queue).too_many_fails?).to be true
-            expect(TaskMetaData.new(attempts: 4, queue: queue).too_many_fails?).to be true
+            expect(TaskMetaData.new(attempts: 3, queue: queue).attempts_left?).to be false
+            expect(TaskMetaData.new(attempts: 4, queue: queue).attempts_left?).to be false
          end
 
          it 'should always be false if nil max_attempts is given' do
@@ -229,7 +330,7 @@ module Procrastinator
                                               max_attempts: nil)
 
             (1..100).each do |i|
-               expect(TaskMetaData.new(attempts: i, queue: queue).too_many_fails?).to be false
+               expect(TaskMetaData.new(attempts: i, queue: queue).attempts_left?).to be true
             end
          end
       end

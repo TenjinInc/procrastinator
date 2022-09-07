@@ -92,10 +92,6 @@ module Procrastinator
 
       include DSL
 
-      def single_queue?
-         @queues.size == 1
-      end
-
       def queue(name: nil)
          queue = if name
                     @queues.find do |q|

@@ -3,7 +3,7 @@
 require 'procrastinator/version'
 require 'procrastinator/loggable'
 require 'procrastinator/task_meta_data'
-require 'procrastinator/task_worker'
+require 'procrastinator/logged_task'
 require 'procrastinator/queue'
 require 'procrastinator/queue_worker'
 require 'procrastinator/config'
@@ -35,10 +35,6 @@ module Procrastinator
       config = Config.new(&block)
 
       raise SetupError, SetupError::ERR_NO_QUEUE if config.queues.empty?
-
-      if config.container && config.queues.none? { |queue| queue.expects_container? }
-         raise SetupError, SetupError::ERR_UNUSED_CONTAINER
-      end
 
       Scheduler.new(config)
    end

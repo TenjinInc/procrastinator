@@ -28,6 +28,7 @@ module Procrastinator
                   end
 
          @scheduler = Scheduler.new(config)
+         @logger    = Logger.new(StringIO.new)
       end
 
       # Works on jobs forever
@@ -51,19 +52,18 @@ module Procrastinator
       def work_one
          task = next_task(logger:    @logger,
                           container: @config.container,
-                          scheduler: @scheduler)
-         return unless task
+                          scheduler: @scheduler) || return
 
-         worker = TaskWorker.new(task, logger: @logger)
+         begin
+            task.run
 
-         worker.work(@queue.timeout)
+            @queue.delete(task.id)
+         rescue StandardError => e
+            task.fail(e)
 
-         if worker.successful?
-            @queue.delete(worker.id)
-         else
-            worker_info = worker.to_h
-            id          = worker_info.delete(:id)
-            @queue.update(id, **worker_info)
+            task_info = task.to_h
+            id        = task_info.delete(:id)
+            @queue.update(id, **task_info)
          end
       end
 
