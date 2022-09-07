@@ -373,28 +373,23 @@ module Procrastinator
             end
          end
       end
-   end
-
-   describe Loggable do
-      let(:loggable) do
-         Test::TestLoggable.new
-      end
-
-      let(:test_task) { Test::Task::AllHooks }
 
       describe '#open_log!' do
          let(:log_dir) { Pathname.new '/var/log' }
 
+         let(:worker) { QueueWorker.new(queue: :test_queue, config: config) }
+
          context 'falsey log level' do
             let(:config) do
                Config.new do |c|
+                  c.define_queue :test_queue, Test::Task::AllHooks
                   c.log_with level:     nil,
                              directory: log_dir
                end
             end
 
             it 'should NOT create the log directory' do
-               loggable.open_log!('test-log', config)
+               worker.open_log!('test-log', config)
 
                expect(Dir.glob('/var/log/*')).to be_empty
             end
@@ -402,11 +397,11 @@ module Procrastinator
             it 'should NOT create a logger instance' do
                expect(Logger).to_not receive(:new)
 
-               loggable.open_log!('test-log', config)
+               worker.open_log!('test-log', config)
             end
 
             it 'should NOT create a log file for this worker' do
-               loggable.open_log!('test-log', config)
+               worker.open_log!('test-log', config)
 
                expect(Dir.glob('*.log')).to be_empty
             end
@@ -415,13 +410,14 @@ module Procrastinator
          context 'truthy log level' do
             let(:config) do
                Config.new do |c|
+                  c.define_queue :test_queue, Test::Task::AllHooks
                   c.log_with level:     1,
                              directory: log_dir
                end
             end
 
             it 'should create the log directory if it does not exist' do
-               loggable.open_log!('test-log', config)
+               worker.open_log!('test-log', config)
 
                expect(log_dir).to be_directory
             end
@@ -435,7 +431,7 @@ module Procrastinator
                log_dir.mkpath
                log_path.write(existing_data)
 
-               logger = loggable.open_log!('existing', config)
+               logger = worker.open_log!('existing', config)
                logger.info(new_data)
 
                expect(log_path.read).to start_with(existing_data)
@@ -447,6 +443,7 @@ module Procrastinator
 
                Logger::Severity.constants.each do |level|
                   config = Config.new do |c|
+                     c.define_queue :test_queue, Test::Task::AllHooks
                      c.log_with level: level
                   end
 
@@ -454,13 +451,13 @@ module Procrastinator
                                           .with(anything, anything, anything, hash_including(level: level))
                                           .and_return logger
 
-                  loggable.open_log!('test-log', config)
+                  worker.open_log!('test-log', config)
                end
             end
 
             it 'should include the log name in the log output' do
                ['some-name', 'another name'].each do |name|
-                  logger = loggable.open_log!(name, config)
+                  logger = worker.open_log!(name, config)
                   logger.info('test')
 
                   log_contents = Pathname.new("#{ log_dir }/#{ name }.log").read
@@ -475,12 +472,13 @@ module Procrastinator
                size   = double('size')
                age    = double('age')
                config = Config.new do |c|
+                  c.define_queue :test_queue, Test::Task::AllHooks
                   c.log_with shift_size: size, shift_age: age
                end
 
                expect(Logger).to receive(:new).with(anything, age, size, anything).and_return(logger)
 
-               loggable.open_log!('test-config', config)
+               worker.open_log!('test-config', config)
             end
          end
       end

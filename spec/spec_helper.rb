@@ -70,10 +70,6 @@ module Procrastinator
             end
          end
       end
-
-      class TestLoggable
-         include Loggable
-      end
    end
 end
 

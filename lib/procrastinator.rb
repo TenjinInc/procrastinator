@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'procrastinator/version'
-require 'procrastinator/loggable'
 require 'procrastinator/task_meta_data'
 require 'procrastinator/logged_task'
 require 'procrastinator/queue'
@@ -34,12 +33,6 @@ module Procrastinator
 
       config = Config.new(&block)
 
-      raise SetupError, SetupError::ERR_NO_QUEUE if config.queues.empty?
-
       Scheduler.new(config)
-   end
-
-   class SetupError < RuntimeError
-      ERR_NO_QUEUE = 'setup block must call #define_queue on the environment'
    end
 end

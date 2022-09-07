@@ -42,7 +42,10 @@ module Procrastinator
          @log_shift_size = DEFAULT_LOG_SHIFT_SIZE
 
          with_store(csv: TaskStore::SimpleCommaStore::DEFAULT_FILE) do
-            yield(self) if block_given?
+            if block_given?
+               yield(self)
+               raise SetupError, SetupError::ERR_NO_QUEUE if @queues.empty?
+            end
          end
 
          @queues.freeze
@@ -133,6 +136,10 @@ module Procrastinator
          else
             store
          end
+      end
+
+      class SetupError < RuntimeError
+         ERR_NO_QUEUE = 'setup block must call #define_queue on the environment'
       end
    end
 end

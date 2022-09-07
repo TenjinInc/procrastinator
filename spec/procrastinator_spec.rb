@@ -41,22 +41,6 @@ module Procrastinator
          it 'should require that a block is provided' do
             expect { Procrastinator.setup }.to raise_error(ArgumentError, 'Procrastinator.setup must be given a block')
          end
-
-         it 'should require at least one queue is defined' do
-            expect do
-               Procrastinator.setup do |config|
-                  config # just a placeholder to avoid rubocop complaint
-               end
-            end.to raise_error(SetupError, 'setup block must call #define_queue on the environment')
-         end
-
-         it 'should complain if it does not have any queues defined' do
-            expect do
-               Procrastinator.setup do |_config|
-                  # empty on purpose
-               end
-            end.to raise_error(SetupError, SetupError::ERR_NO_QUEUE)
-         end
       end
 
       context 'integration tests' do

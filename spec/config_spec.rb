@@ -9,12 +9,15 @@ module Procrastinator
       describe '#initialize' do
          it 'should yield itself' do
             yielded_instance = nil
-            new_instance     = described_class.new { |i| yielded_instance = i }
+            new_instance     = described_class.new do |env|
+               yielded_instance = env
+               env.define_queue(:test_queue, test_task)
+            end
             expect(yielded_instance).to be new_instance
          end
 
          it 'should default to the basic CSV task store if none is provided' do
-            config = Config.new do |c|
+            config = described_class.new do |c|
                c.define_queue(:test_queue, test_task)
             end
 
@@ -26,15 +29,23 @@ module Procrastinator
 
          # immutable to aid with thread-safety and predictability
          it 'should freeze itself' do
-            config = Config.new
+            config = described_class.new
 
             expect(config).to be_frozen
          end
 
          it 'should freeze its queue list' do
-            config = Config.new
+            config = described_class.new
 
             expect(config.queues).to be_frozen
+         end
+
+         it 'should complain if it does not have any queues defined' do
+            expect do
+               described_class.new do
+                  # nothing
+               end
+            end.to raise_error(Config::SetupError, Config::SetupError::ERR_NO_QUEUE)
          end
       end
 
@@ -104,6 +115,7 @@ module Procrastinator
             it 'should yield to the given block' do
                expect do |block|
                   Config.new do |c|
+                     c.define_queue(:test_queue, test_task)
                      c.with_store(csv: 'something.csv', &block)
                   end
                end.to yield_with_no_args
@@ -112,6 +124,7 @@ module Procrastinator
             it 'should use the provided task store as the new default within the block' do
                expect do |block|
                   Config.new do |c|
+                     c.define_queue(:test_queue, test_task)
                      c.with_store(csv: 'something.csv', &block)
                   end
                end.to yield_with_no_args
@@ -136,6 +149,7 @@ module Procrastinator
                container = double('block')
 
                config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
                   c.provide_container(container)
                end
 
@@ -267,6 +281,7 @@ module Procrastinator
                dir = '/a/logging/directory'
 
                config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
                   c.log_with(directory: dir)
                end
 
@@ -276,6 +291,7 @@ module Procrastinator
             it 'should set the log level' do
                lvl    = Logger::FATAL
                config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
                   c.log_with(level: lvl)
                end
 
@@ -285,6 +301,7 @@ module Procrastinator
             it 'should set the shift_age' do
                age    = 123
                config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
                   c.log_with(shift_age: age)
                end
 
@@ -294,6 +311,7 @@ module Procrastinator
             it 'should set the shift_size' do
                size   = 456
                config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
                   c.log_with(shift_size: size)
                end
 
@@ -302,6 +320,7 @@ module Procrastinator
 
             it 'should use default directory if omitted' do
                config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
                   c.log_with(level: Logger::DEBUG)
                end
 
@@ -310,6 +329,7 @@ module Procrastinator
 
             it 'should use default level if omitted' do
                config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
                   c.log_with(directory: '/test/log')
                end
                expect(config.log_level).to eq Logger::INFO
@@ -317,6 +337,7 @@ module Procrastinator
 
             it 'should use default shift age if omitted' do
                config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
                   c.log_with(directory: '/test/log')
                end
                expect(config.log_shift_age).to eq Config::DEFAULT_LOG_SHIFT_AGE
@@ -324,6 +345,7 @@ module Procrastinator
 
             it 'should use default shift size if omitted' do
                config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
                   c.log_with(directory: '/test/log')
                end
                # 2**20 = 1 MB
@@ -393,6 +415,7 @@ module Procrastinator
             dir = '/logging/path'
 
             config = Config.new do |c|
+               c.define_queue(:test_queue, test_task)
                c.log_with directory: dir
             end
 

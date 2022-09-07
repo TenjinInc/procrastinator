@@ -243,4 +243,3 @@ module Procrastinator
       end
    end
 end
-

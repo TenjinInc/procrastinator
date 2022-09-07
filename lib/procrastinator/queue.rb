@@ -55,7 +55,7 @@ module Procrastinator
          freeze
       end
 
-      def next_task(logger: Logger.new(StringIO.new), container: nil, scheduler: nil)
+      def next_task(logger: nil, container: nil, scheduler: nil)
          tasks = read(queue: @name).reject { |t| t[:run_at].nil? }
 
          metas = sort_tasks(tasks.collect do |t|
@@ -71,7 +71,7 @@ module Procrastinator
                                                 logger:    logger,
                                                 scheduler: scheduler))
 
-         LoggedTask.new(task, logger: logger)
+         LoggedTask.new(task, logger: logger || Logger.new(StringIO.new))
       end
 
       def fetch_task(identifier)
