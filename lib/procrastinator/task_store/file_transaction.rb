@@ -26,26 +26,37 @@ module Procrastinator
             attr_reader :file_mutex
          end
 
-         # Completes the given block as an atomic transaction locked using a global mutex table.
-         # The block's result is written to the file.
-         # The block is provided the current file contents.
-         def initialize(path, read_only: true)
-            path = ensure_path(path)
+         def initialize(path)
+            @path = ensure_path(path)
+         end
 
-            semaphore = FileTransaction.file_mutex[path.to_s] ||= Mutex.new
+         # Alias for transact(writable: false)
+         def read(&block)
+            transact(writable: false, &block)
+         end
+
+         # Alias for transact(writable: true)
+         def write(&block)
+            transact(writable: true, &block)
+         end
+
+         # Completes the given block as an atomic transaction locked using a global mutex table.
+         # The block is provided the current file contents.
+         # The block's result is written to the file.
+         def transact(writable: false)
+            semaphore = FileTransaction.file_mutex[@path.to_s] ||= Mutex.new
 
             semaphore.synchronize do
-               path.open(read_only ? 'r' : 'r+') do |file|
+               @path.open(writable ? 'r+' : 'r') do |file|
                   file.flock(File::LOCK_EX)
 
-                  contents     = file.read
-                  new_contents = yield(contents)
-                  unless read_only
+                  yield_result = yield(file.read)
+                  if writable
                      file.rewind
-                     file.write new_contents
+                     file.write yield_result
                      file.truncate(file.pos)
                   end
-                  new_contents
+                  yield_result
                end
             end
          end

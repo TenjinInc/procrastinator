@@ -91,7 +91,9 @@ module Procrastinator
             # write-tmp-and-swap instead, but it would need to be evaluated first vs multithreading and multiprocessing
             # (ie. multiple daemons)
             it 'should perform the read within a file transaction' do
-               expect(FileTransaction).to receive(:new).with(path)
+               transaction = double('transaction')
+               expect(FileTransaction).to receive(:new).with(path).and_return(transaction)
+               expect(transaction).to receive(:read)
 
                store.read
             end
@@ -370,7 +372,9 @@ module Procrastinator
             end
 
             it 'should perform the create within a file transaction' do
-               expect(FileTransaction).to receive(:new).with(path, read_only: false)
+               transaction = double('transaction')
+               expect(FileTransaction).to receive(:new).with(path).and_return(transaction)
+               expect(transaction).to receive(:write)
 
                store.create(required_args)
             end
@@ -438,7 +442,9 @@ module Procrastinator
             end
 
             it 'should perform the update within a file transaction' do
-               expect(FileTransaction).to receive(:new).with(path, read_only: false)
+               transaction = double('transaction')
+               expect(FileTransaction).to receive(:new).with(path).and_return(transaction)
+               expect(transaction).to receive(:write)
 
                store.update(2, run_at: 0)
             end
@@ -470,7 +476,9 @@ module Procrastinator
             end
 
             it 'should perform the delete within a file transaction' do
-               expect(FileTransaction).to receive(:new).with(path, read_only: false)
+               transaction = double('transaction')
+               expect(FileTransaction).to receive(:new).with(path).and_return(transaction)
+               expect(transaction).to receive(:write)
 
                store.delete(2)
             end
@@ -526,53 +534,123 @@ module Procrastinator
                before(:each) do
                   allow_any_instance_of(FakeFS::File).to receive(:flock)
                end
+            end
+         end
+
+         describe '#read' do
+            let(:storage_path) { Pathname.new 'test-file.txt' }
+            let(:transaction) { FileTransaction.new(storage_path) }
+
+            before(:each) do
+               allow_any_instance_of(FakeFS::File).to receive(:flock)
+            end
+
+            it 'should alias #transact' do
+               block = proc do
+                  # something
+               end
+               expect(transaction).to receive(:transact).with(writable: false, &block)
+
+               transaction.read(&block)
+            end
+         end
+
+         describe '#write' do
+            let(:storage_path) { Pathname.new 'test-file.txt' }
+            let(:transaction) { FileTransaction.new(storage_path) }
+
+            it 'should call #transact with writable mode and block' do
+               block = proc do
+                  # something
+               end
+               expect(transaction).to receive(:transact).with(writable: true, &block)
+
+               transaction.write(&block)
+            end
+         end
+
+         describe '#transact' do
+            let(:storage_path) { Pathname.new 'test-file.txt' }
+            let(:transaction) { FileTransaction.new(storage_path) }
+
+            it 'should return the block result' do
+               [true, false].each do |mode|
+                  allow_any_instance_of(FakeFS::File).to receive(:flock)
+
+                  result = double('something')
+
+                  expect(transaction.transact(writable: mode) do
+                     result
+                  end).to eq result
+               end
+            end
+
+            context 'readable' do
+               let(:storage_path) { Pathname.new 'test-file.txt' }
+               let(:transaction) { FileTransaction.new(storage_path) }
+
+               before(:each) do
+                  allow_any_instance_of(FakeFS::File).to receive(:flock)
+               end
 
                it 'should pass the current file contents to the block' do
                   content = nil
                   storage_path.write 'test content'
-                  FileTransaction.new(storage_path) do |current_content|
+                  transaction.read do |current_content|
                      content = current_content
                   end
 
                   expect(content).to eq('test content')
                end
 
-               context 'reading' do
-                  let(:reading_mode) { true }
-                  it 'should NOT overwrite the existing file' do
-                     orig = 'a' * 10
-                     storage_path.write(orig)
-                     FileTransaction.new(storage_path, read_only: reading_mode) do
-                        'zzz'
-                     end
-
-                     expect(storage_path.read).to eq orig
+               it 'should NOT overwrite the existing file' do
+                  orig = 'a' * 10
+                  storage_path.write(orig)
+                  transaction.read do
+                     'zzz'
                   end
+
+                  expect(storage_path.read).to eq orig
+               end
+            end
+
+            context 'writable' do
+               let(:storage_path) { Pathname.new 'test-file.txt' }
+               let(:transaction) { FileTransaction.new(storage_path) }
+
+               before(:each) do
+                  allow_any_instance_of(FakeFS::File).to receive(:flock)
                end
 
-               context 'writing' do
-                  let(:reading_mode) { false }
-                  it 'should write the block result to the file' do
-                     FileTransaction.new(storage_path, read_only: reading_mode) do
-                        'test content'
-                     end
-
-                     expect(storage_path.read).to eq('test content')
+               it 'should pass the current file contents to the block' do
+                  content = nil
+                  storage_path.write 'test content'
+                  transaction.transact(writable: true) do |current_content|
+                     content = current_content
                   end
 
-                  it 'should overwrite the entire existing file' do
-                     storage_path.write('a' * 10)
-                     FileTransaction.new(storage_path, read_only: reading_mode) do
-                        'zzz'
-                     end
+                  expect(content).to eq('test content')
+               end
 
-                     expect(storage_path.read).to eq('zzz')
+               it 'should write the block result to the file' do
+                  transaction.transact(writable: true) do
+                     'test content'
                   end
+
+                  expect(storage_path.read).to eq('test content')
+               end
+
+               it 'should overwrite the entire existing file' do
+                  storage_path.write('a' * 10)
+                  transaction.transact(writable: true) do
+                     'zzz'
+                  end
+
+                  expect(storage_path.read).to eq('zzz')
                end
             end
 
             context 'thread safety' do
-               let(:storage_path) { Pathname.new 'test-file.txt' }
                let(:lock) { FileTransaction.file_mutex[storage_path.to_s] }
 
                before(:each) do
@@ -580,13 +658,13 @@ module Procrastinator
                end
 
                it 'should reserve the file before yielding' do
-                  FileTransaction.new(storage_path) do
+                  transaction.transact do
                      expect(lock).to be_locked
                   end
                end
 
                it 'should release the mutex after normal completion' do
-                  FileTransaction.new(storage_path) do
+                  transaction.transact do
                      # ... do stuff ...
                   end
 
@@ -595,7 +673,7 @@ module Procrastinator
 
                it 'should release the mutex after error' do
                   expect do
-                     FileTransaction.new(storage_path) do
+                     transaction.transact do
                         raise 'stomachache'
                      end
                   end.to raise_error RuntimeError, 'stomachache'
@@ -622,15 +700,22 @@ module Procrastinator
                   FakeFS.activate!
                end
 
-               it 'should flock the file before reading and writing' do
-                  FileTransaction.new(storage_path) do
+               it 'should flock the file before reading' do
+                  transaction.transact do
+                     expect(storage_path.open.flock(flock_mask)).to(eq(false),
+                                                                    "expected #{ storage_path } to be locked")
+                  end
+               end
+
+               it 'should flock the file before writing' do
+                  transaction.transact(writable: true) do
                      expect(storage_path.open.flock(flock_mask)).to(eq(false),
                                                                     "expected #{ storage_path } to be locked")
                   end
                end
 
                it 'should unflock the file when done' do
-                  FileTransaction.new(storage_path) do
+                  transaction.transact do
                      # ... do stuff ...
                   end
 
@@ -640,7 +725,7 @@ module Procrastinator
 
                it 'should unflock the file when errored' do
                   expect do
-                     FileTransaction.new(storage_path) do
+                     transaction.transact do
                         raise 'vexed'
                      end
                   end.to raise_error RuntimeError, 'vexed'
