@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'time'
+
 module Procrastinator
    # TaskMetaData objects are State Patterns that record information about the work done on a particular task.
    #

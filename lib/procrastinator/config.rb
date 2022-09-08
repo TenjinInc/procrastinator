@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'time'
+
 module Procrastinator
    # Configuration object (State Pattern) used to coordinate settings across
    # various components within Procrastinator.
@@ -76,7 +78,7 @@ module Procrastinator
 
             properties[:store] = interpret_store(properties[:store]) if properties.key? :store
 
-            @queues << Queue.new({name: name, task_class: task_class, store: @default_store}.merge(properties))
+            @queues << Queue.new(**{name: name, task_class: task_class, store: @default_store}.merge(properties))
          end
 
          # Sets details of logging behaviour

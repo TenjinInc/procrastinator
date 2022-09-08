@@ -56,11 +56,11 @@ module Procrastinator
       end
 
       def next_task(logger: nil, container: nil, scheduler: nil)
-         tasks = read(queue: @name).reject { |t| t[:run_at].nil? }
+         tasks = read(queue: @name).reject { |t| t[:run_at].nil? }.collect do |t|
+            t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) }.merge(queue: self)
+         end
 
-         metas = sort_tasks(tasks.collect do |t|
-            TaskMetaData.new(t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) }.merge(queue: self))
-         end)
+         metas = sort_tasks(tasks.collect { |t| TaskMetaData.new(**t) })
 
          metadata = metas.find(&:runnable?)
 
@@ -77,7 +77,7 @@ module Procrastinator
       def fetch_task(identifier)
          identifier[:data] = JSON.dump(identifier[:data]) if identifier[:data]
 
-         tasks = read(identifier)
+         tasks = read(**identifier)
 
          raise "no task found matching #{ identifier }" if tasks.nil? || tasks.empty?
          raise "too many (#{ tasks.size }) tasks match #{ identifier }. Found: #{ tasks }" if tasks.size > 1
@@ -109,7 +109,7 @@ module Procrastinator
          create_data.delete(:attempts)
          create_data.delete(:last_fail_at)
          create_data.delete(:last_error)
-         @task_store.create(create_data)
+         @task_store.create(**create_data)
       end
 
       def expects_data?

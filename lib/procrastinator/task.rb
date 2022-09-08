@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'forwardable'
+require 'time'
+
 module Procrastinator
    # Wraps a task handler and task metadata
    #
