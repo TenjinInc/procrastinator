@@ -98,7 +98,7 @@ module Procrastinator
 
             it 'should still increase number of attempts' do
                (1..3).each do |i|
-                  expect { task.run }.to raise_error
+                  expect { task.run }.to raise_error RuntimeError, 'asplode'
                   expect(task.attempts).to eq i
                end
             end
@@ -144,7 +144,7 @@ module Procrastinator
          end
 
          it 'should record the failure in metadata' do
-            expect(meta).to receive(:failure).with(fake_error)
+            expect(meta).to receive(:failure).with(fake_error).and_return :fail
             task.fail(fake_error)
          end
 
@@ -156,7 +156,8 @@ module Procrastinator
          it 'should capture errors from task #fail' do
             allow(handler).to receive(:fail).and_raise('fail error')
 
-            expect { task.fail(fake_error) }.to_not raise_error
+            # output matcher is just to silence expected stderr warning and act as not-raise-error matcher
+            expect { task.fail(fake_error) }.to output.to_stderr
          end
 
          it 'should report errors from task #fail' do
@@ -174,7 +175,12 @@ module Procrastinator
             err = 'fail error'
             allow(handler).to receive(:fail).and_raise(err)
 
-            expect(task.fail(fake_error)).to eq :fail
+            result = nil
+            expect do
+               result = task.fail(fake_error)
+            end.to output.to_stderr
+
+            expect(result).to eq :fail
          end
 
          context 'final failure' do
@@ -182,7 +188,7 @@ module Procrastinator
             let(:meta) { TaskMetaData.new(queue: queue, expire_at: 0) }
 
             it 'should call the #final_fail handler hook' do
-               expect(handler).to receive(:final_fail).with(fake_error)
+               expect(handler).to receive(:final_fail).with(fake_error).and_return :final_fail
                task.fail(fake_error)
             end
 
@@ -204,9 +210,13 @@ module Procrastinator
 
             it 'should return :final_fail even if it breaks' do
                err = 'fail error'
-               allow(handler).to receive(:fail).and_raise(err)
+               allow(handler).to receive(:final_fail).and_raise(err)
 
-               expect(task.fail(fake_error)).to eq :final_fail
+               result = nil
+               expect do
+                  result = task.fail(fake_error)
+               end.to output.to_stderr
+               expect(result).to eq :final_fail
             end
          end
       end

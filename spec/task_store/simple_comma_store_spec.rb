@@ -525,15 +525,12 @@ module Procrastinator
          let(:flock_mask) { File::LOCK_EX | File::LOCK_NB }
 
          let(:path) { Pathname.new 'procrastinator-data.csv' }
-         let(:store) { SimpleCommaStore.new(path) }
 
          describe 'initialize' do
-            context 'block yielding' do
-               let(:storage_path) { Pathname.new 'test-file.txt' }
+            it 'should ensure the file exists' do
+               FileTransaction.new(path)
 
-               before(:each) do
-                  allow_any_instance_of(FakeFS::File).to receive(:flock)
-               end
+               expect(path).to exist
             end
          end
 
