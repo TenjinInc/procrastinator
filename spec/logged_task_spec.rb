@@ -45,12 +45,16 @@ module Procrastinator
 
          it 'should capture logging errors' do
             allow(logger).to receive(:info).and_raise 'blorp'
-            expect { wrapper.run }.to_not raise_error
+            expect do
+               expect do
+                  wrapper.run
+               end.to output.to_stderr # output captured for silence
+            end.to_not raise_error # real test here
          end
 
          it 'should NOT capture run errors' do
             allow(task_handler).to receive(:run).and_raise 'blorp'
-            expect { wrapper.run }.to raise_error RuntimeError, 'blorp'
+            expect { wrapper.run }.to raise_error(RuntimeError, 'blorp')
          end
 
          it 'should report logging errors' do
@@ -100,7 +104,11 @@ module Procrastinator
 
          it 'should capture logging errors' do
             allow(logger).to receive(:error).and_raise 'blorp'
-            expect { wrapper.fail(fake_error) }.to_not raise_error
+            expect do
+               expect do
+                  wrapper.fail(fake_error)
+               end.to output.to_stderr # for test terminal quiet
+            end.to_not raise_error # real test
          end
 
          it 'should NOT capture fail errors' do
