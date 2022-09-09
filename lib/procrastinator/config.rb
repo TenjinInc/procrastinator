@@ -25,7 +25,7 @@ module Procrastinator
    class Config
       attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container
 
-      DEFAULT_LOG_DIRECTORY  = Pathname.new('log/').freeze
+      DEFAULT_LOG_DIRECTORY  = Pathname.new('log').freeze
       DEFAULT_LOG_SHIFT_AGE  = 0
       DEFAULT_LOG_SHIFT_SIZE = 2 ** 20 # 1 MB
       DEFAULT_LOG_FORMATTER  = proc do |severity, datetime, progname, msg|
@@ -49,6 +49,8 @@ module Procrastinator
                raise SetupError, SetupError::ERR_NO_QUEUE if @queues.empty?
             end
          end
+
+         @log_dir = @log_dir.expand_path
 
          @queues.freeze
          freeze

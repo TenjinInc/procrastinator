@@ -73,7 +73,7 @@ module Procrastinator
             QueueWorker.new(queue: queue, config: @config)
          end
 
-         WorkProxy.new(workers)
+         WorkProxy.new(workers, @config)
       end
 
       # Provides a more natural syntax for rescheduling tasks
@@ -109,16 +109,14 @@ module Procrastinator
          PID_EXT          = '.pid'
          DEFAULT_PID_DIR  = Pathname.new('pid/').freeze
          DEFAULT_PID_FILE = Pathname.new("procrastinator#{ PID_EXT }").freeze
+         PROG_NAME        = 'Procrastinator'
 
          # 15 chars is linux limit
          MAX_PROC_LEN = 15
 
-         def initialize(workers)
+         def initialize(workers, config)
             @workers = workers
-            @logger  = Logger.new($stderr,
-                                  progname:  'Procrastinator',
-                                  level:     Logger::INFO,
-                                  formatter: Config::DEFAULT_LOG_FORMATTER)
+            @config  = config
          end
 
          # Work off the given number of tasks for each queue and return
@@ -131,6 +129,7 @@ module Procrastinator
 
          # Work off jobs per queue, each in its own thread.
          def threaded(timeout: nil)
+            open_log
             shutdown_on_interrupt
 
             @threads = spawn_threads
@@ -141,19 +140,20 @@ module Procrastinator
          rescue StandardError => e
             thread_crash(e)
          ensure
-            @logger.info 'Halting worker threads...'
+            @logger&.info 'Halting worker threads...'
             shutdown!
-            @logger.info 'Threads halted.'
+            @logger&.info 'Threads halted.'
          end
 
-         # Consumes the current process and turns it into a background daemon.
+         # Consumes the current process and turns it into a background daemon. A log will be started in the log directory
+         # defined in the configuration block.
          #
          # @param name [String] The process name to request from the OS.
          #                      Not guaranteed to be set, depending on OS support.
          # @param pid_path [Pathname|File|String] Path to where the process ID file is to be kept.
          #                                        Assumed to be a directory unless ends with '.pid '.
-         def daemonized!(name: nil, pid_path: nil, &block)
-            spawn_daemon(pid_path, name)
+         def daemonized!(name: nil, pid_path: nil, log_path: nil, &block)
+            spawn_daemon(name, pid_path)
 
             yield if block
 
@@ -182,19 +182,34 @@ module Procrastinator
             end
          end
 
-         # "And his name is ... Shawn?"
-         def spawn_daemon(pid_path, name)
+         # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
+         #  recitals through holiday weekend IKEA. Go."
+         def spawn_daemon(name, pid_path)
             # double fork to guarantee no terminal can be attached.
             exit if fork
             Process.setsid
             exit if fork
             Dir.chdir '/' # allows process to continue even if the pwd of its running terminal disappears (eg deleted)
 
-            @logger.info 'Starting Procrastinator daemon...'
+            open_log
 
-            manage_pid(pid_path)
+            @logger.info "Starting #{ PROG_NAME } daemon..."
 
             rename_process(name)
+
+            manage_pid(pid_path)
+         end
+
+         def open_log
+            return if @logger
+
+            log_path = @config.log_dir / "#{ PROG_NAME.downcase }.log"
+            log_path.dirname.mkpath
+
+            @logger = Logger.new(log_path.to_s, # || $stderr
+                                 progname:  PROG_NAME.downcase,
+                                 level:     @config.log_level,
+                                 formatter: Config::DEFAULT_LOG_FORMATTER)
          end
 
          def manage_pid(pid_path)

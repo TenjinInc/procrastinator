@@ -27,6 +27,15 @@ module Procrastinator
             expect(created_queue.store.path.to_s).to eq TaskStore::SimpleCommaStore::DEFAULT_FILE.to_s
          end
 
+         it 'should convert the log path to absolute' do
+            config = described_class.new do |c|
+               c.define_queue(:test_queue, test_task)
+               c.log_with directory: 'some/relative/../path/'
+            end
+
+            expect(config.log_dir).to eq Pathname.new('/some/path')
+         end
+
          # immutable to aid with thread-safety and predictability
          it 'should freeze itself' do
             config = described_class.new
@@ -324,7 +333,7 @@ module Procrastinator
                   c.log_with(level: Logger::DEBUG)
                end
 
-               expect(config.log_dir.to_s).to eq Config::DEFAULT_LOG_DIRECTORY.to_s
+               expect(config.log_dir).to eq Pathname.new("/#{ Config::DEFAULT_LOG_DIRECTORY }")
             end
 
             it 'should use default level if omitted' do

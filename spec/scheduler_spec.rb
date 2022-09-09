@@ -316,7 +316,7 @@ module Procrastinator
          end
       end
 
-      let(:main_logger) { Logger.new(StringIO.new) }
+      let(:log_file) { config.log_dir / 'procrastinator.log' }
 
       before(:each) do
          # prevent actual threading during any testing
@@ -324,6 +324,9 @@ module Procrastinator
 
          # prevent the global at_exit handlers by default in testing
          allow_any_instance_of(Scheduler::WorkProxy).to receive(:at_exit)
+
+         # need to stub fakefs flock because Logger uses it internally and FakeFS does not support it yet
+         allow_any_instance_of(FakeFS::File).to receive(:flock)
       end
 
       # acts on each queue in series.
@@ -332,9 +335,9 @@ module Procrastinator
          let(:queue_workers) do
             [queue_names.collect { |queue_name| double("queue worker #{ queue_name }") }]
          end
-         let(:worker_proxy) { Scheduler::WorkProxy.new(queue_workers) }
+         let(:worker_proxy) { Scheduler::WorkProxy.new(queue_workers, config) }
 
-         it 'should call QueueWorker#act on each queue worker' do
+         it 'should call QueueWorker#work_one on each queue worker' do
             queue_workers.each do |worker|
                expect(worker).to receive(:work_one)
             end
@@ -359,11 +362,7 @@ module Procrastinator
                QueueWorker.new(queue: queue_name, config: config)
             end
          end
-         let(:worker_proxy) { Scheduler::WorkProxy.new(queue_workers) }
-
-         before(:each) do
-            allow(Logger).to receive(:new).and_return(main_logger)
-         end
+         let(:worker_proxy) { Scheduler::WorkProxy.new(queue_workers, config) }
 
          it 'should spawn a new thread for each specified queue' do
             expect(Thread).to receive(:new).exactly(queue_workers.size).times.and_return(thread_double)
@@ -396,19 +395,17 @@ module Procrastinator
          it 'should say it is starting threads' do
             allow(Thread).to receive(:new).and_return(thread_double)
 
-            expect(main_logger).to receive(:info).with('Starting worker threads...')
-            allow(main_logger).to receive(:info).with(anything)
             worker_proxy.threaded
+
+            expect(log_file).to include_log_line 'INFO', 'Starting worker threads...'
          end
 
          # ie. testing inside the child thread
          context 'child thread' do
             let(:worker) { queue_workers.first }
-            let(:worker_proxy) { Scheduler::WorkProxy.new([worker]) }
+            let(:worker_proxy) { Scheduler::WorkProxy.new([worker], config) }
 
             before(:each) do
-               allow(Logger).to receive(:new).and_return(main_logger)
-
                allow(Thread).to receive(:new).and_yield(worker).and_return(thread_double)
 
                allow(worker).to receive(:work!) # need to stub work because it uses an infiniloop
@@ -430,15 +427,15 @@ module Procrastinator
 
             # this is a backstop to the queue worker's internal logging, just in case that fails
             it 'should warn about errors' do
-               msg = 'Crash detected in queue worker thread.'
-               err = 'dummy test error'
+               indent = '   '
+               err    = 'dummy test error'
                allow(worker).to receive(:work!).and_raise(StandardError, err)
 
-               expect(main_logger).to receive(:fatal).with(include(msg, # generic crash alert
-                                                                   err, # real error message
-                                                                   '<module:Procrastinator>')) # backtrace
-
                worker_proxy.threaded
+
+               expect(log_file).to include_log_line 'FATAL', 'Crash detected in queue worker thread.'
+               expect(log_file.readlines).to include(/\s+#{ err }/) # source error message
+               expect(log_file.readlines).to include(/<module:Procrastinator>/) # and backtrace
             end
 
             it 'should warn about errors with the crashed queue name' do
@@ -451,9 +448,9 @@ module Procrastinator
                allow(thread_double).to receive(:status).and_return(nil)
                allow(thread_double).to receive(:thread_variable_get).and_return(worker.name)
 
-               expect(main_logger).to receive(:fatal).with(include("Crashed thread: #{ worker.name }")) # backtrace
-
                worker_proxy.threaded
+
+               expect(log_file.readlines).to include(/Crashed thread: #{ worker.name }/) # and backtrace
             end
 
             it 'should call halt after work normally' do
@@ -529,11 +526,11 @@ module Procrastinator
                   signal_block = block
                end
 
-               allow(main_logger).to receive(:info).with(anything)
-               expect(main_logger).to receive(:info).with('Halting worker threads...')
-               expect(main_logger).to receive(:info).with('Threads halted.')
                worker_proxy.threaded
                signal_block&.call
+
+               expect(log_file).to include_log_line 'INFO', 'Halting worker threads...'
+               expect(log_file).to include_log_line 'INFO', 'Threads halted.'
             end
          end
       end
@@ -542,11 +539,10 @@ module Procrastinator
       # (useful for normal background operations in production)
       context '#daemonized!' do
          let(:worker_proxy) do
-            Scheduler::WorkProxy.new([QueueWorker.new(queue: :second, config: config)])
+            Scheduler::WorkProxy.new([QueueWorker.new(queue: :second, config: config)], config)
          end
 
          before(:each) do
-            allow(Logger).to receive(:new).and_return(main_logger)
             # keeping a fallback here; real forks break the rspec runner
             allow(worker_proxy).to receive(:fork).and_raise('Testing error: test must stub :fork')
             allow(Dir).to receive(:chdir)
@@ -584,7 +580,7 @@ module Procrastinator
          context 'child process' do
             before(:each) do
                allow(worker_proxy).to receive(:fork).and_return(nil)
-               allow(worker_proxy).to receive(:threaded)
+               allow(Thread).to receive(:new).and_return double('thread double', join: nil, alive?: false)
                allow(worker_proxy).to receive(:loop).and_yield
             end
 
@@ -632,9 +628,10 @@ module Procrastinator
                   name = "#{ max_prog_name }b"
 
                   msg = "process name is longer than max length (#{ max_len }). Trimming to fit."
-                  expect(main_logger).to receive(:warn).with(msg)
 
                   worker_proxy.daemonized!(name: name)
+
+                  expect(log_file).to include_log_line 'WARN', msg
                end
 
                it 'should warn trim long process names to fit' do
@@ -653,9 +650,9 @@ module Procrastinator
 
                   msg = "a process is already named '#{ prog_name }'. Consider the 'name:' argument to distinguish."
 
-                  expect(main_logger).to receive(:warn).with(msg)
-
                   worker_proxy.daemonized!(name: prog_name)
+
+                  expect(log_file).to include_log_line 'WARN', msg
                end
             end
 
@@ -715,21 +712,29 @@ module Procrastinator
             end
 
             context 'status output' do
-               it 'should print starting the daemon' do
-                  expect(main_logger).to receive(:info).with('Starting Procrastinator daemon...')
-                  expect(main_logger).to receive(:info).with(anything)
+               it 'should open a log file' do
+                  allow(Process).to receive(:pid).and_return(12345)
+                  log_path = config.log_dir / 'procrastinator.log'
 
+                  worker_proxy.daemonized!(log_path: log_path)
+
+                  expect(log_path).to exist
+                  expect(log_file).to include_log_line 'procrastinator', 12345.to_s
+               end
+
+               it 'should print starting the daemon' do
                   worker_proxy.daemonized!
+
+                  expect(log_file).to include_log_line 'INFO', 'Starting Procrastinator daemon...'
                end
 
                it 'should print the daemon pid' do
                   [1234, 5678].each do |pid|
                      allow(Process).to receive(:pid).and_return(pid)
 
-                     expect(main_logger).to receive(:info).with(anything)
-                     expect(main_logger).to receive(:info).with("Procrastinator running. Process ID: #{ pid }")
-
                      worker_proxy.daemonized!
+
+                     expect(log_file).to include_log_line 'INFO', "Procrastinator running. Process ID: #{ pid }"
                   end
                end
 
@@ -740,10 +745,9 @@ module Procrastinator
                      # stub out at_exit to force it to run immediately
                      expect(worker_proxy).to receive(:at_exit).and_yield
 
-                     allow(main_logger).to receive(:info)
-                     expect(main_logger).to receive(:info).with("Procrastinator (pid #{ pid }) halted.")
-
                      worker_proxy.daemonized!
+
+                     expect(log_file).to include_log_line 'INFO', "Procrastinator (pid #{ pid }) halted."
                   end
                end
             end

@@ -114,9 +114,9 @@ module Procrastinator
                allow(worker).to receive(:loop).and_yield
                worker.work!
 
-               log_contents = Pathname.new("log/#{ queue_name }-queue-worker.log").read
+               log_file = config.log_dir / "#{ queue_name }-queue-worker.log"
 
-               expect(log_contents).to include("Started worker thread to consume queue: #{ queue_name }")
+               expect(log_file).to include_log_line 'INFO', "Started worker thread to consume queue: #{ queue_name }"
             end
          end
 
@@ -136,10 +136,9 @@ module Procrastinator
                worker.work!
             end.to raise_error(RuntimeError, err)
 
-            log = File.read('log/fast_queue-queue-worker.log')
+            log_file = config.log_dir / 'fast_queue-queue-worker.log'
 
-            expect(log).to include("\tFATAL\t") # default fatal error notation in Ruby logger
-            expect(log).to include(err)
+            expect(log_file).to include_log_line 'FATAL', 'err'
          end
 
          it 'should NOT log fatal errors if NOT logging' do
@@ -335,9 +334,6 @@ module Procrastinator
       end
 
       describe '#halt' do
-         let(:str_log) { StringIO.new }
-         let(:logger) { Logger.new(str_log) }
-
          let(:config) do
             Config.new do |c|
                c.with_store(persister) do
@@ -347,11 +343,9 @@ module Procrastinator
             end
          end
 
-         before(:each) do
-            allow(Logger).to receive(:new).and_return(logger)
-         end
-
          it 'should close its logger' do
+            logger = Logger.new(StringIO.new)
+            allow(Logger).to receive(:new).and_return(logger)
             expect(logger).to receive(:close)
 
             worker = QueueWorker.new(queue: :email, config: config)
@@ -362,14 +356,14 @@ module Procrastinator
 
          it 'should log clean shutdown' do
             [:email, :reminders].each do |queue_name|
-               expect(logger).to receive(:close)
-
                worker = QueueWorker.new(queue: queue_name, config: config)
                allow(worker).to receive(:loop).and_yield
                worker.work!
                worker.halt
 
-               expect(str_log.string.strip).to end_with "Halted worker on queue: #{ queue_name }"
+               log_file = config.log_dir / "#{ queue_name }-queue-worker.log"
+
+               expect(log_file.readlines).to end_with(include('INFO', "Halted worker on queue: #{ queue_name }"))
             end
          end
       end
@@ -439,8 +433,6 @@ module Procrastinator
             end
 
             it 'should log at the provided level' do
-               logger = Logger.new(StringIO.new)
-
                Logger::Severity.constants.each do |level|
                   config = Config.new do |c|
                      c.define_queue :test_queue, Test::Task::AllHooks
@@ -449,7 +441,7 @@ module Procrastinator
 
                   expect(Logger).to receive(:new)
                                           .with(anything, anything, anything, hash_including(level: level))
-                                          .and_return logger
+                                          .and_call_original
 
                   worker.open_log!('test-log', config)
                end
@@ -467,8 +459,6 @@ module Procrastinator
             end
 
             it 'should use the provided shift age and size' do
-               logger = Logger.new(StringIO.new)
-
                size   = double('size')
                age    = double('age')
                config = Config.new do |c|
@@ -476,7 +466,7 @@ module Procrastinator
                   c.log_with shift_size: size, shift_age: age
                end
 
-               expect(Logger).to receive(:new).with(anything, age, size, anything).and_return(logger)
+               expect(Logger).to receive(:new).with(anything, age, size, anything).and_call_original
 
                worker.open_log!('test-config', config)
             end

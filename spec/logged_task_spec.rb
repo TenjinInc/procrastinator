@@ -10,7 +10,13 @@ module Procrastinator
       let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: Test::Task::AllHooks, store: fake_persister) }
       let(:task) { Task.new(meta, task_handler) }
 
-      let(:logger) { Logger.new(StringIO.new) }
+      let(:log_file) { Pathname.new('tasklog.log') }
+      let(:logger) { Logger.new(log_file.to_s, formatter: Config::DEFAULT_LOG_FORMATTER) }
+
+      before(:each) do
+         # Needed because loggers use flock internally
+         allow_any_instance_of(FakeFS::File).to receive(:flock)
+      end
 
       describe '#inititalize' do
          it 'should remember the given logger' do
@@ -31,7 +37,6 @@ module Procrastinator
 
       describe '#run' do
          let(:wrapper) { LoggedTask.new(task, logger: logger) }
-
          it 'should call task #run' do
             expect(task).to receive(:run)
 
@@ -39,8 +44,10 @@ module Procrastinator
          end
 
          it 'should log #run at info level' do
-            expect(logger).to receive(:info).with("Task completed: #{ queue.name.to_sym }#1 [#{ data_str }]")
             wrapper.run
+
+            msg = "Task completed: #{ queue.name.to_sym }#1 [#{ data_str }]"
+            expect(log_file).to include_log_line 'INFO', msg
          end
 
          it 'should capture logging errors' do
@@ -73,9 +80,9 @@ module Procrastinator
          let(:fake_error) { StandardError.new('asplode') }
 
          it 'should call #fail on task' do
-            expect(logger).to receive(:error).with("Task failed: #{ queue.name }#1 [#{ data_str }]")
-
             wrapper.fail(fake_error)
+
+            expect(log_file).to include_log_line 'ERROR', "Task failed: #{ queue.name }#1 [#{ data_str }]"
          end
 
          it 'should return #fail result' do
@@ -86,9 +93,9 @@ module Procrastinator
          end
 
          it 'should log #fail at error level' do
-            expect(logger).to receive(:error).with("Task failed: #{ queue.name }#1 [#{ data_str }]")
-
             wrapper.fail(fake_error)
+
+            expect(log_file).to include_log_line 'ERROR', "Task failed: #{ queue.name }#1 [#{ data_str }]"
          end
 
          it 'should log #final_fail at error level' do
@@ -97,9 +104,9 @@ module Procrastinator
 
             wrapper = LoggedTask.new(fail_task, logger: logger)
 
-            expect(logger).to receive(:error).with("Task final_failed: #{ queue.name }#1 [#{ data_str }]")
-
             wrapper.fail(fake_error)
+
+            expect(log_file).to include_log_line 'ERROR', "Task final_failed: #{ queue.name }#1 [#{ data_str }]"
          end
 
          it 'should capture logging errors' do

@@ -510,16 +510,12 @@ module Procrastinator
          end
 
          it 'should create a logged task' do
-            logger = Logger.new(StringIO.new)
-
-            allow(Logger).to receive(:new).and_return(logger)
-
             config = Config.new do |c|
                c.define_queue(:fast_queue, test_task, update_period: 0, store: fake_persister([{run_at: 1}]))
             end
 
             expect(LoggedTask).to receive(:new).with(instance_of(Task),
-                                                     hash_including(logger: logger)).and_call_original
+                                                     hash_including(logger: instance_of(Logger))).and_call_original
             worker = QueueWorker.new(queue: :fast_queue, config: config)
 
             worker.work_one

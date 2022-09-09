@@ -18,6 +18,15 @@ RSpec.configure do |config|
    config.include FakeFS::SpecHelpers
 end
 
+RSpec::Matchers.define :include_log_line do |level, msg|
+   match do |file_name|
+      actual_lines = file_name.readlines(chomp: true)
+      actual_lines.any? do |line|
+         line.include?(level) && line.include?(msg)
+      end
+   end
+end
+
 module Procrastinator
    module Test
       class Persister
