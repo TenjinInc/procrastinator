@@ -69,8 +69,10 @@ module Procrastinator
       # @param queue_names [Array<String,Symbol>] Names of specific queues to act upon.
       #                                           Omit or leave empty to act on all queues.
       def work(*queue_names)
-         workers = filter_queues(queue_names).collect do |queue|
-            QueueWorker.new(queue: queue, config: @config)
+         queue_names = @config.queues if queue_names.empty?
+
+         workers = queue_names.collect do |queue_name|
+            QueueWorker.new(queue: queue_name, config: @config)
          end
 
          WorkProxy.new(workers, @config)
@@ -102,32 +104,28 @@ module Procrastinator
          alias at to
       end
 
-      # Provides a more natural chained syntax for kicking off the queue working process
+      # Serial work style
       #
-      # @see Scheduler#work
-      class WorkProxy
-         PID_EXT          = '.pid'
-         DEFAULT_PID_DIR  = Pathname.new('pid/').freeze
-         DEFAULT_PID_FILE = Pathname.new("procrastinator#{ PID_EXT }").freeze
-         PROG_NAME        = 'Procrastinator'
-
-         # 15 chars is linux limit
-         MAX_PROC_LEN = 15
-
-         def initialize(workers, config)
-            @workers = workers
-            @config  = config
-         end
-
+      # @see WorkProxy
+      module SerialWorking
          # Work off the given number of tasks for each queue and return
          # @param steps [integer] The number of tasks to complete.
          def serially(steps: 1)
             steps.times do
-               @workers.each(&:work_one)
+               workers.each(&:work_one)
             end
          end
+      end
+
+      # Threaded work style
+      #
+      # @see WorkProxy
+      module ThreadedWorking
+         PROG_NAME = 'Procrastinator'
 
          # Work off jobs per queue, each in its own thread.
+         #
+         # @param timeout Maximum number of seconds to run for. If nil, will run indefinitely.
          def threaded(timeout: nil)
             open_log
             shutdown_on_interrupt
@@ -143,23 +141,6 @@ module Procrastinator
             @logger&.info 'Halting worker threads...'
             shutdown!
             @logger&.info 'Threads halted.'
-         end
-
-         # Consumes the current process and turns it into a background daemon. A log will be started in the log directory
-         # defined in the configuration block.
-         #
-         # @param name [String] The process name to request from the OS.
-         #                      Not guaranteed to be set, depending on OS support.
-         # @param pid_path [Pathname|File|String] Path to where the process ID file is to be kept.
-         #                                        Assumed to be a directory unless ends with '.pid '.
-         def daemonized!(name: nil, pid_path: nil, &block)
-            spawn_daemon(name, pid_path)
-
-            yield if block
-
-            threaded
-
-            @logger.info "Procrastinator running. Process ID: #{ Process.pid }"
          end
 
          private
@@ -182,6 +163,73 @@ module Procrastinator
             end
          end
 
+         def thread_crash(error)
+            crashed_threads = (@threads || []).select { |t| t.status.nil? }.collect do |thread|
+               "Crashed thread: #{ thread.thread_variable_get(:name) }"
+            end
+
+            @logger.fatal <<~MSG
+               Crash detected in queue worker thread.
+                  #{ crashed_threads.join("\n") }
+                  #{ error.message }
+                  #{ error.backtrace.join("\n\t") }"
+            MSG
+         end
+
+         def shutdown_on_interrupt
+            Signal.trap('INT') do
+               warn "\n" # just to separate the shutdown log item
+               shutdown!
+            end
+         end
+
+         def shutdown!
+            (@threads || []).select(&:alive?).each(&:kill)
+         end
+
+         def open_log
+            return if @logger
+
+            log_path = @config.log_dir / "#{ PROG_NAME.downcase }.log"
+            log_path.dirname.mkpath
+
+            @logger = Logger.new(log_path.to_s, # || $stderr
+                                 progname:  PROG_NAME.downcase,
+                                 level:     @config.log_level,
+                                 formatter: Config::DEFAULT_LOG_FORMATTER)
+         end
+      end
+
+      # Daemonized work style
+      #
+      # @see WorkProxy
+      module DaemonWorking
+         PID_EXT          = '.pid'
+         DEFAULT_PID_DIR  = Pathname.new('pid/').freeze
+         DEFAULT_PID_FILE = Pathname.new("procrastinator#{ PID_EXT }").freeze
+
+         # 15 chars is linux limit
+         MAX_PROC_LEN = 15
+
+         # Consumes the current process and turns it into a background daemon. A log will be started in the log
+         # directory defined in the configuration block.
+         #
+         # @param name [String] The process name to request from the OS.
+         #                      Not guaranteed to be set, depending on OS support.
+         # @param pid_path [Pathname,File,String] Path to where the process ID file is to be kept.
+         #                                        Assumed to be a directory unless ends with '.pid '.
+         def daemonized!(name: nil, pid_path: nil, &block)
+            spawn_daemon(name, pid_path)
+
+            yield if block
+
+            threaded
+
+            @logger.info "Procrastinator running. Process ID: #{ Process.pid }"
+         end
+
+         private
+
          # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
          #  recitals through holiday weekend IKEA. Go."
          def spawn_daemon(name, pid_path)
@@ -198,18 +246,6 @@ module Procrastinator
             rename_process(name)
 
             manage_pid(pid_path)
-         end
-
-         def open_log
-            return if @logger
-
-            log_path = @config.log_dir / "#{ PROG_NAME.downcase }.log"
-            log_path.dirname.mkpath
-
-            @logger = Logger.new(log_path.to_s, # || $stderr
-                                 progname:  PROG_NAME.downcase,
-                                 level:     @config.log_level,
-                                 formatter: Config::DEFAULT_LOG_FORMATTER)
          end
 
          def manage_pid(pid_path)
@@ -231,6 +267,7 @@ module Procrastinator
          end
 
          def rename_process(name)
+            @logger.debug("Renaming process to #{ name }")
             return if name.nil?
 
             if name.size > MAX_PROC_LEN
@@ -245,40 +282,22 @@ module Procrastinator
             Process.setproctitle(name)
          end
 
-         def shutdown_on_interrupt
-            Signal.trap('INT') do
-               warn "\n" # just to separate the shutdown log item
-               shutdown!
-            end
-         end
-
-         def shutdown!
-            (@threads || []).select(&:alive?).each(&:kill)
-         end
-
-         def thread_crash(error)
-            crashed_threads = (@threads || []).select { |t| t.status.nil? }.collect do |thread|
-               "Crashed thread: #{ thread.thread_variable_get(:name) }"
-            end
-
-            @logger.fatal <<~MSG
-               Crash detected in queue worker thread.
-                  #{ crashed_threads.join("\n") }
-                  #{ error.message }
-                  #{ error.backtrace.join("\n\t") }"
-            MSG
-         end
+         include ThreadedWorking
       end
 
-      private
+      # DSL grammar object to enable chaining #work with the three work modes.
+      #
+      # @see Scheduler#work
+      class WorkProxy
+         include SerialWorking
+         include ThreadedWorking
+         include DaemonWorking
 
-      # Find Queues that match the given queue names, or all queues if no names provided.
-      # @param :queue_names [Array<String,Symbol>] List of queue names to match. If empty, will return all queues.
-      def filter_queues(queue_names)
-         queue_names ||= []
+         attr_reader :workers
 
-         @config.queues.select do |queue|
-            queue_names.empty? || queue_names.include?(queue.name)
+         def initialize(workers, config)
+            @workers = workers
+            @config  = config
          end
       end
    end
