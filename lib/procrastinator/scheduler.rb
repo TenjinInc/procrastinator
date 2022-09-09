@@ -152,7 +152,7 @@ module Procrastinator
          #                      Not guaranteed to be set, depending on OS support.
          # @param pid_path [Pathname|File|String] Path to where the process ID file is to be kept.
          #                                        Assumed to be a directory unless ends with '.pid '.
-         def daemonized!(name: nil, pid_path: nil, log_path: nil, &block)
+         def daemonized!(name: nil, pid_path: nil, &block)
             spawn_daemon(name, pid_path)
 
             yield if block

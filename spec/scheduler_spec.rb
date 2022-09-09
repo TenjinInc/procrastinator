@@ -427,8 +427,7 @@ module Procrastinator
 
             # this is a backstop to the queue worker's internal logging, just in case that fails
             it 'should warn about errors' do
-               indent = '   '
-               err    = 'dummy test error'
+               err = 'dummy test error'
                allow(worker).to receive(:work!).and_raise(StandardError, err)
 
                worker_proxy.threaded
@@ -716,7 +715,7 @@ module Procrastinator
                   allow(Process).to receive(:pid).and_return(12345)
                   log_path = config.log_dir / 'procrastinator.log'
 
-                  worker_proxy.daemonized!(log_path: log_path)
+                  worker_proxy.daemonized!
 
                   expect(log_path).to exist
                   expect(log_file).to include_log_line 'procrastinator', 12345.to_s

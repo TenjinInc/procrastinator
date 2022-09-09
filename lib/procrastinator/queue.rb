@@ -49,20 +49,13 @@ module Procrastinator
          @timeout       = timeout
          @update_period = update_period
 
-         verify_task_class!
-         verify_task_store!
+         validate!
 
          freeze
       end
 
       def next_task(logger: nil, container: nil, scheduler: nil)
-         tasks = read(queue: @name).reject { |t| t[:run_at].nil? }.collect do |t|
-            t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) }.merge(queue: self)
-         end
-
-         metas = sort_tasks(tasks.collect { |t| TaskMetaData.new(**t) })
-
-         metadata = metas.find(&:runnable?)
+         metadata = next_metas.find(&:runnable?)
 
          return nil unless metadata
 
@@ -98,13 +91,10 @@ module Procrastinator
             ERROR
          end
 
-         meta = TaskMetaData.new(queue:          self,
-                                 run_at:         run_at,
-                                 initial_run_at: run_at,
-                                 expire_at:      expire_at,
-                                 data:           JSON.dump(data))
-         # TODO: shorten to slice once updated to Ruby 2.5+
-         create_data = meta.to_h
+         # TODO: shorten to using slice once updated to Ruby 2.5+
+         attrs = {queue: self, run_at: run_at, initial_run_at: run_at, expire_at: expire_at, data: JSON.dump(data)}
+
+         create_data = TaskMetaData.new(attrs).to_h
          create_data.delete(:id)
          create_data.delete(:attempts)
          create_data.delete(:last_fail_at)
@@ -127,6 +117,14 @@ module Procrastinator
          handler
       end
 
+      def next_metas
+         tasks = read(queue: @name).reject { |t| t[:run_at].nil? }.collect do |t|
+            t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) }.merge(queue: self)
+         end
+
+         sort_tasks(tasks.collect { |t| TaskMetaData.new(**t) })
+      end
+
       def sort_tasks(tasks)
          # TODO: improve this
          # shuffling and re-sorting to avoid worst case O(n^2) when receiving already sorted data
@@ -136,59 +134,68 @@ module Procrastinator
          tasks.shuffle.sort_by(&:run_at)
       end
 
-      def verify_task_class!
-         verify_run_method!
-         verify_accessors!
-         verify_hooks!
-      end
-
-      # The interface compliance is checked on init because it's one of those rare cases where you want to know early;
-      # otherwise, you wouldn't know until task execution and that could be far in the future.
-      # UX is important for devs, too.
-      #    - R
-      def verify_run_method!
-         unless @task_class.method_defined? :run
-            raise MalformedTaskError, "task #{ @task_class } does not support #run method"
+      # Internal queue validator
+      module QueueValidation
+         def validate!
+            verify_task_class!
+            verify_task_store!
          end
 
-         return unless @task_class.instance_method(:run).arity.positive?
-
-         raise MalformedTaskError, "task #{ @task_class } cannot require parameters to its #run method"
-      end
-
-      def verify_accessors!
-         [:logger, :container, :scheduler].each do |method_name|
-            next if @task_class.method_defined?(method_name) && @task_class.method_defined?("#{ method_name }=")
-
-            raise MalformedTaskError, <<~ERR
-               Task handler is missing a #{ method_name } accessor. Add this to the #{ @task_class } class definition:
-                  attr_accessor :logger, :container, :scheduler
-            ERR
+         def verify_task_class!
+            verify_run_method!
+            verify_accessors!
+            verify_hooks!
          end
-      end
 
-      def verify_hooks!
-         expected_arity = 1
+         # The interface compliance is checked on init because it's one of those rare cases where you want to know early;
+         # otherwise, you wouldn't know until task execution and that could be far in the future.
+         # UX is important for devs, too.
+         #    - R
+         def verify_run_method!
+            unless @task_class.method_defined? :run
+               raise MalformedTaskError, "task #{ @task_class } does not support #run method"
+            end
 
-         [:success, :fail, :final_fail].each do |method_name|
-            next unless @task_class.method_defined?(method_name)
-            next if @task_class.instance_method(method_name).arity == expected_arity
+            return unless @task_class.instance_method(:run).arity.positive?
 
-            err = "task #{ @task_class } must accept #{ expected_arity } parameter to its ##{ method_name } method"
-
-            raise MalformedTaskError, err
+            raise MalformedTaskError, "task #{ @task_class } cannot require parameters to its #run method"
          end
-      end
 
-      def verify_task_store!
-         raise ArgumentError, ':store cannot be nil' if @task_store.nil?
+         def verify_accessors!
+            [:logger, :container, :scheduler].each do |method_name|
+               next if @task_class.method_defined?(method_name) && @task_class.method_defined?("#{ method_name }=")
 
-         [:read, :create, :update, :delete].each do |method|
-            unless @task_store.respond_to? method
-               raise MalformedTaskStoreError, "task store #{ @task_store.class } must respond to ##{ method }"
+               raise MalformedTaskError, <<~ERR
+                  Task handler is missing a #{ method_name } accessor. Add this to the #{ @task_class } class definition:
+                     attr_accessor :logger, :container, :scheduler
+               ERR
+            end
+         end
+
+         def verify_hooks!
+            expected_arity = 1
+
+            [:success, :fail, :final_fail].each do |method_name|
+               next unless @task_class.method_defined?(method_name)
+               next if @task_class.instance_method(method_name).arity == expected_arity
+
+               err = "task #{ @task_class } must accept #{ expected_arity } parameter to its ##{ method_name } method"
+
+               raise MalformedTaskError, err
+            end
+         end
+
+         def verify_task_store!
+            raise ArgumentError, ':store cannot be nil' if @task_store.nil?
+
+            [:read, :create, :update, :delete].each do |method|
+               unless @task_store.respond_to? method
+                  raise MalformedTaskStoreError, "task store #{ @task_store.class } must respond to ##{ method }"
+               end
             end
          end
       end
+      include QueueValidation
    end
 
    class MalformedTaskError < StandardError

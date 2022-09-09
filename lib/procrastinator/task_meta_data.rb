@@ -36,15 +36,9 @@ module Procrastinator
 
       attr_reader(*EXPECTED_DATA, :queue)
 
-      def initialize(id: nil,
-                     queue: nil,
-                     run_at: nil,
-                     initial_run_at: nil,
-                     expire_at: nil,
-                     attempts: 0,
-                     last_error: nil,
-                     last_fail_at: nil,
-                     data: nil)
+      def initialize(id: nil, queue: nil, data: nil,
+                     run_at: nil, initial_run_at: nil, expire_at: nil,
+                     attempts: 0, last_error: nil, last_fail_at: nil)
          @id             = id
          @queue          = queue || raise(ArgumentError, 'queue cannot be nil')
          @run_at         = get_time(run_at)
@@ -112,7 +106,8 @@ module Procrastinator
 
          if run_at
             @run_at = @initial_run_at = get_time(run_at)
-            reset
+            clear_fails
+            @attempts = 0
          end
 
          return if run_at || expire_at
@@ -141,11 +136,6 @@ module Procrastinator
       def clear_fails
          @last_error   = nil
          @last_fail_at = nil
-      end
-
-      def reset
-         @attempts = 0
-         clear_fails
       end
 
       private
