@@ -635,12 +635,8 @@ module Procrastinator
          end
 
          context 'parent process' do
-            it 'should exit cleanly' do
+            before(:each) do
                allow(work_proxy).to receive(:fork).and_return(1234)
-
-               expect { work_proxy.daemonized! }.to raise_error(SystemExit) do |error|
-                  expect(error.status).to eq(0)
-               end
             end
 
             it 'should clear the session id and exit cleanly again' do
@@ -653,13 +649,23 @@ module Procrastinator
             end
 
             it 'should NOT run the given block' do
-               allow(work_proxy).to receive(:fork).and_return(1234)
+               expect do |block|
+                  work_proxy.daemonized!(&block)
+               end.to_not yield_control
+            end
 
-               expect do
-                  expect do |block|
-                     work_proxy.daemonized!(&block)
-                  end.to_not yield_control
-               end.to raise_error(SystemExit)
+            it 'should NOT log threaded working' do
+               allow(Process).to receive(:pid).and_return(1234)
+
+               work_proxy.daemonized!
+
+               expect(log_file).to_not exist
+            end
+
+            it 'should NOT run threaded working' do
+               expect(work_proxy).to_not receive(:threaded)
+
+               work_proxy.daemonized!
             end
          end
          context 'child process' do

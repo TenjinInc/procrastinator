@@ -258,7 +258,7 @@ module Procrastinator
          # @param pid_path [Pathname,File,String] Path to where the process ID file is to be kept.
          #                                        Assumed to be a directory unless ends with '.pid '.
          def daemonized!(name: nil, pid_path: nil, &block)
-            spawn_daemon(name, pid_path, &block)
+            return if spawn_daemon(name, pid_path, &block)
 
             @logger.info "Procrastinator running. Process ID: #{ Process.pid }"
 
@@ -272,10 +272,10 @@ module Procrastinator
          def spawn_daemon(name, pid_path, &block)
             pid_path = normalize_pid(pid_path)
 
-            # double fork to guarantee no terminal can be attached.
-            exit if fork
+            return true if fork
+
             Process.setsid
-            exit if fork
+            exit if fork # double fork to guarantee no terminal can be attached.
             Dir.chdir '/' # allows process to continue even if the pwd of its running terminal disappears (eg deleted)
 
             open_log(quiet: true)
