@@ -94,7 +94,7 @@ module Procrastinator
          # TODO: shorten to using slice once updated to Ruby 2.5+
          attrs = {queue: self, run_at: run_at, initial_run_at: run_at, expire_at: expire_at, data: JSON.dump(data)}
 
-         create_data = TaskMetaData.new(attrs).to_h
+         create_data = TaskMetaData.new(**attrs).to_h
          create_data.delete(:id)
          create_data.delete(:attempts)
          create_data.delete(:last_fail_at)

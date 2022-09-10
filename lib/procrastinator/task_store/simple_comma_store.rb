@@ -41,8 +41,10 @@ module Procrastinator
             if @path.directory? || @path.to_s.end_with?('/')
                @path /= DEFAULT_FILE
             elsif @path.extname.empty?
-               @path = Pathname.new("#{ file_path }.csv")
+               @path = @path.dirname / "#{ @path.basename }.csv"
             end
+
+            @path = @path.expand_path
 
             freeze
          end

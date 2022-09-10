@@ -644,7 +644,7 @@ module Procrastinator
                let(:max_prog_name) { 'a' * max_len }
 
                before(:each) do
-                  allow(work_proxy).to receive(:system).with('pidof', anything).and_return(false)
+                  allow(work_proxy).to receive(:system).with('pidof', anything, anything).and_return(false)
                end
 
                it 'should rename the daemon process' do
@@ -653,6 +653,12 @@ module Procrastinator
                   expect(Process).to receive(:setproctitle).with(prog_name)
 
                   work_proxy.daemonized!(name: prog_name)
+               end
+
+               it 'should use a default process name' do
+                  expect(Process).to receive(:setproctitle).with(Scheduler::DaemonWorking::PROG_NAME.downcase)
+
+                  work_proxy.daemonized!
                end
 
                it 'should warn if the process name is too long' do
@@ -674,10 +680,18 @@ module Procrastinator
                   work_proxy.daemonized!(name: "#{ max_proc_name }more")
                end
 
+               it 'should silently ask the system about another process' do
+                  prog_name = 'lemming'
+
+                  expect(work_proxy).to receive(:system).with('pidof', prog_name, out: File::NULL)
+
+                  work_proxy.daemonized!(name: prog_name)
+               end
+
                it 'should warn when an existing process has the same name' do
                   prog_name = 'lemming'
 
-                  expect(work_proxy).to receive(:system).with('pidof', prog_name).and_return(true)
+                  allow(work_proxy).to receive(:system).with('pidof', prog_name, out: File::NULL).and_return(true)
 
                   msg = "a process is already named '#{ prog_name }'. Consider the 'name:' argument to distinguish."
 
@@ -708,8 +722,8 @@ module Procrastinator
                end
 
                it 'should use a default pid dir' do
+                  pid_path = Scheduler::DaemonWorking::DEFAULT_PID_DIR.expand_path / Scheduler::DaemonWorking::DEFAULT_PID_FILE
                   work_proxy.daemonized!
-                  pid_path = Scheduler::DaemonWorking::DEFAULT_PID_DIR / Scheduler::DaemonWorking::DEFAULT_PID_FILE
                   expect(pid_path).to exist
                end
 

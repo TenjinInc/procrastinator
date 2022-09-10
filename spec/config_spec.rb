@@ -23,8 +23,10 @@ module Procrastinator
 
             created_queue = config.queue(name: :test_queue)
 
+            path = Pathname.new(TaskStore::SimpleCommaStore::DEFAULT_FILE).expand_path
+
             expect(created_queue.store).to be_a(TaskStore::SimpleCommaStore)
-            expect(created_queue.store.path.to_s).to eq TaskStore::SimpleCommaStore::DEFAULT_FILE.to_s
+            expect(created_queue.store.path.to_s).to eq path.to_s
          end
 
          it 'should convert the log path to absolute' do
@@ -87,7 +89,7 @@ module Procrastinator
                   created_queue = config.queue(name: :test_queue)
 
                   expect(created_queue.store).to be_a(TaskStore::SimpleCommaStore)
-                  expect(created_queue.store.path).to eq Pathname.new(path)
+                  expect(created_queue.store.path).to eq Pathname.new(path).expand_path
                end
             end
 
@@ -140,7 +142,7 @@ module Procrastinator
             end
 
             it 'should return the default to original' do
-               custom_path = Pathname.new('custom.csv')
+               custom_path = Pathname.new('custom.csv').expand_path
                config      = Config.new do |c|
                   c.with_store(csv: custom_path) do
                      c.define_queue(:inner_queue, test_task)
@@ -148,8 +150,10 @@ module Procrastinator
                   c.define_queue(:outer_queue, test_task)
                end
 
+               default_path = Pathname.new(TaskStore::SimpleCommaStore::DEFAULT_FILE).expand_path
+
                expect(config.queue(name: :inner_queue).store.path).to eq(custom_path)
-               expect(config.queue(name: :outer_queue).store.path).to eq(Pathname.new(TaskStore::SimpleCommaStore::DEFAULT_FILE))
+               expect(config.queue(name: :outer_queue).store.path).to eq(default_path)
             end
          end
 
@@ -230,7 +234,7 @@ module Procrastinator
             end
 
             context 'storage' do
-               let(:storage_path) { Pathname.new('some-storage.csv') }
+               let(:storage_path) { Pathname.new('some-storage.csv').expand_path }
                let(:persister) { fake_persister([]) }
 
                it 'should add a queue with the given storage' do

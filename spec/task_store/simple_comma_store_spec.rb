@@ -9,20 +9,26 @@ module Procrastinator
       describe SimpleCommaStore do
          describe 'initialize' do
             it 'should accept a path argument' do
-               store = SimpleCommaStore.new 'testfile.csv'
-               expect(store.path.to_s).to eq 'testfile.csv'
+               store = described_class.new 'testfile.csv'
+               expect(store.path.to_s).to eq '/testfile.csv'
             end
 
             it 'should provide a default path argument' do
-               store = SimpleCommaStore.new
+               store = described_class.new
 
-               expect(store.path.to_s).to eq(SimpleCommaStore::DEFAULT_FILE.to_s)
+               expect(store.path.to_s).to eq(Pathname.new(SimpleCommaStore::DEFAULT_FILE).expand_path.to_s)
+            end
+
+            it 'should interpret an absolute path' do
+               store = described_class.new 'some/relative/../path.csv'
+
+               expect(store.path.to_s).to eq '/some/path.csv'
             end
 
             it 'should add a .csv extension to the path if missing extension' do
                store = SimpleCommaStore.new 'plainfile'
 
-               expect(store.path.to_s).to eq('plainfile.csv')
+               expect(store.path.to_s).to eq('/plainfile.csv')
             end
 
             it 'should add a default filename if the provided path is a directory name' do
@@ -34,7 +40,7 @@ module Procrastinator
             end
 
             it 'should add a default filename if the provided path is an existing directory' do
-               existing_dir = Pathname.new 'test_dir'
+               existing_dir = Pathname.new('test_dir').expand_path
                existing_dir.mkdir
                store = SimpleCommaStore.new(existing_dir)
 
@@ -50,7 +56,7 @@ module Procrastinator
          end
 
          describe 'read' do
-            let(:path) { Pathname.new SimpleCommaStore::DEFAULT_FILE }
+            let(:path) { Pathname.new(SimpleCommaStore::DEFAULT_FILE).expand_path }
             let(:store) { SimpleCommaStore.new(path) }
 
             before(:each) do
@@ -272,7 +278,7 @@ module Procrastinator
          end
 
          describe 'create' do
-            let(:path) { Pathname.new SimpleCommaStore::DEFAULT_FILE }
+            let(:path) { Pathname.new(SimpleCommaStore::DEFAULT_FILE).expand_path }
             let(:store) { SimpleCommaStore.new(path) }
 
             let(:required_args) do
@@ -381,7 +387,7 @@ module Procrastinator
          end
 
          describe 'update' do
-            let(:path) { Pathname.new 'procrastinator-data.csv' }
+            let(:path) { Pathname.new('procrastinator-data.csv').expand_path }
             let(:store) { SimpleCommaStore.new(path) }
 
             before(:each) do
@@ -451,7 +457,7 @@ module Procrastinator
          end
 
          describe 'delete' do
-            let(:path) { Pathname.new 'procrastinator-data.csv' }
+            let(:path) { Pathname.new('procrastinator-data.csv').expand_path }
             let(:store) { SimpleCommaStore.new(path) }
 
             before(:each) do

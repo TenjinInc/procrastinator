@@ -132,6 +132,7 @@ module Procrastinator
 
             @threads = spawn_threads
 
+            @logger.debug 'Humming merrily.'
             @threads.each do |thread|
                thread.join(timeout)
             end
@@ -149,7 +150,7 @@ module Procrastinator
             @logger.info 'Starting worker threads...'
 
             @workers.collect do |worker|
-               @logger.debug "Spawning: #{ worker.name }"
+               @logger.debug "Spawning thread: #{ worker.name }"
                Thread.new(worker) do |w|
                   Thread.current.abort_on_exception = true
                   Thread.current.thread_variable_set(:name, w.name)
@@ -233,6 +234,8 @@ module Procrastinator
          # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
          #  recitals through holiday weekend IKEA. Go."
          def spawn_daemon(name, pid_path)
+            pid_path = (pid_path || DEFAULT_PID_DIR).expand_path
+
             # double fork to guarantee no terminal can be attached.
             exit if fork
             Process.setsid
@@ -243,13 +246,15 @@ module Procrastinator
 
             @logger.info "Starting #{ PROG_NAME } daemon..."
 
-            rename_process(name)
+            rename_process(name || PROG_NAME.downcase)
 
             manage_pid(pid_path)
          end
 
          def manage_pid(pid_path)
             pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
+
+            @logger.debug("Creating pid at path: #{ pid_path.expand_path }")
 
             if pid_path.extname == PID_EXT
                pid_path.dirname.mkpath
@@ -261,21 +266,23 @@ module Procrastinator
             pid_path.write(Process.pid.to_s)
 
             at_exit do
-               pid_path.delete if pid_path.exist?
+               if pid_path.exist?
+                  @logger.debug "Cleaning up pid file #{ pid_path }"
+                  pid_path.delete
+               end
                @logger.info "Procrastinator (pid #{ Process.pid }) halted."
             end
          end
 
          def rename_process(name)
             @logger.debug("Renaming process to #{ name }")
-            return if name.nil?
 
             if name.size > MAX_PROC_LEN
                @logger.warn "process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
                name = name[0, MAX_PROC_LEN]
             end
 
-            if system('pidof', name)
+            if system('pidof', name, out: File::NULL)
                @logger.warn "a process is already named '#{ name }'. Consider the 'name:' argument to distinguish."
             end
 
