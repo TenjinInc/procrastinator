@@ -260,9 +260,9 @@ module Procrastinator
          def daemonized!(name: nil, pid_path: nil, &block)
             spawn_daemon(name, pid_path, &block)
 
-            threaded
-
             @logger.info "Procrastinator running. Process ID: #{ Process.pid }"
+
+            threaded
          end
 
          private
@@ -321,8 +321,8 @@ module Procrastinator
                # this raises Errno::ESRCH when no process found, therefore if found we should exit
                Process.getpgid(existing_pid.to_i)
 
-               hint = 'Either terminate that process or remove the pid file.'
-               msg  = "Another process already already exists for #{ pid_path } (pid #{ existing_pid }). #{ hint }"
+               hint = 'Either terminate that process or remove the pid file (if coincidental).'
+               msg  = "Another process (pid #{ existing_pid }) already exists for #{ pid_path }. #{ hint }"
                @logger.fatal msg
                raise ProcessExistsError, msg
             rescue Errno::ESRCH
@@ -331,7 +331,7 @@ module Procrastinator
          end
 
          def rename_process(name)
-            @logger.debug("Renaming process to #{ name }")
+            @logger.debug("Renaming process to: #{ name }")
 
             if name.size > MAX_PROC_LEN
                @logger.warn "Process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."

@@ -862,8 +862,8 @@ module Procrastinator
                   end
 
                   it 'should log the process collision' do
-                     hint = 'Either terminate that process or remove the pid file.'
-                     msg  = "Another process already already exists for #{ pid_file.expand_path } (pid 1234). #{ hint }"
+                     hint = 'Either terminate that process or remove the pid file (if coincidental).'
+                     msg  = "Another process (pid 1234) already exists for #{ pid_file.expand_path }. #{ hint }"
 
                      expect do
                         work_proxy.daemonized!(pid_path: pid_file)
@@ -904,13 +904,16 @@ module Procrastinator
                it 'should print the daemon pid' do
                   allow(Process).to receive(:pid).and_return(1234)
 
-                  msg1 = 'Procrastinator running. Process ID: 1234'
+                  # tacking onto threaded to cause logging to be before infiniloop
+                  allow(work_proxy).to receive(:threaded) do
+                     expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
+                  end
 
                   expect do
                      work_proxy.daemonized!
                   end.to_not output.to_stderr
 
-                  expect(log_file).to include_log_line 'INFO', msg1
+                  expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
                end
 
                it 'should print a clean exit' do
