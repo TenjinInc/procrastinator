@@ -258,9 +258,7 @@ module Procrastinator
          # @param pid_path [Pathname,File,String] Path to where the process ID file is to be kept.
          #                                        Assumed to be a directory unless ends with '.pid '.
          def daemonized!(name: nil, pid_path: nil, &block)
-            spawn_daemon(name, pid_path)
-
-            yield if block
+            spawn_daemon(name, pid_path, &block)
 
             threaded
 
@@ -271,8 +269,8 @@ module Procrastinator
 
          # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
          #  recitals through holiday weekend IKEA. Go."
-         def spawn_daemon(name, pid_path)
-            pid_path = (pid_path || DEFAULT_PID_DIR).expand_path
+         def spawn_daemon(name, pid_path, &block)
+            pid_path = normalize_pid(pid_path)
 
             # double fork to guarantee no terminal can be attached.
             exit if fork
@@ -287,17 +285,15 @@ module Procrastinator
             rename_process(name || PROG_NAME.downcase)
 
             manage_pid(pid_path)
+
+            yield if block
          end
 
          def manage_pid(pid_path)
-            pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
-            pid_path /= DEFAULT_PID_FILE unless pid_path.extname == PID_EXT
-            pid_path = pid_path.expand_path
-
             ensure_unique(pid_path)
 
-            pid_path.dirname.mkpath
             @logger.debug "Managing pid at path: #{ pid_path }"
+            pid_path.dirname.mkpath
             pid_path.write(Process.pid.to_s)
 
             at_exit do
@@ -307,6 +303,12 @@ module Procrastinator
                end
                @logger.info "Procrastinator (pid #{ Process.pid }) halted."
             end
+         end
+
+         def normalize_pid(pid_path)
+            pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
+            pid_path /= DEFAULT_PID_FILE unless pid_path.extname == PID_EXT
+            pid_path.expand_path
          end
 
          def ensure_unique(pid_path)

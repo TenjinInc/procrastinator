@@ -784,9 +784,16 @@ module Procrastinator
                end
 
                it 'should use a default pid dir' do
-                  pid_path = Scheduler::DaemonWorking::DEFAULT_PID_DIR.expand_path / Scheduler::DaemonWorking::DEFAULT_PID_FILE
+                  # wrap in new pathname to translate into FakeFS
+                  pid_path = Pathname.new(Scheduler::DaemonWorking::DEFAULT_PID_DIR) / Scheduler::DaemonWorking::DEFAULT_PID_FILE
                   work_proxy.daemonized!
                   expect(pid_path).to exist
+               end
+
+               it 'should convert the path to absolute' do
+                  pid_path = Pathname.new('./up/../pid/something.pid')
+                  work_proxy.daemonized!(pid_path: pid_path)
+                  expect(pid_path.expand_path).to exist
                end
 
                it 'should write its pid file' do
