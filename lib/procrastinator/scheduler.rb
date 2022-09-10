@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'stringio'
+
 module Procrastinator
    # A Scheduler object provides the API for client applications to manage delayed tasks.
    #
@@ -130,18 +132,20 @@ module Procrastinator
             open_log
             shutdown_on_interrupt
 
-            @threads = spawn_threads
+            begin
+               @threads = spawn_threads
 
-            @logger.debug 'Humming merrily.'
-            @threads.each do |thread|
-               thread.join(timeout)
+               @logger.debug 'Humming merrily.'
+               @threads.each do |thread|
+                  thread.join(timeout)
+               end
+            rescue StandardError => e
+               thread_crash(e)
+            ensure
+               @logger&.info 'Halting worker threads...'
+               shutdown!
+               @logger&.info 'Threads halted.'
             end
-         rescue StandardError => e
-            thread_crash(e)
-         ensure
-            @logger&.info 'Halting worker threads...'
-            shutdown!
-            @logger&.info 'Threads halted.'
          end
 
          private
@@ -188,16 +192,50 @@ module Procrastinator
             (@threads || []).select(&:alive?).each(&:kill)
          end
 
-         def open_log
+         def open_log(quiet: false)
             return if @logger
 
-            log_path = @config.log_dir / "#{ PROG_NAME.downcase }.log"
-            log_path.dirname.mkpath
+            log_devs = []
 
-            @logger = Logger.new(log_path.to_s, # || $stderr
+            log_devs << StringIO.new if quiet && !@config.log_level
+            log_devs << $stderr unless quiet
+            log_devs << log_path.open('a') if @config.log_level
+
+            multi      = MultiIO.new(*log_devs)
+            multi.sync = true
+
+            @logger = Logger.new(multi,
                                  progname:  PROG_NAME.downcase,
-                                 level:     @config.log_level,
+                                 level:     @config.log_level || Logger::INFO,
                                  formatter: Config::DEFAULT_LOG_FORMATTER)
+         end
+
+         def log_path
+            path = @config.log_dir / "#{ PROG_NAME.downcase }.log"
+            path.dirname.mkpath
+            # FileUtils.touch(log_path)
+            path
+         end
+
+         # IO Multiplexer that forwards calls to a list of IO streams.
+         class MultiIO
+            def initialize(*stream)
+               @streams = stream
+            end
+
+            (IO.methods << :path << :sync=).uniq.each do |method_name|
+               define_method(method_name) do |*args|
+                  able_streams(method_name).collect do |stream|
+                     stream.send(method_name, *args)
+                  end.last # forces consistent return result type for callers (but may lose some info)
+               end
+            end
+
+            private
+
+            def able_streams(method_name)
+               @streams.select { |stream| stream.respond_to?(method_name) }
+            end
          end
       end
 
@@ -242,7 +280,7 @@ module Procrastinator
             exit if fork
             Dir.chdir '/' # allows process to continue even if the pwd of its running terminal disappears (eg deleted)
 
-            open_log
+            open_log(quiet: true)
 
             @logger.info "Starting #{ PROG_NAME } daemon..."
 
@@ -278,12 +316,12 @@ module Procrastinator
             @logger.debug("Renaming process to #{ name }")
 
             if name.size > MAX_PROC_LEN
-               @logger.warn "process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
+               @logger.warn "Process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
                name = name[0, MAX_PROC_LEN]
             end
 
             if system('pidof', name, out: File::NULL)
-               @logger.warn "a process is already named '#{ name }'. Consider the 'name:' argument to distinguish."
+               @logger.warn "Another process is already named '#{ name }'. Consider the 'name:' argument to distinguish."
             end
 
             Process.setproctitle(name)
