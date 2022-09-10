@@ -291,16 +291,13 @@ module Procrastinator
 
          def manage_pid(pid_path)
             pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
+            pid_path /= DEFAULT_PID_FILE unless pid_path.extname == PID_EXT
+            pid_path = pid_path.expand_path
 
-            @logger.debug("Creating pid at path: #{ pid_path.expand_path }")
+            ensure_unique(pid_path)
 
-            if pid_path.extname == PID_EXT
-               pid_path.dirname.mkpath
-            else
-               pid_path.mkpath
-               pid_path /= DEFAULT_PID_FILE
-            end
-
+            pid_path.dirname.mkpath
+            @logger.debug "Managing pid at path: #{ pid_path }"
             pid_path.write(Process.pid.to_s)
 
             at_exit do
@@ -309,6 +306,25 @@ module Procrastinator
                   pid_path.delete
                end
                @logger.info "Procrastinator (pid #{ Process.pid }) halted."
+            end
+         end
+
+         def ensure_unique(pid_path)
+            return unless pid_path.exist?
+
+            @logger.debug "Checking pid file #{ pid_path }"
+            existing_pid = pid_path.read
+
+            begin
+               # this raises Errno::ESRCH when no process found, therefore if found we should exit
+               Process.getpgid(existing_pid.to_i)
+
+               hint = 'Either terminate that process or remove the pid file.'
+               msg  = "Another process already already exists for #{ pid_path } (pid #{ existing_pid }). #{ hint }"
+               @logger.fatal msg
+               raise ProcessExistsError, msg
+            rescue Errno::ESRCH
+               @logger.warn "Replacing old pid file of defunct process (pid #{ existing_pid }) at #{ pid_path }."
             end
          end
 
@@ -321,7 +337,7 @@ module Procrastinator
             end
 
             if system('pidof', name, out: File::NULL)
-               @logger.warn "Another process is already named '#{ name }'. Consider the 'name:' argument to distinguish."
+               @logger.warn "Another process is already named '#{ name }'. Consider the 'name:' keyword to distinguish."
             end
 
             Process.setproctitle(name)
@@ -345,5 +361,8 @@ module Procrastinator
             @config  = config
          end
       end
+   end
+
+   class ProcessExistsError < RuntimeError
    end
 end

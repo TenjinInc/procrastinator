@@ -597,7 +597,7 @@ module Procrastinator
       let(:queue_names) { [:first, :second, :third] }
 
       let(:persister) { Test::Persister.new }
-      let(:log_level) { Logger::FATAL }
+      let(:log_level) { Logger::INFO }
       let(:config) do
          Config.new do |c|
             c.with_store(persister) do
@@ -747,12 +747,12 @@ module Procrastinator
                      expect(log_file).to include_log_line 'WARN', msg
                   end
 
-                  it 'should warn when an existing process has the same name' do
+                  it 'should log warning when an existing process has the same name' do
                      prog_name = 'lemming'
 
-                     allow(work_proxy).to receive(:system).with('pidof', prog_name, out: File::NULL).and_return(true)
+                     allow(work_proxy).to receive(:system).with('pidof', prog_name, anything).and_return(true)
 
-                     msg = "Another process is already named '#{ prog_name }'. Consider the 'name:' argument to distinguish."
+                     msg = "Another process is already named '#{ prog_name }'. Consider the 'name:' keyword to distinguish."
 
                      expect do
                         work_proxy.daemonized!(name: prog_name)
@@ -815,6 +815,55 @@ module Procrastinator
                   end
 
                   work_proxy.daemonized!(pid_path: pid_file)
+               end
+
+               context 'process already exists' do
+                  before(:each) do
+                     pid_file.dirname.mkpath
+                     pid_file.write(1234)
+                     allow(Process).to receive(:getpgid).and_raise Errno::ESRCH, 'No such process'
+                  end
+
+                  it 'should log warning about removing old pid file' do
+                     msg = "Replacing old pid file of defunct process (pid 1234) at #{ pid_file.expand_path }."
+
+                     work_proxy.daemonized!(pid_path: pid_file)
+
+                     expect(log_file).to include_log_line 'WARN', msg
+                  end
+               end
+
+               context 'process already exists' do
+                  before(:each) do
+                     pid_file.dirname.mkpath
+                     pid_file.write(1234)
+                     allow(Process).to receive(:getpgid).and_return 5678
+                  end
+
+                  it 'should ask about the process in the pid file' do
+                     expect(Process).to receive(:getpgid).with(1234)
+
+                     expect do
+                        work_proxy.daemonized!(pid_path: pid_file)
+                     end.to raise_error ProcessExistsError
+                  end
+
+                  it 'should error out' do
+                     expect do
+                        work_proxy.daemonized!(pid_path: pid_file)
+                     end.to raise_error ProcessExistsError
+                  end
+
+                  it 'should log the process collision' do
+                     hint = 'Either terminate that process or remove the pid file.'
+                     msg  = "Another process already already exists for #{ pid_file.expand_path } (pid 1234). #{ hint }"
+
+                     expect do
+                        work_proxy.daemonized!(pid_path: pid_file)
+                     end.to raise_error ProcessExistsError, msg
+
+                     expect(log_file).to include_log_line 'FATAL', msg
+                  end
                end
             end
 
