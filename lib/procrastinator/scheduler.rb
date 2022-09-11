@@ -135,7 +135,7 @@ module Procrastinator
             begin
                @threads = spawn_threads
 
-               @logger.debug 'Humming merrily.'
+               @logger.info "Procrastinator running. Process ID: #{ Process.pid }"
                @threads.each do |thread|
                   thread.join(timeout)
                end
@@ -257,9 +257,7 @@ module Procrastinator
          # @param pid_path [Pathname,File,String] Path to where the process ID file is to be kept.
          #                                        Assumed to be a directory unless ends with '.pid '.
          def daemonized!(name: nil, pid_path: nil, &block)
-            return if spawn_daemon(name, pid_path, &block)
-
-            @logger.info "Procrastinator running. Process ID: #{ Process.pid }"
+            spawn_daemon(name, pid_path, &block)
 
             threaded
          end

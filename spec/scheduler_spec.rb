@@ -412,15 +412,24 @@ module Procrastinator
                   end
                end
 
-               it 'should say it is starting threads' do
+               before(:each) do
                   allow(Thread).to receive(:new).and_return(thread_double)
+                  allow(Process).to receive(:pid).and_return(1234)
+               end
 
+               it 'should say it is starting threads' do
                   msg = 'Starting workers for queues: first, second, third'
                   expect do
                      work_proxy.threaded
                   end.to output(include(msg)).to_stderr
 
                   expect(log_file).to include_log_line 'INFO', msg
+               end
+
+               it 'should print the process pid' do
+                  work_proxy.threaded
+
+                  expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
                end
             end
          end
@@ -845,38 +854,25 @@ module Procrastinator
 
          context 'status output' do
             let(:log_level) { Logger::INFO }
+            let(:pid) { 12345 }
+
+            before(:each) do
+               allow(Process).to receive(:pid).and_return(pid)
+            end
 
             it 'should open a log file' do
-               allow(Process).to receive(:pid).and_return(12345)
                log_path = config.log_dir / 'procrastinator.log'
-
-               msg = 12345.to_s
 
                work_proxy.daemonized!
 
                expect(log_path).to exist
-               expect(log_file).to include_log_line 'procrastinator', msg
+               expect(log_file).to include_log_line 'procrastinator', pid.to_s
             end
 
-            it 'should print starting the daemon' do
-               msg = 'Starting Procrastinator daemon...'
-
+            it 'should print starting daemon' do
                work_proxy.daemonized!
 
-               expect(log_file).to include_log_line 'INFO', msg
-            end
-
-            it 'should print the daemon pid' do
-               allow(Process).to receive(:pid).and_return(1234)
-
-               # tacking onto threaded to cause logging to be before infiniloop
-               allow(work_proxy).to receive(:threaded) do
-                  expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
-               end
-
-               work_proxy.daemonized!
-
-               expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
+               expect(log_file).to include_log_line 'INFO', 'Starting Procrastinator daemon...'
             end
 
             it 'should print a clean exit' do
@@ -885,7 +881,7 @@ module Procrastinator
 
                work_proxy.daemonized!
 
-               expect(log_file.read.strip).to match /Procrastinator \(pid \d+\) halted/
+               expect(log_file).to include_log_line 'INFO', "Procrastinator (pid #{ pid }) halted."
             end
 
             it 'should log fatal errors' do
