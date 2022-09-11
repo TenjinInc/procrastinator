@@ -655,7 +655,7 @@ module Procrastinator
             end
 
             it 'should NOT log threaded working' do
-               allow(Process).to receive(:pid).and_return(1234)
+               allow(Process).to receive(:pid).and_return 1234
 
                work_proxy.daemonized!
 
@@ -663,21 +663,34 @@ module Procrastinator
             end
 
             it 'should NOT run threaded working' do
-               expect(work_proxy).to_not receive(:threaded)
+               expect(work_proxy).to_not receive :threaded
 
                work_proxy.daemonized!
             end
          end
+
          context 'child process' do
             before(:each) do
                allow(work_proxy).to receive(:fork).and_return(nil)
                allow(Thread).to receive(:new).and_return double('thread double', join: nil, alive?: false)
                allow(work_proxy).to receive(:loop).and_yield
+
+               allow($stdin).to receive(:reopen)
+               allow($stdout).to receive(:reopen)
+               allow($stderr).to receive(:reopen)
             end
 
             # prevents pointing to a pwd inherited from a manual terminal run (which might disappear)
             it 'should chdir to root' do
                expect(Dir).to receive(:chdir).with('/')
+               work_proxy.daemonized!
+            end
+
+            it 'should redirect all stdio to null' do
+               expect($stdin).to receive(:reopen).with(File::NULL)
+               expect($stdout).to receive(:reopen).with(File::NULL, anything)
+               expect($stderr).to receive(:reopen).with(File::NULL, anything)
+
                work_proxy.daemonized!
             end
 
@@ -746,9 +759,7 @@ module Procrastinator
 
                      msg = "Process name is longer than max length (#{ max_len }). Trimming to fit."
 
-                     expect do
-                        work_proxy.daemonized!(name: name)
-                     end.to_not output.to_stderr
+                     work_proxy.daemonized!(name: name)
 
                      expect(log_file).to include_log_line 'WARN', msg
                   end
@@ -760,9 +771,7 @@ module Procrastinator
 
                      msg = "Another process is already named '#{ prog_name }'. Consider the 'name:' keyword to distinguish."
 
-                     expect do
-                        work_proxy.daemonized!(name: prog_name)
-                     end.to_not output.to_stderr
+                     work_proxy.daemonized!(name: prog_name)
 
                      expect(log_file).to include_log_line 'WARN', msg
                   end
@@ -771,8 +780,10 @@ module Procrastinator
 
             context 'pid file' do
                let(:pid_file) { Pathname.new 'pids/procrastinator.pid' }
+               let(:default_basename) { 'procrastinator.pid' }
 
-               it 'should create pid file at the provided filename' do
+               # use fully-specified pid name as-is
+               it 'should create pid file at the provided specific filename' do
                   pid_file = Pathname.new('/tmp/atomic-coffee/beans.pid')
                   work_proxy.daemonized!(pid_path: pid_file)
 
@@ -780,20 +791,29 @@ module Procrastinator
                   expect(pid_file).to be_file
                end
 
-               it 'should use the provided pid directory' do
+               it 'should assume extensionless pid path is a directory' do
                   pid_dir = Pathname.new('/tmp/atomic-coffee')
                   work_proxy.daemonized!(pid_path: pid_dir)
 
                   expect(pid_dir).to exist
                   expect(pid_dir).to be_directory
-                  expect(pid_dir / Scheduler::DaemonWorking::DEFAULT_PID_FILE).to exist
+                  expect(pid_dir / default_basename).to exist
                end
 
-               it 'should use a default pid dir' do
+               it 'should use the process name as pid file basename' do
+                  name = 'janet-summon'
+                  work_proxy.daemonized!(name: name)
+
+                  pid_root = Pathname.new(Scheduler::DaemonWorking::DEFAULT_PID_DIR)
+                  expect(pid_root / 'janet-summon.pid').to exist
+               end
+
+               # when not provided at all
+               it 'should assume a default pid dir and name' do
                   # wrap in new pathname to translate into FakeFS
-                  pid_path = Pathname.new(Scheduler::DaemonWorking::DEFAULT_PID_DIR) / Scheduler::DaemonWorking::DEFAULT_PID_FILE
+                  pid_path = Pathname.new(Scheduler::DaemonWorking::DEFAULT_PID_DIR)
                   work_proxy.daemonized!
-                  expect(pid_path).to exist
+                  expect(pid_path / default_basename).to exist
                end
 
                it 'should convert the path to absolute' do
@@ -889,9 +909,7 @@ module Procrastinator
 
                   msg = 12345.to_s
 
-                  expect do
-                     work_proxy.daemonized!
-                  end.to_not output.to_stderr
+                  work_proxy.daemonized!
 
                   expect(log_path).to exist
                   expect(log_file).to include_log_line 'procrastinator', msg
@@ -900,9 +918,7 @@ module Procrastinator
                it 'should print starting the daemon' do
                   msg = 'Starting Procrastinator daemon...'
 
-                  expect do
-                     work_proxy.daemonized!
-                  end.to_not output.to_stderr
+                  work_proxy.daemonized!
 
                   expect(log_file).to include_log_line 'INFO', msg
                end
@@ -915,9 +931,7 @@ module Procrastinator
                      expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
                   end
 
-                  expect do
-                     work_proxy.daemonized!
-                  end.to_not output.to_stderr
+                  work_proxy.daemonized!
 
                   expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
                end
@@ -930,9 +944,7 @@ module Procrastinator
 
                   msg = 'Procrastinator (pid 1234) halted.'
 
-                  expect do
-                     work_proxy.daemonized!
-                  end.to_not output.to_stderr
+                  work_proxy.daemonized!
 
                   expect(log_file).to include_log_line 'INFO', msg
                end
@@ -941,9 +953,7 @@ module Procrastinator
                   let(:log_level) { false }
 
                   it 'should create a null logger' do
-                     expect do
-                        work_proxy.daemonized!
-                     end.to_not output.to_stderr
+                     work_proxy.daemonized!
 
                      expect(log_file).to_not exist
                   end

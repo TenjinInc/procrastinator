@@ -243,9 +243,8 @@ module Procrastinator
       #
       # @see WorkProxy
       module DaemonWorking
-         PID_EXT          = '.pid'
-         DEFAULT_PID_DIR  = Pathname.new('pid/').freeze
-         DEFAULT_PID_FILE = Pathname.new("procrastinator#{ PID_EXT }").freeze
+         PID_EXT         = '.pid'
+         DEFAULT_PID_DIR = Pathname.new('pid/').freeze
 
          # 15 chars is linux limit
          MAX_PROC_LEN = 15
@@ -270,21 +269,28 @@ module Procrastinator
          # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
          #  recitals through holiday weekend IKEA. Go."
          def spawn_daemon(name, pid_path, &block)
-            pid_path = normalize_pid(pid_path)
-
             return true if fork
 
-            Process.setsid
+            Process.setsid # clears the session id
             exit if fork # double fork to guarantee no terminal can be attached.
-            Dir.chdir '/' # allows process to continue even if the pwd of its running terminal disappears (eg deleted)
 
-            open_log(quiet: true)
+            $stdin.reopen File::NULL
+            $stdout.reopen File::NULL, 'a'
+            $stderr.reopen File::NULL, 'a'
 
+            open_log quiet: true
             @logger.info "Starting #{ PROG_NAME } daemon..."
 
-            rename_process(name || PROG_NAME.downcase)
+            name, pid_path = normalize name, pid_path
 
-            manage_pid(pid_path)
+            # Setting dir to root allows process to continue even if the original working directory
+            # disappears (eg. is deleted). Needs to be done after the normalization to allow absolute paths to
+            # resolve correctly.
+            Dir.chdir '/'
+
+            rename_process name
+
+            manage_pid pid_path
 
             yield if block
          end
@@ -294,7 +300,7 @@ module Procrastinator
 
             @logger.debug "Managing pid at path: #{ pid_path }"
             pid_path.dirname.mkpath
-            pid_path.write(Process.pid.to_s)
+            pid_path.write Process.pid.to_s
 
             at_exit do
                if pid_path.exist?
@@ -305,10 +311,23 @@ module Procrastinator
             end
          end
 
-         def normalize_pid(pid_path)
+         def normalize(name, pid_path)
+            name ||= PROG_NAME.downcase
+
+            if name.size > MAX_PROC_LEN
+
+               @logger.warn "Process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
+               name = name[0, MAX_PROC_LEN]
+            end
+
             pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
-            pid_path /= DEFAULT_PID_FILE unless pid_path.extname == PID_EXT
-            pid_path.expand_path
+            pid_path /= "#{ name }#{ PID_EXT }" unless pid_path.extname == PID_EXT
+
+            [name, pid_path.expand_path]
+         end
+
+         def normalize_name(name)
+
          end
 
          def ensure_unique(pid_path)
@@ -319,7 +338,7 @@ module Procrastinator
 
             begin
                # this raises Errno::ESRCH when no process found, therefore if found we should exit
-               Process.getpgid(existing_pid.to_i)
+               Process.getpgid existing_pid.to_i
 
                hint = 'Either terminate that process or remove the pid file (if coincidental).'
                msg  = "Another process (pid #{ existing_pid }) already exists for #{ pid_path }. #{ hint }"
@@ -331,18 +350,12 @@ module Procrastinator
          end
 
          def rename_process(name)
-            @logger.debug("Renaming process to: #{ name }")
-
-            if name.size > MAX_PROC_LEN
-               @logger.warn "Process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
-               name = name[0, MAX_PROC_LEN]
-            end
-
             if system('pidof', name, out: File::NULL)
                @logger.warn "Another process is already named '#{ name }'. Consider the 'name:' keyword to distinguish."
             end
 
-            Process.setproctitle(name)
+            @logger.debug "Renaming process to: #{ name }"
+            Process.setproctitle name
          end
 
          include ThreadedWorking
