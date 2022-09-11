@@ -270,6 +270,8 @@ module Procrastinator
             open_log quiet: true
             @logger.info "Starting #{ PROG_NAME } daemon..."
 
+            print_debug_context
+
             name, pid_path = normalize name, pid_path
 
             Process.daemon
@@ -330,6 +332,13 @@ module Procrastinator
             rescue Errno::ESRCH
                @logger.warn "Replacing old pid file of defunct process (pid #{ existing_pid }) at #{ pid_path }."
             end
+         end
+
+         def print_debug_context
+            @logger.debug "Ruby Path: #{ ENV['RUBY_ROOT'] }"
+            @logger.debug "Bundler Path: #{ ENV['BUNDLE_BIN_PATH'] }"
+            # logname is the posix standard and is set by cron, so probably reliable.
+            @logger.debug "Runtime User: #{ ENV['LOGNAME'] || ENV['USERNAME'] }"
          end
 
          def rename_process(name)
