@@ -415,7 +415,7 @@ module Procrastinator
                it 'should say it is starting threads' do
                   allow(Thread).to receive(:new).and_return(thread_double)
 
-                  msg = 'Starting worker threads...'
+                  msg = 'Starting workers for queues: first, second, third'
                   expect do
                      work_proxy.threaded
                   end.to output(include(msg)).to_stderr
@@ -628,335 +628,284 @@ module Procrastinator
          let(:work_proxy) { Scheduler.new(config).work(:second) }
 
          before(:each) do
-            # keeping a fallback here; real forks break the rspec runner
-            allow(work_proxy).to receive(:fork).and_raise('Testing error: test must stub :fork')
-            allow(Dir).to receive(:chdir)
-            allow(Process).to receive(:setsid)
+            allow(Process).to receive(:daemon).and_return(0)
          end
 
-         context 'parent process' do
-            before(:each) do
-               allow(work_proxy).to receive(:fork).and_return(1234)
-            end
-
-            it 'should clear the session id and exit cleanly again' do
-               allow(work_proxy).to receive(:fork).and_return(nil, 5678)
-
-               expect(Process).to receive(:setsid)
-               expect { work_proxy.daemonized! }.to raise_error(SystemExit) do |error|
-                  expect(error.status).to eq(0)
-               end
-            end
-
-            it 'should NOT run the given block' do
-               expect do |block|
-                  work_proxy.daemonized!(&block)
-               end.to_not yield_control
-            end
-
-            it 'should NOT log threaded working' do
-               allow(Process).to receive(:pid).and_return 1234
-
-               work_proxy.daemonized!
-
-               expect(log_file).to_not exist
-            end
-
-            it 'should NOT run threaded working' do
-               expect(work_proxy).to_not receive :threaded
-
-               work_proxy.daemonized!
-            end
+         it 'should call process daemon' do
+            # no args means chdir to root and redirect all stdio to /dev/null
+            expect(Process).to receive(:daemon).with(no_args).and_return(0)
+            work_proxy.daemonized!
          end
 
-         context 'child process' do
+         it 'should spawn queues workers in threaded mode' do
+            expect(work_proxy).to receive(:threaded)
+
+            work_proxy.daemonized!
+         end
+
+         it 'should run the given block' do
+            was_run = false
+            work_proxy.daemonized! do
+               was_run = true
+            end
+
+            expect(was_run).to eq true
+         end
+
+         # not sure this is actually necessary to test, so leaving just as a note:
+         #    it 'should respond to SIGTERM to exit cleanly'
+
+         context 'process name' do
+            let(:max_len) { Scheduler::DaemonWorking::MAX_PROC_LEN }
+            let(:max_prog_name) { 'a' * max_len }
+
             before(:each) do
-               allow(work_proxy).to receive(:fork).and_return(nil)
-               allow(Thread).to receive(:new).and_return double('thread double', join: nil, alive?: false)
-               allow(work_proxy).to receive(:loop).and_yield
-
-               allow($stdin).to receive(:reopen)
-               allow($stdout).to receive(:reopen)
-               allow($stderr).to receive(:reopen)
+               allow(work_proxy).to receive(:system).with('pidof', anything, anything).and_return(false)
             end
 
-            # prevents pointing to a pwd inherited from a manual terminal run (which might disappear)
-            it 'should chdir to root' do
-               expect(Dir).to receive(:chdir).with('/')
-               work_proxy.daemonized!
+            it 'should rename the daemon process' do
+               prog_name = 'vicky'
+
+               expect(Process).to receive(:setproctitle).with(prog_name)
+
+               work_proxy.daemonized!(name: prog_name)
             end
 
-            it 'should redirect all stdio to null' do
-               expect($stdin).to receive(:reopen).with(File::NULL)
-               expect($stdout).to receive(:reopen).with(File::NULL, anything)
-               expect($stderr).to receive(:reopen).with(File::NULL, anything)
+            it 'should use a default process name' do
+               expect(Process).to receive(:setproctitle).with(Scheduler::DaemonWorking::PROG_NAME.downcase)
 
                work_proxy.daemonized!
             end
 
-            it 'should spawn queues workers in threaded mode' do
-               expect(work_proxy).to receive(:threaded)
+            it 'should trim long process names to fit' do
+               maxlen        = Scheduler::DaemonWorking::MAX_PROC_LEN
+               max_proc_name = 'z' * maxlen
 
-               work_proxy.daemonized!
+               expect(Process).to receive(:setproctitle).with(max_proc_name)
+
+               work_proxy.daemonized!(name: "#{ max_proc_name }more")
             end
 
-            it 'should run the given block' do
-               was_run = false
-               work_proxy.daemonized! do
-                  was_run = true
-               end
+            it 'should silently ask the system about another process' do
+               prog_name = 'lemming'
 
-               expect(was_run).to eq true
+               expect(work_proxy).to receive(:system).with('pidof', prog_name, out: File::NULL)
+
+               work_proxy.daemonized!(name: prog_name)
             end
 
-            # not sure this is actually necessary to test, so leaving just as a note:
-            #    it 'should respond to SIGTERM to exit cleanly'
-
-            context 'process name' do
-               let(:max_len) { Scheduler::DaemonWorking::MAX_PROC_LEN }
-               let(:max_prog_name) { 'a' * max_len }
-
-               before(:each) do
-                  allow(work_proxy).to receive(:system).with('pidof', anything, anything).and_return(false)
-               end
-
-               it 'should rename the daemon process' do
-                  prog_name = 'vicky'
-
-                  expect(Process).to receive(:setproctitle).with(prog_name)
-
-                  work_proxy.daemonized!(name: prog_name)
-               end
-
-               it 'should use a default process name' do
-                  expect(Process).to receive(:setproctitle).with(Scheduler::DaemonWorking::PROG_NAME.downcase)
-
-                  work_proxy.daemonized!
-               end
-
-               it 'should trim long process names to fit' do
-                  maxlen        = Scheduler::DaemonWorking::MAX_PROC_LEN
-                  max_proc_name = 'z' * maxlen
-
-                  expect(Process).to receive(:setproctitle).with(max_proc_name)
-
-                  work_proxy.daemonized!(name: "#{ max_proc_name }more")
-               end
-
-               it 'should silently ask the system about another process' do
-                  prog_name = 'lemming'
-
-                  expect(work_proxy).to receive(:system).with('pidof', prog_name, out: File::NULL)
-
-                  work_proxy.daemonized!(name: prog_name)
-               end
-
-               context 'logging enabled' do
-                  let(:log_level) { Logger::INFO }
-
-                  it 'should warn if the process name is too long' do
-                     name = "#{ max_prog_name }b"
-
-                     msg = "Process name is longer than max length (#{ max_len }). Trimming to fit."
-
-                     work_proxy.daemonized!(name: name)
-
-                     expect(log_file).to include_log_line 'WARN', msg
-                  end
-
-                  it 'should log warning when an existing process has the same name' do
-                     prog_name = 'lemming'
-
-                     allow(work_proxy).to receive(:system).with('pidof', prog_name, anything).and_return(true)
-
-                     msg = "Another process is already named '#{ prog_name }'. Consider the 'name:' keyword to distinguish."
-
-                     work_proxy.daemonized!(name: prog_name)
-
-                     expect(log_file).to include_log_line 'WARN', msg
-                  end
-               end
-            end
-
-            context 'pid file' do
-               let(:pid_file) { Pathname.new 'pids/procrastinator.pid' }
-               let(:default_basename) { 'procrastinator.pid' }
-
-               # use fully-specified pid name as-is
-               it 'should create pid file at the provided specific filename' do
-                  pid_file = Pathname.new('/tmp/atomic-coffee/beans.pid')
-                  work_proxy.daemonized!(pid_path: pid_file)
-
-                  expect(pid_file).to exist
-                  expect(pid_file).to be_file
-               end
-
-               it 'should assume extensionless pid path is a directory' do
-                  pid_dir = Pathname.new('/tmp/atomic-coffee')
-                  work_proxy.daemonized!(pid_path: pid_dir)
-
-                  expect(pid_dir).to exist
-                  expect(pid_dir).to be_directory
-                  expect(pid_dir / default_basename).to exist
-               end
-
-               it 'should use the process name as pid file basename' do
-                  name = 'janet-summon'
-                  work_proxy.daemonized!(name: name)
-
-                  pid_root = Pathname.new(Scheduler::DaemonWorking::DEFAULT_PID_DIR)
-                  expect(pid_root / 'janet-summon.pid').to exist
-               end
-
-               # when not provided at all
-               it 'should assume a default pid dir and name' do
-                  # wrap in new pathname to translate into FakeFS
-                  pid_path = Pathname.new(Scheduler::DaemonWorking::DEFAULT_PID_DIR)
-                  work_proxy.daemonized!
-                  expect(pid_path / default_basename).to exist
-               end
-
-               it 'should convert the path to absolute' do
-                  pid_path = Pathname.new('./up/../pid/something.pid')
-                  work_proxy.daemonized!(pid_path: pid_path)
-                  expect(pid_path.expand_path).to exist
-               end
-
-               it 'should write its pid file' do
-                  pid = 12345
-                  allow(Process).to receive(:pid).and_return(pid)
-                  work_proxy.daemonized!(pid_path: pid_file)
-
-                  file_content = File.read(pid_file)
-                  expect(file_content).to eq(pid.to_s)
-               end
-
-               it 'should clean up the pid file on exit' do
-                  # stub out at_exit to force it to run immediately
-                  expect(work_proxy).to receive(:at_exit).and_yield
-
-                  work_proxy.daemonized!
-
-                  expect(pid_file).to_not exist
-               end
-
-               it 'should be okay with the pid file not existing' do
-                  # stub out at_exit to force it to run immediately
-                  expect(work_proxy).to receive(:at_exit) do |&block|
-                     pid_file.delete
-                     block.call
-                  end
-
-                  work_proxy.daemonized!(pid_path: pid_file)
-               end
-
-               context 'process already exists' do
-                  before(:each) do
-                     pid_file.dirname.mkpath
-                     pid_file.write(1234)
-                     allow(Process).to receive(:getpgid).and_raise Errno::ESRCH, 'No such process'
-                  end
-
-                  it 'should log warning about removing old pid file' do
-                     msg = "Replacing old pid file of defunct process (pid 1234) at #{ pid_file.expand_path }."
-
-                     work_proxy.daemonized!(pid_path: pid_file)
-
-                     expect(log_file).to include_log_line 'WARN', msg
-                  end
-               end
-
-               context 'process already exists' do
-                  before(:each) do
-                     pid_file.dirname.mkpath
-                     pid_file.write(1234)
-                     allow(Process).to receive(:getpgid).and_return 5678
-                  end
-
-                  it 'should ask about the process in the pid file' do
-                     expect(Process).to receive(:getpgid).with(1234)
-
-                     expect do
-                        work_proxy.daemonized!(pid_path: pid_file)
-                     end.to raise_error ProcessExistsError
-                  end
-
-                  it 'should error out' do
-                     expect do
-                        work_proxy.daemonized!(pid_path: pid_file)
-                     end.to raise_error ProcessExistsError
-                  end
-
-                  it 'should log the process collision' do
-                     hint = 'Either terminate that process or remove the pid file (if coincidental).'
-                     msg  = "Another process (pid 1234) already exists for #{ pid_file.expand_path }. #{ hint }"
-
-                     expect do
-                        work_proxy.daemonized!(pid_path: pid_file)
-                     end.to raise_error ProcessExistsError, msg
-
-                     expect(log_file).to include_log_line 'FATAL', msg
-                  end
-               end
-            end
-
-            context 'status output' do
+            context 'logging enabled' do
                let(:log_level) { Logger::INFO }
 
-               it 'should open a log file' do
-                  allow(Process).to receive(:pid).and_return(12345)
-                  log_path = config.log_dir / 'procrastinator.log'
+               it 'should warn if the process name is too long' do
+                  name = "#{ max_prog_name }b"
 
-                  msg = 12345.to_s
+                  msg = "Process name is longer than max length (#{ max_len }). Trimming to fit."
 
-                  work_proxy.daemonized!
+                  work_proxy.daemonized!(name: name)
 
-                  expect(log_path).to exist
-                  expect(log_file).to include_log_line 'procrastinator', msg
+                  expect(log_file).to include_log_line 'WARN', msg
                end
 
-               it 'should print starting the daemon' do
-                  msg = 'Starting Procrastinator daemon...'
+               it 'should log warning when an existing process has the same name' do
+                  prog_name = 'lemming'
 
-                  work_proxy.daemonized!
+                  allow(work_proxy).to receive(:system).with('pidof', prog_name, anything).and_return(true)
 
-                  expect(log_file).to include_log_line 'INFO', msg
+                  msg = "Another process is already named '#{ prog_name }'. Consider the 'name:' keyword to distinguish."
+
+                  work_proxy.daemonized!(name: prog_name)
+
+                  expect(log_file).to include_log_line 'WARN', msg
+               end
+            end
+         end
+
+         context 'pid file' do
+            let(:pid_file) { Pathname.new 'pids/procrastinator.pid' }
+            let(:default_basename) { 'procrastinator.pid' }
+
+            # use fully-specified pid name as-is
+            it 'should create pid file at the provided specific filename' do
+               pid_file = Pathname.new('/tmp/atomic-coffee/beans.pid')
+               work_proxy.daemonized!(pid_path: pid_file)
+
+               expect(pid_file).to exist
+               expect(pid_file).to be_file
+            end
+
+            it 'should assume extensionless pid path is a directory' do
+               pid_dir = Pathname.new('/tmp/atomic-coffee')
+               work_proxy.daemonized!(pid_path: pid_dir)
+
+               expect(pid_dir).to exist
+               expect(pid_dir).to be_directory
+               expect(pid_dir / default_basename).to exist
+            end
+
+            it 'should use the process name as pid file basename' do
+               name = 'janet-summon'
+               work_proxy.daemonized!(name: name)
+
+               pid_root = Pathname.new(Scheduler::DaemonWorking::DEFAULT_PID_DIR)
+               expect(pid_root / 'janet-summon.pid').to exist
+            end
+
+            # when not provided at all
+            it 'should assume a default pid dir and name' do
+               # wrap in new pathname to translate into FakeFS
+               pid_path = Pathname.new(Scheduler::DaemonWorking::DEFAULT_PID_DIR)
+               work_proxy.daemonized!
+               expect(pid_path / default_basename).to exist
+            end
+
+            it 'should convert the path to absolute' do
+               pid_path = Pathname.new('./up/../pid/something.pid')
+               work_proxy.daemonized!(pid_path: pid_path)
+               expect(pid_path.expand_path).to exist
+            end
+
+            it 'should write its pid file' do
+               pid = 12345
+               allow(Process).to receive(:pid).and_return(pid)
+               work_proxy.daemonized!(pid_path: pid_file)
+
+               file_content = File.read(pid_file)
+               expect(file_content).to eq(pid.to_s)
+            end
+
+            it 'should clean up the pid file on exit' do
+               # stub out at_exit to force it to run immediately
+               expect(work_proxy).to receive(:at_exit).and_yield
+
+               work_proxy.daemonized!
+
+               expect(pid_file).to_not exist
+            end
+
+            it 'should be okay with the pid file not existing' do
+               # stub out at_exit to force it to run immediately
+               expect(work_proxy).to receive(:at_exit) do |&block|
+                  pid_file.delete
+                  block.call
                end
 
-               it 'should print the daemon pid' do
-                  allow(Process).to receive(:pid).and_return(1234)
+               work_proxy.daemonized!(pid_path: pid_file)
+            end
 
-                  # tacking onto threaded to cause logging to be before infiniloop
-                  allow(work_proxy).to receive(:threaded) do
-                     expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
-                  end
+            context 'process already exists' do
+               before(:each) do
+                  pid_file.dirname.mkpath
+                  pid_file.write(1234)
+                  allow(Process).to receive(:getpgid).and_raise Errno::ESRCH, 'No such process'
+               end
 
-                  work_proxy.daemonized!
+               it 'should log warning about removing old pid file' do
+                  msg = "Replacing old pid file of defunct process (pid 1234) at #{ pid_file.expand_path }."
 
+                  work_proxy.daemonized!(pid_path: pid_file)
+
+                  expect(log_file).to include_log_line 'WARN', msg
+               end
+            end
+
+            context 'process already exists' do
+               before(:each) do
+                  pid_file.dirname.mkpath
+                  pid_file.write(1234)
+                  allow(Process).to receive(:getpgid).and_return 5678
+               end
+
+               it 'should ask about the process in the pid file' do
+                  expect(Process).to receive(:getpgid).with(1234)
+
+                  expect do
+                     work_proxy.daemonized!(pid_path: pid_file)
+                  end.to raise_error ProcessExistsError
+               end
+
+               it 'should error out' do
+                  expect do
+                     work_proxy.daemonized!(pid_path: pid_file)
+                  end.to raise_error ProcessExistsError
+               end
+
+               it 'should log the process collision' do
+                  hint = 'Either terminate that process or remove the pid file (if coincidental).'
+                  msg  = "Another process (pid 1234) already exists for #{ pid_file.expand_path }. #{ hint }"
+
+                  expect do
+                     work_proxy.daemonized!(pid_path: pid_file)
+                  end.to raise_error ProcessExistsError, msg
+
+                  expect(log_file).to include_log_line 'FATAL', msg
+               end
+            end
+         end
+
+         context 'status output' do
+            let(:log_level) { Logger::INFO }
+
+            it 'should open a log file' do
+               allow(Process).to receive(:pid).and_return(12345)
+               log_path = config.log_dir / 'procrastinator.log'
+
+               msg = 12345.to_s
+
+               work_proxy.daemonized!
+
+               expect(log_path).to exist
+               expect(log_file).to include_log_line 'procrastinator', msg
+            end
+
+            it 'should print starting the daemon' do
+               msg = 'Starting Procrastinator daemon...'
+
+               work_proxy.daemonized!
+
+               expect(log_file).to include_log_line 'INFO', msg
+            end
+
+            it 'should print the daemon pid' do
+               allow(Process).to receive(:pid).and_return(1234)
+
+               # tacking onto threaded to cause logging to be before infiniloop
+               allow(work_proxy).to receive(:threaded) do
                   expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
                end
 
-               it 'should print a clean exit' do
-                  allow(Process).to receive(:pid).and_return(1234)
+               work_proxy.daemonized!
 
-                  # stub out at_exit to force it to run immediately
-                  expect(work_proxy).to receive(:at_exit).and_yield
+               expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
+            end
 
-                  msg = 'Procrastinator (pid 1234) halted.'
+            it 'should print a clean exit' do
+               # stub out at_exit to force it to run inline
+               expect(work_proxy).to receive(:at_exit).and_yield
 
+               work_proxy.daemonized!
+
+               expect(log_file.read.strip).to match /Procrastinator \(pid \d+\) halted/
+            end
+
+            it 'should log fatal errors' do
+               msg = 'asplode'
+               allow(Process).to receive(:daemon).and_raise msg
+
+               expect do
+                  work_proxy.daemonized!
+               end.to raise_error RuntimeError, msg
+
+               expect(log_file).to include_log_line 'FATAL', msg
+            end
+
+            context 'logging disabled' do
+               let(:log_level) { false }
+
+               it 'should create a null logger' do
                   work_proxy.daemonized!
 
-                  expect(log_file).to include_log_line 'INFO', msg
-               end
-
-               context 'logging disabled' do
-                  let(:log_level) { false }
-
-                  it 'should create a null logger' do
-                     work_proxy.daemonized!
-
-                     expect(log_file).to_not exist
-                  end
+                  expect(log_file).to_not exist
                end
             end
          end

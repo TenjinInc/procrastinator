@@ -151,7 +151,7 @@ module Procrastinator
          private
 
          def spawn_threads
-            @logger.info 'Starting worker threads...'
+            @logger.info "Starting workers for queues: #{ @workers.collect(&:name).join(', ') }"
 
             @workers.collect do |worker|
                @logger.debug "Spawning thread: #{ worker.name }"
@@ -269,30 +269,20 @@ module Procrastinator
          # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
          #  recitals through holiday weekend IKEA. Go."
          def spawn_daemon(name, pid_path, &block)
-            return true if fork
-
-            Process.setsid # clears the session id
-            exit if fork # double fork to guarantee no terminal can be attached.
-
-            $stdin.reopen File::NULL
-            $stdout.reopen File::NULL, 'a'
-            $stderr.reopen File::NULL, 'a'
-
             open_log quiet: true
             @logger.info "Starting #{ PROG_NAME } daemon..."
 
             name, pid_path = normalize name, pid_path
 
-            # Setting dir to root allows process to continue even if the original working directory
-            # disappears (eg. is deleted). Needs to be done after the normalization to allow absolute paths to
-            # resolve correctly.
-            Dir.chdir '/'
+            Process.daemon
 
             rename_process name
-
             manage_pid pid_path
 
             yield if block
+         rescue StandardError => e
+            @logger.fatal ([e.message] + e.backtrace).join("\n")
+            raise e
          end
 
          def manage_pid(pid_path)
@@ -315,7 +305,6 @@ module Procrastinator
             name ||= PROG_NAME.downcase
 
             if name.size > MAX_PROC_LEN
-
                @logger.warn "Process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
                name = name[0, MAX_PROC_LEN]
             end
@@ -324,10 +313,6 @@ module Procrastinator
             pid_path /= "#{ name }#{ PID_EXT }" unless pid_path.extname == PID_EXT
 
             [name, pid_path.expand_path]
-         end
-
-         def normalize_name(name)
-
          end
 
          def ensure_unique(pid_path)
