@@ -262,12 +262,22 @@ module Procrastinator
             threaded
          end
 
+         # Normalizes the given pid path, including conversion to absolute path and defaults.
+         #
+         # @param pid_path [Pathname, String] path to normalize
+         def self.normalize_pid(pid_path)
+            pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
+            pid_path /= "#{ PROG_NAME.downcase }#{ PID_EXT }" unless pid_path.extname == PID_EXT
+
+            pid_path.expand_path
+         end
+
          private
 
          # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
          #  recitals through holiday weekend IKEA. Go."
          def spawn_daemon(pid_path, &block)
-            pid_path = normalize_pid pid_path
+            pid_path = DaemonWorking.normalize_pid pid_path
 
             open_log quiet: true
             @logger.info "Starting #{ PROG_NAME } daemon..."
@@ -283,13 +293,6 @@ module Procrastinator
          rescue StandardError => e
             @logger.fatal ([e.message] + e.backtrace).join("\n")
             raise e
-         end
-
-         def normalize_pid(pid_path)
-            pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
-            pid_path /= "#{ PROG_NAME.downcase }#{ PID_EXT }" unless pid_path.extname == PID_EXT
-
-            pid_path.expand_path
          end
 
          def manage_pid(pid_path)
