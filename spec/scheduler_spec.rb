@@ -672,18 +672,18 @@ module Procrastinator
                allow(work_proxy).to receive(:system).with('pidof', anything, anything).and_return(false)
             end
 
-            it 'should rename the daemon process' do
+            it 'should rename the daemon process based on the pidfile' do
                prog_name = 'vicky'
 
                expect(Process).to receive(:setproctitle).with(prog_name)
 
-               work_proxy.daemonized!(name: prog_name)
+               work_proxy.daemonized!("#{ prog_name }.pid")
             end
 
             it 'should use a default process name' do
                expect(Process).to receive(:setproctitle).with(Scheduler::DaemonWorking::PROG_NAME.downcase)
 
-               work_proxy.daemonized!
+               work_proxy.daemonized!('/var/run')
             end
 
             it 'should trim long process names to fit' do
@@ -692,7 +692,7 @@ module Procrastinator
 
                expect(Process).to receive(:setproctitle).with(max_proc_name)
 
-               work_proxy.daemonized!(name: "#{ max_proc_name }more")
+               work_proxy.daemonized!("#{ max_proc_name }more.pid")
             end
 
             it 'should silently ask the system about another process' do
@@ -700,7 +700,7 @@ module Procrastinator
 
                expect(work_proxy).to receive(:system).with('pidof', prog_name, out: File::NULL)
 
-               work_proxy.daemonized!(name: prog_name)
+               work_proxy.daemonized!("#{ prog_name }.pid")
             end
 
             context 'logging enabled' do
@@ -711,7 +711,7 @@ module Procrastinator
 
                   msg = "Process name is longer than max length (#{ max_len }). Trimming to fit."
 
-                  work_proxy.daemonized!(name: name)
+                  work_proxy.daemonized!("#{ name }.pid")
 
                   expect(log_file).to include_log_line 'WARN', msg
                end
@@ -723,7 +723,7 @@ module Procrastinator
 
                   msg = "Another process is already named '#{ prog_name }'. Consider the 'name:' keyword to distinguish."
 
-                  work_proxy.daemonized!(name: prog_name)
+                  work_proxy.daemonized!("#{ prog_name }.pid")
 
                   expect(log_file).to include_log_line 'WARN', msg
                end
@@ -737,7 +737,7 @@ module Procrastinator
             # use fully-specified pid name as-is
             it 'should create pid file at the provided specific filename' do
                pid_file = Pathname.new('/tmp/atomic-coffee/beans.pid')
-               work_proxy.daemonized!(pid_path: pid_file)
+               work_proxy.daemonized!(pid_file)
 
                expect(pid_file).to exist
                expect(pid_file).to be_file
@@ -745,19 +745,11 @@ module Procrastinator
 
             it 'should assume extensionless pid path is a directory' do
                pid_dir = Pathname.new('/tmp/atomic-coffee')
-               work_proxy.daemonized!(pid_path: pid_dir)
+               work_proxy.daemonized!(pid_dir)
 
                expect(pid_dir).to exist
                expect(pid_dir).to be_directory
                expect(pid_dir / default_basename).to exist
-            end
-
-            it 'should use the process name as pid file basename' do
-               name = 'janet-summon'
-               work_proxy.daemonized!(name: name)
-
-               pid_root = Pathname.new(Scheduler::DaemonWorking::DEFAULT_PID_DIR)
-               expect(pid_root / 'janet-summon.pid').to exist
             end
 
             # when not provided at all
@@ -770,14 +762,14 @@ module Procrastinator
 
             it 'should convert the path to absolute' do
                pid_path = Pathname.new('./up/../pid/something.pid')
-               work_proxy.daemonized!(pid_path: pid_path)
+               work_proxy.daemonized!(pid_path)
                expect(pid_path.expand_path).to exist
             end
 
             it 'should write its pid file' do
                pid = 12345
                allow(Process).to receive(:pid).and_return(pid)
-               work_proxy.daemonized!(pid_path: pid_file)
+               work_proxy.daemonized!(pid_file)
 
                file_content = File.read(pid_file)
                expect(file_content).to eq(pid.to_s)
@@ -799,7 +791,7 @@ module Procrastinator
                   block.call
                end
 
-               work_proxy.daemonized!(pid_path: pid_file)
+               work_proxy.daemonized!(pid_file)
             end
 
             context 'process already exists' do
@@ -812,7 +804,7 @@ module Procrastinator
                it 'should log warning about removing old pid file' do
                   msg = "Replacing old pid file of defunct process (pid 1234) at #{ pid_file.expand_path }."
 
-                  work_proxy.daemonized!(pid_path: pid_file)
+                  work_proxy.daemonized!(pid_file)
 
                   expect(log_file).to include_log_line 'WARN', msg
                end
@@ -829,13 +821,13 @@ module Procrastinator
                   expect(Process).to receive(:getpgid).with(1234)
 
                   expect do
-                     work_proxy.daemonized!(pid_path: pid_file)
+                     work_proxy.daemonized!(pid_file)
                   end.to raise_error ProcessExistsError
                end
 
                it 'should error out' do
                   expect do
-                     work_proxy.daemonized!(pid_path: pid_file)
+                     work_proxy.daemonized!(pid_file)
                   end.to raise_error ProcessExistsError
                end
 
@@ -844,7 +836,7 @@ module Procrastinator
                   msg  = "Another process (pid 1234) already exists for #{ pid_file.expand_path }. #{ hint }"
 
                   expect do
-                     work_proxy.daemonized!(pid_path: pid_file)
+                     work_proxy.daemonized!(pid_file)
                   end.to raise_error ProcessExistsError, msg
 
                   expect(log_file).to include_log_line 'FATAL', msg

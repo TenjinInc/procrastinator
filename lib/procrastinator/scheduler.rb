@@ -244,7 +244,7 @@ module Procrastinator
       # @see WorkProxy
       module DaemonWorking
          PID_EXT         = '.pid'
-         DEFAULT_PID_DIR = Pathname.new('pid/').freeze
+         DEFAULT_PID_DIR = Pathname.new('/var/run/').freeze
 
          # 15 chars is linux limit
          MAX_PROC_LEN = 15
@@ -252,12 +252,12 @@ module Procrastinator
          # Consumes the current process and turns it into a background daemon. A log will be started in the log
          # directory defined in the configuration block.
          #
-         # @param name [String] The process name to request from the OS.
-         #                      Not guaranteed to be set, depending on OS support.
+         # If pid_path ends with extension '.pid', the basename will be requested as process title (depending on OS
+         # support). An extensionless path is assumed to be a directory and a default filename (and proctitle) is used.
+         #
          # @param pid_path [Pathname,File,String] Path to where the process ID file is to be kept.
-         #                                        Assumed to be a directory unless ends with '.pid '.
-         def daemonized!(name: nil, pid_path: nil, &block)
-            spawn_daemon(name, pid_path, &block)
+         def daemonized!(pid_path = nil, &block)
+            spawn_daemon(pid_path, &block)
 
             threaded
          end
@@ -266,23 +266,30 @@ module Procrastinator
 
          # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
          #  recitals through holiday weekend IKEA. Go."
-         def spawn_daemon(name, pid_path, &block)
+         def spawn_daemon(pid_path, &block)
+            pid_path = normalize_pid pid_path
+
             open_log quiet: true
             @logger.info "Starting #{ PROG_NAME } daemon..."
 
             print_debug_context
 
-            name, pid_path = normalize name, pid_path
-
             Process.daemon
 
-            rename_process name
             manage_pid pid_path
+            rename_process pid_path
 
             yield if block
          rescue StandardError => e
             @logger.fatal ([e.message] + e.backtrace).join("\n")
             raise e
+         end
+
+         def normalize_pid(pid_path)
+            pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
+            pid_path /= "#{ PROG_NAME.downcase }#{ PID_EXT }" unless pid_path.extname == PID_EXT
+
+            pid_path.expand_path
          end
 
          def manage_pid(pid_path)
@@ -299,20 +306,6 @@ module Procrastinator
                end
                @logger.info "Procrastinator (pid #{ Process.pid }) halted."
             end
-         end
-
-         def normalize(name, pid_path)
-            name ||= PROG_NAME.downcase
-
-            if name.size > MAX_PROC_LEN
-               @logger.warn "Process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
-               name = name[0, MAX_PROC_LEN]
-            end
-
-            pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
-            pid_path /= "#{ name }#{ PID_EXT }" unless pid_path.extname == PID_EXT
-
-            [name, pid_path.expand_path]
          end
 
          def ensure_unique(pid_path)
@@ -341,7 +334,14 @@ module Procrastinator
             @logger.debug "Runtime User: #{ ENV['LOGNAME'] || ENV['USERNAME'] }"
          end
 
-         def rename_process(name)
+         def rename_process(pid_path)
+            name = pid_path.basename(PID_EXT).to_s
+
+            if name.size > MAX_PROC_LEN
+               @logger.warn "Process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
+               name = name[0, MAX_PROC_LEN]
+            end
+
             if system('pidof', name, out: File::NULL)
                @logger.warn "Another process is already named '#{ name }'. Consider the 'name:' keyword to distinguish."
             end
