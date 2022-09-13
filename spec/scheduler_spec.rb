@@ -898,5 +898,32 @@ module Procrastinator
             end
          end
       end
+
+      context 'halt!' do
+         let(:pid) { 12345 }
+
+         before(:each) do
+            allow(Process).to receive(:kill)
+         end
+
+         it 'should process kill the pid' do
+            pid_file = Pathname.new 'procrastinator.pid'
+            pid_file.write(pid)
+
+            expect(Process).to receive(:kill).with('TERM', pid)
+
+            described_class.halt!(pid_file)
+         end
+
+         it 'should normalize the pid parameter' do
+            pid_file = Pathname.new '/var/run/procrastinator.pid'
+            pid_file.dirname.mkpath
+            pid_file.write(pid)
+
+            expect(Process).to receive(:kill).with('TERM', pid)
+
+            described_class.halt!(nil)
+         end
+      end
    end
 end

@@ -19,8 +19,8 @@ module Procrastinator
          #
          # @param (see #define)
          # @see DaemonTasks#define
-         def self.define(*args)
-            new.define(*args)
+         def self.define(**args)
+            new.define(**args)
          end
 
          # Defines procrastinator:start and procrastinator:stop Rake tasks that operate on the given scheduler.
@@ -35,7 +35,7 @@ module Procrastinator
                end
 
                task :stop do
-                  Process.kill('TERM', File.read(pid_path).to_i)
+                  Procrastinator::Scheduler::DaemonWorking.halt!(pid_path)
                end
             end
          end

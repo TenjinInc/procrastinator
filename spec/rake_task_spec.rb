@@ -100,31 +100,19 @@ module Procrastinator
 
          context 'task procrastinator:stop' do
             let(:task_factory) { described_class.new }
-            let(:pid) { 12345 }
             let(:pid_path) { 'procrastinator.pid' }
-            let(:scheduler_proxy) { double('scheduler proxy') }
-            let(:scheduler) { double('scheduler', work: scheduler_proxy) }
+            let(:scheduler) { double('scheduler') }
             let(:task) { ::Rake::Task['procrastinator:stop'] }
 
             before(:each) do
                # Resets the task definitions. This is a bit blunt, but works for now.
                ::Rake::Task.clear
-
-               File.write(pid_path, pid.to_s)
             end
 
-            it 'should process kill the pid' do
+            it 'should call stop! with the pid path' do
                task_factory.define(scheduler: scheduler, pid_path: pid_path)
 
-               expect(Process).to receive(:kill).with('TERM', pid)
-
-               task.invoke
-            end
-
-            it 'should process kill the pid' do
-               task_factory.define(scheduler: scheduler, pid_path: pid_path)
-
-               expect(Process).to receive(:kill).with('TERM', pid)
+               expect(Procrastinator::Scheduler::DaemonWorking).to receive(:halt!).with(pid_path)
 
                task.invoke
             end

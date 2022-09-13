@@ -273,6 +273,13 @@ module Procrastinator
             pid_path.expand_path
          end
 
+         # Stops the procrastinator process denoted by the provided pid file
+         def self.halt!(pid_path)
+            pid_path = normalize_pid pid_path
+
+            Process.kill('TERM', pid_path.read.to_i)
+         end
+
          private
 
          # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
