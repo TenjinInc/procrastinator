@@ -255,7 +255,8 @@ module Procrastinator
          # If pid_path ends with extension '.pid', the basename will be requested as process title (depending on OS
          # support). An extensionless path is assumed to be a directory and a default filename (and proctitle) is used.
          #
-         # @param pid_path [Pathname,File,String] Path to where the process ID file is to be kept.
+         # @param pid_path [Pathname, File, String, nil] Path to where the process ID file is to be kept.
+         # @yield [void] Block to run after daemonization
          def daemonized!(pid_path = nil, &block)
             spawn_daemon(pid_path, &block)
 

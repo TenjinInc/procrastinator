@@ -14,6 +14,9 @@ require 'fakefs/spec_helpers'
 
 require 'procrastinator'
 
+# keeping this independent of procrastinator base require on purpose
+require 'procrastinator/rake/daemon_tasks'
+
 RSpec.configure do |config|
    config.include FakeFS::SpecHelpers
 end
