@@ -54,7 +54,7 @@ module Procrastinator
          freeze
       end
 
-      def next_task(logger: nil, container: nil, scheduler: nil)
+      def next_task(logger: Logger.new(StringIO.new), container: nil, scheduler: nil)
          metadata = next_metas.find(&:runnable?)
 
          return nil unless metadata
@@ -64,7 +64,7 @@ module Procrastinator
                                                 logger:    logger,
                                                 scheduler: scheduler))
 
-         LoggedTask.new(task, logger: logger || Logger.new(StringIO.new))
+         LoggedTask.new(task, logger: logger)
       end
 
       def fetch_task(identifier)
@@ -119,7 +119,7 @@ module Procrastinator
 
       def next_metas
          tasks = read(queue: @name).reject { |t| t[:run_at].nil? }.collect do |t|
-            t.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) }.merge(queue: self)
+            t.to_h.delete_if { |key| !TaskMetaData::EXPECTED_DATA.include?(key) }.merge(queue: self)
          end
 
          sort_tasks(tasks.collect { |t| TaskMetaData.new(**t) })

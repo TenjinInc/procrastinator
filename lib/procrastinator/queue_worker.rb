@@ -26,13 +26,13 @@ module Procrastinator
                   end
 
          @scheduler = Scheduler.new(config)
+         @logger    = Logger.new(StringIO.new)
       end
 
       # Works on jobs forever
       def work!
          @logger = open_log!("#{ name }-queue-worker", @config)
-
-         @logger&.info("Started worker thread to consume queue: #{ name }")
+         @logger.info("Started worker thread to consume queue: #{ name }")
 
          loop do
             sleep(@queue.update_period)
@@ -40,7 +40,7 @@ module Procrastinator
             work_one
          end
       rescue StandardError => e
-         @logger&.fatal(e)
+         @logger.fatal(e)
 
          raise
       end
@@ -71,7 +71,7 @@ module Procrastinator
 
       # Starts a log file and returns the created Logger
       def open_log!(name, config)
-         return unless config.log_level
+         return @logger unless config.log_level
 
          log_path = config.log_dir / "#{ name }.log"
 
@@ -80,7 +80,7 @@ module Procrastinator
 
          Logger.new(log_path.to_path,
                     config.log_shift_age, config.log_shift_size,
-                    level:     config.log_level,
+                    level:     config.log_level || Logger::FATAL,
                     progname:  name,
                     formatter: Config::DEFAULT_LOG_FORMATTER)
       end

@@ -256,7 +256,8 @@ module Procrastinator
                worker = QueueWorker.new(queue: :email, config: config)
 
                expect(worker).to receive(:next_task).with(hash_including(container: container,
-                                                                         scheduler: an_instance_of(Scheduler)))
+                                                                         scheduler: an_instance_of(Scheduler),
+                                                                         logger:    an_instance_of(Logger)))
 
                worker.work_one
             end
@@ -388,8 +389,8 @@ module Procrastinator
                expect(Dir.glob('/var/log/*')).to be_empty
             end
 
-            it 'should NOT create a logger instance' do
-               expect(Logger).to_not receive(:new)
+            it 'should create a logger instance with stringIO' do
+               expect(Logger).to receive(:new).with(instance_of(StringIO))
 
                worker.open_log!('test-log', config)
             end
@@ -433,6 +434,8 @@ module Procrastinator
             end
 
             it 'should log at the provided level' do
+               worker # referencing the variable spawns it once and runs the initializer
+
                Logger::Severity.constants.each do |level|
                   config = Config.new do |c|
                      c.define_queue :test_queue, Test::MockTask
@@ -459,6 +462,8 @@ module Procrastinator
             end
 
             it 'should use the provided shift age and size' do
+               worker
+
                size   = double('size')
                age    = double('age')
                config = Config.new do |c|
