@@ -21,9 +21,13 @@ module Procrastinator
          EXT          = 'csv'
          DEFAULT_FILE = Pathname.new("procrastinator-tasks.#{ EXT }").freeze
 
-         CONVERTER = proc do |value, field_info|
+         TIME_FIELDS = [:run_at, :initial_run_at, :expire_at, :last_fail_at].freeze
+
+         READ_CONVERTER = proc do |value, field_info|
             if field_info.header == :data
                value
+            elsif TIME_FIELDS.include? field_info.header
+               value.empty? ? nil : Time.parse(value)
             else
                begin
                   Integer(value)
@@ -59,7 +63,13 @@ module Procrastinator
             end
          end
 
-         def create(queue:, run_at:, initial_run_at:, expire_at:, data: '')
+         # Saves a task to the CSV file.
+         #
+         # @param queue [String] queue name
+         # @param run_at [Time, nil] time to run the task at
+         # @param initial_run_at [Time, nil] first time to run the task at. Defaults to run_at.
+         # @param expire_at [Time, nil] time to expire the task
+         def create(queue:, run_at:, expire_at:, data: '', initial_run_at: nil)
             FileTransaction.new(@path).write do |existing_data|
                tasks  = parse(existing_data)
                max_id = tasks.collect { |task| task[:id] }.max || 0
@@ -68,7 +78,7 @@ module Procrastinator
                      id:             max_id + 1,
                      queue:          queue,
                      run_at:         run_at,
-                     initial_run_at: initial_run_at,
+                     initial_run_at: initial_run_at || run_at,
                      expire_at:      expire_at,
                      attempts:       0,
                      data:           data
@@ -86,6 +96,7 @@ module Procrastinator
                end
 
                task_data&.merge!(data)
+
                generate(tasks)
             end
          end
@@ -99,6 +110,9 @@ module Procrastinator
 
          def generate(data)
             lines = data.collect do |d|
+               TIME_FIELDS.each do |field|
+                  d[field] = d[field]&.iso8601
+               end
                CSV.generate_line(d, headers: HEADERS, force_quotes: true).strip
             end
 
@@ -114,7 +128,7 @@ module Procrastinator
                              headers:           true,
                              header_converters: :symbol,
                              skip_blanks:       true,
-                             converters:        CONVERTER,
+                             converters:        READ_CONVERTER,
                              force_quotes:      true).to_a
 
             headers = data.shift || HEADERS

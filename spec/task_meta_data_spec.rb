@@ -497,7 +497,7 @@ module Procrastinator
             expect(task.to_h).to include(id: id)
          end
 
-         it 'should include the run information in iso8601' do
+         it 'should include the run information as Time objects' do
             run_at         = '2022-03-04T00:01:20-06:00'
             initial_run_at = '2022-03-04T00:01:20-06:00'
             expire_at      = '2022-03-04T00:01:20-06:00'
@@ -507,9 +507,9 @@ module Procrastinator
                                     run_at:         run_at,
                                     expire_at:      expire_at)
 
-            expect(task.to_h).to include(initial_run_at: initial_run_at,
-                                         run_at:         run_at,
-                                         expire_at:      expire_at)
+            expect(task.to_h).to include(initial_run_at: Time.parse(initial_run_at),
+                                         run_at:         Time.parse(run_at),
+                                         expire_at:      Time.parse(expire_at))
          end
 
          it 'should include the attempts and failure information' do
@@ -520,7 +520,7 @@ module Procrastinator
             task = TaskMetaData.new(queue: queue, attempts: attempts, last_error: last_error, last_fail_at: fail_time)
 
             expect(task.to_h).to include(attempts:     attempts,
-                                         last_fail_at: fail_time,
+                                         last_fail_at: Time.parse(fail_time),
                                          last_error:   last_error)
          end
       end

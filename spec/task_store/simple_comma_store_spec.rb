@@ -61,10 +61,10 @@ module Procrastinator
 
             before(:each) do
                contents = <<~CONTENTS
-                  id, queue    , run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  1 , reminders, 2     , 3             ,  4       , 5       , 6           , problem   , info
-                  8 , reminders, 9     , 10            ,  11      , 12      , 13          , asplode   , something
-                  15, thumbs   , 16    , 17            ,  18      , 19      , 20          , boom      , north means left
+                  id, queue    , run_at,            initial_run_at,    expire_at,         attempts, last_fail_at,      last_error, data
+                  1 , reminders, 2022-01-01T00:00Z, 2022-01-01T00:00Z, 2022-01-01T00:00Z, 5       , 2022-01-01T00:00Z, problem   , info
+                  8 , reminders, 2022-01-01T00:00Z, 2022-01-01T00:00Z, 2022-01-01T00:00Z, 12      , 2022-01-01T00:00Z, asplode   , something
+                  15, thumbs   , 2022-01-01T00:00Z, 2022-01-01T00:00Z, 2022-01-01T00:00Z, 19      , 2022-01-01T00:00Z, boom      , north means left
                CONTENTS
 
                path.write(contents)
@@ -73,7 +73,7 @@ module Procrastinator
             end
 
             it 'should read from a specific csv file' do
-               data = '1, reminders, 2, 3, 4, 5, 6, problem, {user: 7}'
+               data = '1, reminders, 2022-01-01T00:00:00Z, 2022-01-01T00:00:00Z, 2022-01-01T00:00:00Z, 5, 2022-01-01T00:00:00Z, problem, {user: 7}'
 
                [Pathname.new('special-procrastinator-data.csv'),
                 Pathname.new('/some/place/some-other-data.csv')].each do |path|
@@ -126,7 +126,7 @@ module Procrastinator
 
                   contents = <<~CONTENTS
                      id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                     "1","","2","3","4","5","6","problem","#{ hash_data.gsub('"', '""') }"
+                     "1","","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","5","2022-01-01T00:00Z","problem","#{ hash_data.gsub('"', '""') }"
                   CONTENTS
 
                   path.write(contents)
@@ -139,7 +139,7 @@ module Procrastinator
 
                   contents = <<~CONTENTS
                      id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                     "1","","2","3","4","5","6","problem","#{ array_data.gsub('"', '""') }"
+                     "1","","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","5","2022-01-01T00:00Z","problem","#{ array_data.gsub('"', '""') }"
                   CONTENTS
 
                   path.write(contents)
@@ -152,7 +152,7 @@ module Procrastinator
 
                   contents = <<~CONTENTS
                      id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                     "1","","2","3","4","5","6","problem","#{ string_data.gsub('"', '""') }"
+                     "1","","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","5","2022-01-01T00:00Z","problem","#{ string_data.gsub('"', '""') }"
                   CONTENTS
 
                   path.write(contents)
@@ -165,7 +165,7 @@ module Procrastinator
 
                   contents = <<~CONTENTS
                      id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                     "1","","2","3","4","5","6","problem","#{ integer_data }"
+                     "1","","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","5","2022-01-01T00:00Z","problem","#{ integer_data }"
                   CONTENTS
 
                   path.write(contents)
@@ -182,7 +182,7 @@ module Procrastinator
                # This HEREDOC must be non-interpolated or else you will lose 1 sanity point and be stunned for a turn.
                contents = <<~'CONTENTS'
                   id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","","2","3","4","5","6","problem","""string with \""quotes\"" in it"""
+                  "1","","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","5","2022-01-01T00:00Z","problem","""string with \""quotes\"" in it"""
                CONTENTS
 
                path.write(contents)
@@ -204,9 +204,9 @@ module Procrastinator
             it 'should ignore blank lines' do
                contents = <<~'CONTENTS'
                   id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","","2","3","4","5","6","problem","5"
+                  "1","","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","5","2022-01-01T00:00Z","problem","5"
 
-                  "2","","3","3","4","5","6","problem","5"
+                  "2","","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","","","5"
                CONTENTS
 
                path.write(contents)
@@ -217,10 +217,10 @@ module Procrastinator
             it 'should filter data by queue' do
                contents = <<~CONTENTS
                   id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","thumbnail","2","3","4","5","6","problem",""
-                  "2","greetings","2","3","4","5","6","problem",""
-                  "3","reminders","2","3","4","5","6","problem",""
-                  "4","greetings","2","3","4","5","6","problem",""
+                  "1","thumbnail","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","","",""
+                  "2","greetings","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","5","","",""
+                  "3","reminders","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","2022-01-01T00:00Z","problem",""
+                  "4","greetings","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","5","","",""
                CONTENTS
 
                path.write(contents)
@@ -248,22 +248,22 @@ module Procrastinator
             it 'should convert types' do
                contents = <<~CONTENTS
                   id, queue,   run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","emails","1","1","4","0","","",""
-                  "2","emails","2","2","4","","","",""
-                  "3","emails","","3","","2","2","problem",""
+                  "1","emails","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","0","","",""
+                  "2","emails","2022-01-01T00:00Z","2022-01-01T00:00Z","","","","",""
+                  "3","emails","","2022-01-01T00:00Z","","2","2022-01-01T00:00Z","problem",""
                CONTENTS
 
                path.write(contents)
 
                data = store.read
 
-               nil_int_keys = [:run_at, :expire_at, :last_fail_at]
-               int_keys     = [:id, :initial_run_at, :attempts]
+               time_keys = [:run_at, :initial_run_at, :expire_at, :last_fail_at]
+               int_keys  = [:id, :attempts]
 
                data.each do |row|
-                  nil_int_keys.each do |key|
+                  time_keys.each do |key|
                      expect(row[key]).to satisfy do |value|
-                        value.is_a?(Integer) || value.nil?
+                        value.is_a?(Time) || value.nil?
                      end
                   end
                   int_keys.each do |key|
@@ -282,7 +282,7 @@ module Procrastinator
             let(:store) { SimpleCommaStore.new(path) }
 
             let(:required_args) do
-               {queue: :some_queue, run_at: 0, initial_run_at: 0, expire_at: nil, data: ''}
+               {queue: :some_queue, run_at: Time.at(0), expire_at: nil, data: ''}
             end
 
             before(:each) do
@@ -306,13 +306,14 @@ module Procrastinator
             end
 
             it 'should write given values' do
-               data = [
-                     {queue: :thumbnails, run_at: 0, initial_run_at: 1, expire_at: nil, data: ''},
-                     {queue: :reminders, run_at: 3, initial_run_at: 4, expire_at: 5, data: 'user_id: 5'}
+               default_data = {run_at: nil, expire_at: nil}
+               data         = [
+                     {queue: :thumbnails, data: ''},
+                     {queue: :reminders, data: 'user_id: 5'}
                ]
 
                data.each do |arguments|
-                  store.create(arguments)
+                  store.create(default_data.merge(arguments))
 
                   data_line = path.readlines.last&.strip
 
@@ -324,6 +325,23 @@ module Procrastinator
                         data:           arguments[:data]
                   }.each_value do |expected_value|
                      expect(data_line).to include expected_value.to_s
+                  end
+               end
+            end
+
+            it 'should write time values in ISO 8601' do
+               default_data = {queue: :reminders, run_at: nil, initial_run_at: nil, expire_at: nil}
+
+               test_keys   = [:run_at, :initial_run_at, :expire_at]
+               test_values = [Time.at(0), Time.at(10), nil]
+
+               test_keys.each do |field|
+                  test_values.each do |value|
+                     store.create(default_data.merge(field => value))
+
+                     data_line = path.readlines.last&.strip
+
+                     expect(data_line).to include(value&.iso8601 || '')
                   end
                end
             end
@@ -345,9 +363,9 @@ module Procrastinator
             it 'should create a new id for the new task' do
                contents = <<~CONTENTS
                   id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","","2","3","4","5","6","err",""
-                  "2","","2","3","4","5","6","err",""
-                  "37","","2","3","4","5","6","err",""
+                  "1","","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","","",""
+                  "2","","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","","",""
+                  "37","","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","","",""
                CONTENTS
 
                path.write(contents)
@@ -362,9 +380,9 @@ module Procrastinator
             it 'should keep existing content' do
                prior_content = <<~CONTENTS
                   id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
-                  "1","","2","3","4","5","6","err",""
-                  "2","","2","3","4","5","6","err",""
-                  "37","","2","3","4","5","6","err",""
+                  "1","","2022-01-01T00:00:00Z","2022-01-01T01:00:00Z","2022-01-01T02:00:00Z","5","2022-01-01T03:00:00Z","err",""
+                  "2","","2022-02-02T00:00:00Z","2022-02-02T01:00:00Z","","5","","",""
+                  "37","","2022-03-03T00:00:00Z","2022-03-03T01:00:00Z","2022-03-03T02:00:00Z","5","2022-03-03T03:00:00Z","err",""
                CONTENTS
 
                path.write(prior_content)
@@ -373,7 +391,7 @@ module Procrastinator
 
                file_content = path.read || ''
 
-               expect(file_content.split("\n").size).to eq 5 # header + 3 existing + new record
+               expect(file_content.split("\n").size).to eq 5 # 1 header + 3 existing + 1 new record
                expect(file_content).to start_with(prior_content)
             end
 
@@ -393,9 +411,9 @@ module Procrastinator
             before(:each) do
                path.write <<~CONTENTS
                   id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
-                  "1","reminders","2","3","4","5","6","err",""
-                  "2","reminders","7","8","9","10","11","err",""
-                  "37","thumbnails","12","13","14","15","16","err","size: 500"
+                  "1","reminders","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","2022-01-01T00:00Z","err",""
+                  "2","reminders","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","10","2022-01-01T00:00Z","err",""
+                  "37","thumbnails","2022-01-01T00:00Z","2022-01-01T00:00Z","","15","","","size: 500"
                CONTENTS
 
                allow_any_instance_of(FakeFS::File).to receive(:flock)
@@ -404,32 +422,64 @@ module Procrastinator
             it 'should write the changed data to a file' do
                id = 2
 
-               run      = 0
-               initial  = 0
-               expire   = 0
                attempts = 14
                error    = 'everything is okay alarm'
-               error_at = 0
                data     = 'boop'
 
                store.update(id,
-                            run_at:         run,
-                            initial_run_at: initial,
-                            expire_at:      expire,
-                            attempts:       attempts,
-                            last_fail_at:   error_at,
-                            last_error:     error,
-                            data:           data)
+                            attempts:   attempts,
+                            last_error: error,
+                            data:       data)
 
-               file_lines = path.readlines
+               file_lines = path.readlines(chomp: true)
 
-               line = %["#{ id }","reminders","#{ run }","#{ initial }","#{ expire }","#{ attempts }","#{ error_at }","#{ error }","#{ data }"\n]
+               line = [id.to_s,
+                       'reminders',
+                       '2022-01-01T00:00:00Z',
+                       '2022-01-01T00:00:00Z',
+                       '2022-01-01T00:00:00Z',
+                       attempts.to_s,
+                       '2022-01-01T00:00:00Z',
+                       error,
+                       data]
 
-               expect(file_lines[2]).to eq line
+               expect(file_lines[2]).to eq line.collect { |v| %["#{ v }"] }.join(',')
+            end
+
+            it 'should convert time fields to iso8601' do
+               id = 2
+
+               run      = '2022-01-01T01:01:01-01:00'
+               initial  = '2022-01-02T02:02:02-02:00'
+               expire   = '2022-03-03T03:03:03-03:00'
+               error_at = '2022-04-04T04:04:04-04:00'
+
+               store.update(id,
+                            run_at:         Time.parse(run),
+                            initial_run_at: Time.parse(initial),
+                            expire_at:      Time.parse(expire),
+                            attempts:       10,
+                            last_fail_at:   Time.parse(error_at),
+                            last_error:     'err',
+                            data:           '')
+
+               file_lines = path.readlines(chomp: true)
+
+               line = [id.to_s,
+                       'reminders',
+                       run,
+                       initial,
+                       expire,
+                       '10',
+                       error_at,
+                       'err',
+                       '']
+
+               expect(file_lines[2]).to eq line.collect { |v| %["#{ v }"] }.join(',')
             end
 
             it 'should NOT create a new task' do
-               store.update(2, run_at: 0)
+               store.update(2, run_at: Time.at(0))
 
                file_lines = path.readlines
 
@@ -437,7 +487,7 @@ module Procrastinator
             end
 
             it 'should NOT change the task id' do
-               store.update(2, run_at: 0)
+               store.update(2, run_at: Time.at(0))
 
                file_lines = path.readlines
 
@@ -463,9 +513,9 @@ module Procrastinator
             before(:each) do
                path.write <<~CONTENTS
                   id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
-                  "1","reminders","2","3","4","5","6","err",""
-                  "2","reminders","7","8","9","10","11","err",""
-                  "37","thumbnails","12","13","14","15","16","err","size: 500"
+                  "1","reminders","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","","",""
+                  "2","reminders","2022-01-01T00:00Z","2022-01-01T00:00Z","","10","","",""
+                  "37","thumbnails","2022-01-01T00:00Z","2022-01-01T00:00Z","","15","","","size: 500"
                CONTENTS
 
                allow_any_instance_of(FakeFS::File).to receive(:flock)
@@ -476,8 +526,8 @@ module Procrastinator
 
                expect(path.read).to eq <<~CONTENTS
                   id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
-                  "1","reminders","2","3","4","5","6","err",""
-                  "37","thumbnails","12","13","14","15","16","err","size: 500"
+                  "1","reminders","2022-01-01T00:00:00Z","2022-01-01T00:00:00Z","","5","","",""
+                  "37","thumbnails","2022-01-01T00:00:00Z","2022-01-01T00:00:00Z","","15","","","size: 500"
                CONTENTS
             end
 
@@ -505,11 +555,11 @@ module Procrastinator
                task_info = {
                      id:             1,
                      queue:          :reminders,
-                     run_at:         3,
-                     initial_run_at: 4,
-                     expire_at:      5,
+                     run_at:         Time.at(3),
+                     initial_run_at: Time.at(4),
+                     expire_at:      Time.at(5),
                      attempts:       0,
-                     last_fail_at:   '',
+                     last_fail_at:   Time.at(7),
                      last_error:     '',
                      data:           'user_id: 5'
                }

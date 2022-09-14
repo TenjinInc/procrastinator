@@ -31,7 +31,7 @@ module Procrastinator
          it 'should record a task with given run_at' do
             run_stamp = '2022-12-25T06:01:00-07:00'
 
-            expect(persister).to receive(:create).with(hash_including(run_at: run_stamp))
+            expect(persister).to receive(:create).with(hash_including(run_at: Time.parse(run_stamp)))
 
             scheduler.delay(:reminders, run_at: run_stamp)
          end
@@ -39,7 +39,7 @@ module Procrastinator
          it 'should record a task with given expire_at' do
             expire_stamp = '2022-12-31T23:59:59-04:00'
 
-            expect(persister).to receive(:create).with(hash_including(expire_at: expire_stamp))
+            expect(persister).to receive(:create).with(hash_including(expire_at: Time.parse(expire_stamp)))
 
             scheduler.delay(:reminders, expire_at: expire_stamp)
          end
@@ -67,7 +67,7 @@ module Procrastinator
             now = Time.now
 
             Timecop.freeze(now) do
-               expect(persister).to receive(:create).with(hash_including(run_at: now.iso8601))
+               expect(persister).to receive(:create).with(hash_including(run_at: now))
 
                scheduler.delay(:reminders)
             end
@@ -76,8 +76,8 @@ module Procrastinator
          it 'should record initial_run_at and run_at to be equal' do
             time = Time.now
 
-            expect(persister).to receive(:create).with(hash_including(run_at:         time.iso8601,
-                                                                      initial_run_at: time.iso8601))
+            expect(persister).to receive(:create).with(hash_including(run_at:         time,
+                                                                      initial_run_at: time))
 
             scheduler.delay(:reminders, run_at: time)
          end
@@ -252,12 +252,12 @@ module Procrastinator
          end
 
          it 'should update run_at and initial_run_at to the given time' do
-            time = '2022-05-01T05:40:00-06:00'
+            time = Time.parse('2022-05-01T05:40:00-06:00')
 
             expect(queue).to receive(:update).with(anything, hash_including(run_at:         time,
                                                                             initial_run_at: time))
 
-            update_proxy.to(run_at: Time.parse(time))
+            update_proxy.to(run_at: time)
          end
 
          it 'should reschedule the run_at' do
