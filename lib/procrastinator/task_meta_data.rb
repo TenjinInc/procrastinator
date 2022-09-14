@@ -119,7 +119,7 @@ module Procrastinator
 
       def to_h
          {id:             @id,
-          queue:          @queue.name,
+          queue:          @queue.name.to_s,
           run_at:         @run_at&.iso8601,
           initial_run_at: @initial_run_at&.iso8601,
           expire_at:      @expire_at&.iso8601,

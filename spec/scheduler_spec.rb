@@ -22,7 +22,7 @@ module Procrastinator
       describe '#delay' do
          it 'should record a task on the given queue' do
             [:emails, :reminders].each do |queue_name|
-               expect(persister).to receive(:create).with(hash_including(queue: queue_name))
+               expect(persister).to receive(:create).with(hash_including(queue: queue_name.to_s))
 
                scheduler.delay(queue_name)
             end

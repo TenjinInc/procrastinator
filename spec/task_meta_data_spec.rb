@@ -475,17 +475,18 @@ module Procrastinator
             expect(task.to_h).to be_a Hash
          end
 
-         it 'should include the queue name symbol' do
-            task = TaskMetaData.new(queue: queue)
+         # converting to string avoids interpretation by some persistence libraries (eg. ROM MySQL auto column name)
+         it 'should include the queue name as string' do
+            task = TaskMetaData.new(queue: double('queue', name: :reminders))
 
-            expect(task.to_h).to include(queue: :some_queue)
+            expect(task.to_h).to include(queue: 'reminders')
          end
 
          it 'should include the serialized data' do
             data_str = JSON.dump('some data')
             task     = TaskMetaData.new(queue: queue, data: data_str)
 
-            expect(task.to_h).to include(queue: :some_queue, data: data_str)
+            expect(task.to_h).to include(data: data_str)
          end
 
          it 'should include the id' do

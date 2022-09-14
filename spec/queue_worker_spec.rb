@@ -306,7 +306,7 @@ module Procrastinator
                   worker = QueueWorker.new(queue: name, config: config)
 
                   expect(persister).to receive(:update).with(id, hash_including(run_at: nil,
-                                                                                queue:  name))
+                                                                                queue:  name.to_s))
 
                   worker.work_one
                end
