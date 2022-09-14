@@ -4,7 +4,7 @@ require 'spec_helper'
 
 module Procrastinator
    describe Procrastinator::Scheduler do
-      let(:test_task) { Test::Task::AllHooks }
+      let(:test_task) { Test::MockTask }
       let(:persister) { Test::Persister.new }
 
       let(:config) do
@@ -231,8 +231,8 @@ module Procrastinator
       let(:task_id) { double('task id') }
       let(:identifier) { {id: task_id} }
       let(:task) do
-         Task.new(TaskMetaData.new(queue: Queue.new(name: :test_queue, task_class: Test::Task::AllHooks), id: task_id),
-                  Test::Task::AllHooks.new)
+         Task.new(TaskMetaData.new(queue: Queue.new(name: :test_queue, task_class: Test::MockTask), id: task_id),
+                  Test::MockTask.new)
       end
       # need a queue double bc queues are frozen and can't be stubbed
       let(:queue) { double('queue', update: nil, fetch_task: task) }
@@ -299,7 +299,7 @@ module Procrastinator
    end
 
    describe Scheduler::SerialWorking do
-      let(:test_task) { Test::Task::AllHooks }
+      let(:test_task) { Test::MockTask }
 
       let(:queue_names) { [:first, :second, :third] }
 
@@ -338,7 +338,7 @@ module Procrastinator
    end
 
    describe Scheduler::ThreadedWorking do
-      let(:test_task) { Test::Task::AllHooks }
+      let(:test_task) { Test::MockTask }
 
       let(:queue_names) { [:first, :second, :third] }
 
@@ -407,7 +407,7 @@ module Procrastinator
                let(:config) do
                   Config.new do |c|
                      queue_names.each do |name|
-                        c.define_queue name, Test::Task::AllHooks
+                        c.define_queue name, Test::MockTask
                      end
                   end
                end
@@ -601,7 +601,7 @@ module Procrastinator
    end
 
    describe Scheduler::DaemonWorking do
-      let(:test_task) { Test::Task::AllHooks }
+      let(:test_task) { Test::MockTask }
 
       let(:queue_names) { [:first, :second, :third] }
 

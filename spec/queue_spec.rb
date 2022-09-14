@@ -4,7 +4,7 @@ require 'spec_helper'
 
 module Procrastinator
    describe Queue do
-      let(:test_task) { Test::Task::AllHooks }
+      let(:test_task) { Test::MockTask }
       let(:persister) { fake_persister([{id: 1, run_at: 1}]) }
 
       describe '#initialize' do
@@ -642,7 +642,7 @@ module Procrastinator
       end
 
       describe '#fetch_task' do
-         let(:queue) { Queue.new(name: :test_queue, task_class: Test::Task::AllHooks, store: persister) }
+         let(:queue) { Queue.new(name: :test_queue, task_class: Test::MockTask, store: persister) }
 
          it 'should request the task matching the given information' do
             [{id: 5}, {data: {user_id: 5, appointment_id: 2}}].each do |identifier|

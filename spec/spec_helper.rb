@@ -13,6 +13,7 @@ require 'fakefs/safe'
 require 'fakefs/spec_helpers'
 
 require 'procrastinator'
+require 'procrastinator/test/mocks'
 
 # keeping this independent of procrastinator base require on purpose
 require 'procrastinator/rake/daemon_tasks'
@@ -47,22 +48,6 @@ module Procrastinator
       end
 
       module Task
-         class AllHooks
-            attr_accessor :container, :logger, :scheduler
-
-            def run
-            end
-
-            def success(_result)
-            end
-
-            def fail(_error)
-            end
-
-            def final_fail(_error)
-            end
-         end
-
          class Fail
             attr_accessor :logger, :container, :scheduler
 

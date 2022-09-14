@@ -6,7 +6,22 @@ module Procrastinator
    describe Task do
       let(:queue) { double('test queue', name: :test_queue, max_attempts: nil, timeout: nil) }
       let(:meta) { TaskMetaData.new(queue: queue) }
-      let(:handler) { Test::Task::AllHooks.new }
+      let(:handler_class) do
+         Class.new do
+            def run
+            end
+
+            def success(_result)
+            end
+
+            def fail(_error)
+            end
+
+            def final_fail(_error)
+            end
+         end
+      end
+      let(:handler) { handler_class.new }
       let(:task) { Task.new(meta, handler) }
 
       describe '#run' do

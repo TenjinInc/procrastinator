@@ -9,7 +9,7 @@ module Procrastinator
       end
 
       describe '.setup' do
-         let(:test_task) { Test::Task::AllHooks }
+         let(:test_task) { Test::MockTask }
          let(:persister) { Test::Persister.new }
 
          it 'should provide the block a configuration instance' do

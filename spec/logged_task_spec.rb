@@ -5,9 +5,9 @@ require 'spec_helper'
 module Procrastinator
    describe LoggedTask do
       let(:data_str) { JSON.dump('itsa me, a data-o') }
-      let(:task_handler) { Test::Task::AllHooks.new }
+      let(:task_handler) { Test::MockTask.new }
       let(:meta) { TaskMetaData.new(id: 1, queue: queue, data: data_str) }
-      let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: Test::Task::AllHooks, store: fake_persister) }
+      let(:queue) { Procrastinator::Queue.new(name: :test_queue, task_class: Test::MockTask, store: fake_persister) }
       let(:task) { Task.new(meta, task_handler) }
 
       let(:log_file) { Pathname.new('tasklog.log') }

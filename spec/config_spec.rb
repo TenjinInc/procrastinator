@@ -4,7 +4,7 @@ module Procrastinator
    require 'spec_helper'
 
    describe Config do
-      let(:test_task) { Test::Task::AllHooks }
+      let(:test_task) { Test::MockTask }
 
       describe '#initialize' do
          it 'should yield itself' do

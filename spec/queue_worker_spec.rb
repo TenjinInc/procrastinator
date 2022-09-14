@@ -5,7 +5,7 @@ require 'spec_helper'
 module Procrastinator
    describe QueueWorker do
       let(:persister) { double('task store', read: [], create: nil, update: nil, delete: nil) }
-      let(:test_task) { Test::Task::AllHooks }
+      let(:test_task) { Test::MockTask }
 
       describe '#initialize' do
          let(:config) do
@@ -214,7 +214,7 @@ module Procrastinator
 
                allow(persister).to receive(:read).and_return([job1], [job2])
 
-               allow(Test::Task::AllHooks).to receive(:new).and_return(task1, task2)
+               allow(Test::MockTask).to receive(:new).and_return(task1, task2)
 
                start_time = Time.now
 
@@ -376,7 +376,7 @@ module Procrastinator
          context 'falsey log level' do
             let(:config) do
                Config.new do |c|
-                  c.define_queue :test_queue, Test::Task::AllHooks
+                  c.define_queue :test_queue, Test::MockTask
                   c.log_with level:     nil,
                              directory: log_dir
                end
@@ -404,7 +404,7 @@ module Procrastinator
          context 'truthy log level' do
             let(:config) do
                Config.new do |c|
-                  c.define_queue :test_queue, Test::Task::AllHooks
+                  c.define_queue :test_queue, Test::MockTask
                   c.log_with level:     1,
                              directory: log_dir
                end
@@ -435,7 +435,7 @@ module Procrastinator
             it 'should log at the provided level' do
                Logger::Severity.constants.each do |level|
                   config = Config.new do |c|
-                     c.define_queue :test_queue, Test::Task::AllHooks
+                     c.define_queue :test_queue, Test::MockTask
                      c.log_with level: level
                   end
 
@@ -462,7 +462,7 @@ module Procrastinator
                size   = double('size')
                age    = double('age')
                config = Config.new do |c|
-                  c.define_queue :test_queue, Test::Task::AllHooks
+                  c.define_queue :test_queue, Test::MockTask
                   c.log_with shift_size: size, shift_age: age
                end
 
