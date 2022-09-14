@@ -280,6 +280,17 @@ module Procrastinator
             Process.kill('TERM', pid_path.read.to_i)
          end
 
+         def self.running?(pid_path)
+            pid = normalize_pid(pid_path).read.to_i
+
+            # this raises Errno::ESRCH when no process found, therefore if found we should exit
+            Process.getpgid pid
+
+            true
+         rescue Errno::ESRCH
+            false
+         end
+
          private
 
          # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
@@ -323,18 +334,14 @@ module Procrastinator
             return unless pid_path.exist?
 
             @logger.debug "Checking pid file #{ pid_path }"
-            existing_pid = pid_path.read
 
-            begin
-               # this raises Errno::ESRCH when no process found, therefore if found we should exit
-               Process.getpgid existing_pid.to_i
-
+            if DaemonWorking.running? pid_path
                hint = 'Either terminate that process or remove the pid file (if coincidental).'
-               msg  = "Another process (pid #{ existing_pid }) already exists for #{ pid_path }. #{ hint }"
+               msg  = "Another process (pid #{ pid_path.read }) already exists for #{ pid_path }. #{ hint }"
                @logger.fatal msg
                raise ProcessExistsError, msg
-            rescue Errno::ESRCH
-               @logger.warn "Replacing old pid file of defunct process (pid #{ existing_pid }) at #{ pid_path }."
+            else
+               @logger.warn "Replacing old pid file of defunct process (pid #{ pid_path.read }) at #{ pid_path }."
             end
          end
 

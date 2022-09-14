@@ -52,7 +52,7 @@ module Procrastinator
          context 'task procrastinator:start' do
             let(:task_factory) { described_class.new }
 
-            let(:pid_path) { 'pid/path' }
+            let(:pid_path) { Pathname.new('pid/path').expand_path }
             let(:scheduler_proxy) { double('scheduler proxy') }
             let(:scheduler) { double('scheduler', work: scheduler_proxy) }
             let(:task) { ::Rake::Task['procrastinator:start'] }
@@ -74,7 +74,7 @@ module Procrastinator
             it 'should allow pid_path to be omitted' do
                task_factory.define(scheduler: scheduler)
 
-               expect(scheduler_proxy).to receive(:daemonized!).with nil
+               expect(scheduler_proxy).to receive(:daemonized!).with Pathname.new('/var/run/procrastinator.pid')
 
                task.invoke
             end
@@ -82,7 +82,7 @@ module Procrastinator
             it 'should call daemonized with the given pid_path' do
                task_factory.define(scheduler: scheduler, pid_path: pid_path)
 
-               expect(scheduler_proxy).to receive(:daemonized!).with pid_path
+               expect(scheduler_proxy).to receive(:daemonized!).with pid_path / 'procrastinator.pid'
 
                task.invoke
             end
@@ -98,9 +98,66 @@ module Procrastinator
             end
          end
 
-         context 'task procrastinator:stop' do
+         context 'task procrastinator:status' do
             let(:task_factory) { described_class.new }
             let(:pid_path) { 'procrastinator.pid' }
+            let(:scheduler) { double('scheduler') }
+            let(:task) { ::Rake::Task['procrastinator:status'] }
+            let(:pid) { 12345 }
+
+            before(:each) do
+               # Resets the task definitions. This is a bit blunt, but works for now.
+               ::Rake::Task.clear
+
+               allow(Procrastinator::Scheduler::DaemonWorking).to receive(:running?).and_return status
+            end
+
+            context 'instance running' do
+               let(:status) { true }
+
+               it 'should say the instance pid' do
+                  Pathname.new(pid_path).write(pid)
+                  task_factory.define(scheduler: scheduler, pid_path: pid_path)
+
+                  msg = "Procrastinator instance running (pid #{ pid })\n"
+
+                  expect do
+                     task.invoke
+                  end.to output(msg).to_stderr
+               end
+
+               it 'should use the default' do
+                  pid_path = Pathname.new('/var/run/procrastinator.pid')
+                  pid_path.dirname.mkpath
+                  pid_path.write(pid)
+                  task_factory.define(scheduler: scheduler)
+
+                  msg = "Procrastinator instance running (pid #{ pid })\n"
+
+                  expect do
+                     task.invoke
+                  end.to output(msg).to_stderr
+               end
+            end
+
+            context 'instance not running' do
+               let(:status) { false }
+
+               it 'should say so' do
+                  task_factory.define(scheduler: scheduler, pid_path: pid_path)
+
+                  msg = "No Procrastinator instance detected for /#{ pid_path }\n"
+
+                  expect do
+                     task.invoke
+                  end.to output(msg).to_stderr
+               end
+            end
+         end
+
+         context 'task procrastinator:stop' do
+            let(:task_factory) { described_class.new }
+            let(:pid_path) { Pathname.new('procrastinator.pid').expand_path }
             let(:scheduler) { double('scheduler') }
             let(:task) { ::Rake::Task['procrastinator:stop'] }
 

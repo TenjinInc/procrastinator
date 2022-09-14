@@ -29,13 +29,23 @@ module Procrastinator
          # @param scheduler [Procrastinator::Scheduler]
          # @param pid_path [Pathname, File, String, nil]
          def define(scheduler:, pid_path: nil, &block)
+            pid_path = Scheduler::DaemonWorking.normalize_pid(pid_path)
+
             namespace :procrastinator do
                task :start do
                   scheduler.work.daemonized!(pid_path, &block)
                end
 
+               task :status do
+                  if Scheduler::DaemonWorking.running?(pid_path)
+                     warn "Procrastinator instance running (pid #{ File.read(pid_path) })"
+                  else
+                     warn "No Procrastinator instance detected for #{ pid_path }"
+                  end
+               end
+
                task :stop do
-                  Procrastinator::Scheduler::DaemonWorking.halt!(pid_path)
+                  Scheduler::DaemonWorking.halt!(pid_path)
                end
             end
          end
