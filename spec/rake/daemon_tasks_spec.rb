@@ -30,22 +30,21 @@ module Procrastinator
             let(:task_factory) { described_class.new }
 
             it 'should define a start task' do
-               task_factory.define(scheduler: nil, pid_path: nil)
+               task_factory.define(pid_path: nil) { nil }
 
                expect(::Rake::Task.task_defined?('procrastinator:start')).to be true
             end
 
             it 'should define an end task' do
-               task_factory.define(scheduler: nil, pid_path: nil)
+               task_factory.define(pid_path: nil) { nil }
 
                expect(::Rake::Task.task_defined?('procrastinator:stop')).to be true
             end
 
-            # to use the default path from the scheduler
-            it 'should require scheduler is provided' do
+            it 'should complain when block missing' do
                expect do
-                  task_factory.define
-               end.to raise_error(ArgumentError, 'missing keyword: scheduler')
+                  task_factory.define(pid_path: nil)
+               end.to raise_error ArgumentError, 'must provide a scheduler builder block'
             end
          end
 
@@ -63,7 +62,9 @@ module Procrastinator
             end
 
             it 'should call daemonized on the given scheduler' do
-               task_factory.define(scheduler: scheduler)
+               task_factory.define do
+                  scheduler
+               end
 
                expect(scheduler_proxy).to receive(:daemonized!)
 
@@ -72,7 +73,7 @@ module Procrastinator
 
             # to use the default path from the scheduler
             it 'should allow pid_path to be omitted' do
-               task_factory.define(scheduler: scheduler)
+               task_factory.define { scheduler }
 
                expect(scheduler_proxy).to receive(:daemonized!).with Pathname.new('/var/run/procrastinator.pid')
 
@@ -80,19 +81,9 @@ module Procrastinator
             end
 
             it 'should call daemonized with the given pid_path' do
-               task_factory.define(scheduler: scheduler, pid_path: pid_path)
+               task_factory.define(pid_path: pid_path) { scheduler }
 
                expect(scheduler_proxy).to receive(:daemonized!).with pid_path / 'procrastinator.pid'
-
-               task.invoke
-            end
-
-            it 'should call daemonized with the post daemon block' do
-               block = proc { '' }
-
-               task_factory.define(scheduler: scheduler, pid_path: pid_path, &block)
-
-               expect(scheduler_proxy).to receive(:daemonized!).with block
 
                task.invoke
             end
@@ -117,7 +108,7 @@ module Procrastinator
 
                it 'should say the instance pid' do
                   Pathname.new(pid_path).write(pid)
-                  task_factory.define(scheduler: scheduler, pid_path: pid_path)
+                  task_factory.define(pid_path: pid_path) { scheduler }
 
                   msg = "Procrastinator instance running (pid #{ pid })\n"
 
@@ -130,7 +121,7 @@ module Procrastinator
                   pid_path = Pathname.new('/var/run/procrastinator.pid')
                   pid_path.dirname.mkpath
                   pid_path.write(pid)
-                  task_factory.define(scheduler: scheduler)
+                  task_factory.define { scheduler }
 
                   msg = "Procrastinator instance running (pid #{ pid })\n"
 
@@ -144,7 +135,7 @@ module Procrastinator
                let(:status) { false }
 
                it 'should say so' do
-                  task_factory.define(scheduler: scheduler, pid_path: pid_path)
+                  task_factory.define(pid_path: pid_path) { scheduler }
 
                   msg = "No Procrastinator instance detected for /#{ pid_path }\n"
 
@@ -167,7 +158,7 @@ module Procrastinator
             end
 
             it 'should call stop! with the pid path' do
-               task_factory.define(scheduler: scheduler, pid_path: pid_path)
+               task_factory.define(pid_path: pid_path) { scheduler }
 
                expect(Procrastinator::Scheduler::DaemonWorking).to receive(:halt!).with(pid_path)
 

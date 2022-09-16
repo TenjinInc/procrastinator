@@ -47,7 +47,7 @@ module Procrastinator
          UpdateProxy.new(@config, identifier: identifier.merge(queue: queue.to_s))
       end
 
-      # Removes an existing task, as located by the givne identifying information.
+      # Removes an existing task, as located by the given identifying information.
       #
       # The identifier can include any data field stored in the task loader. Often this is the information in :data.
       #
@@ -249,28 +249,27 @@ module Procrastinator
          # 15 chars is linux limit
          MAX_PROC_LEN = 15
 
-         # Consumes the current process and turns it into a background daemon. A log will be started in the log
-         # directory defined in the configuration block.
+         # Consumes the current process and turns it into a background daemon and proceed as #threaded.
+         # Additional logging is recorded in the directory specified by the Procrastinator.setup configuration.
          #
          # If pid_path ends with extension '.pid', the basename will be requested as process title (depending on OS
          # support). An extensionless path is assumed to be a directory and a default filename (and proctitle) is used.
          #
          # @param pid_path [Pathname, File, String, nil] Path to where the process ID file is to be kept.
-         # @yield [void] Block to run after daemonization
-         def daemonized!(pid_path = nil, &block)
-            spawn_daemon(pid_path, &block)
+         def daemonized!(pid_path = nil)
+            spawn_daemon(pid_path)
 
             threaded
          end
 
          # Normalizes the given pid path, including conversion to absolute path and defaults.
          #
-         # @param pid_path [Pathname, String] path to normalize
+         # @param pid_path [Pathname, File, String, nil] path to normalize
          def self.normalize_pid(pid_path)
-            pid_path = Pathname.new(pid_path || DEFAULT_PID_DIR)
-            pid_path /= "#{ PROG_NAME.downcase }#{ PID_EXT }" unless pid_path.extname == PID_EXT
+            normalized = Pathname.new(pid_path || DEFAULT_PID_DIR)
+            normalized /= "#{ PROG_NAME.downcase }#{ PID_EXT }" unless normalized.extname == PID_EXT
 
-            pid_path.expand_path
+            normalized.expand_path
          end
 
          # Stops the procrastinator process denoted by the provided pid file
@@ -293,9 +292,7 @@ module Procrastinator
 
          private
 
-         # "You, search from the spastic dentistry department down through disembowelment. You, cover children's dance
-         #  recitals through holiday weekend IKEA. Go."
-         def spawn_daemon(pid_path, &block)
+         def spawn_daemon(pid_path)
             pid_path = DaemonWorking.normalize_pid pid_path
 
             open_log quiet: true
@@ -303,14 +300,14 @@ module Procrastinator
 
             print_debug_context
 
+            # "You, search from the spastic dentistry department down through disembowelment.
+            #  You, cover children's dance recitals through holiday weekend IKEA. Go."
             Process.daemon
 
             manage_pid pid_path
             rename_process pid_path
-
-            yield if block
          rescue StandardError => e
-            @logger.fatal ([e.message] + e.backtrace).join("\n")
+            @logger&.fatal ([e.message] + e.backtrace).join("\n")
             raise e
          end
 
@@ -346,10 +343,10 @@ module Procrastinator
          end
 
          def print_debug_context
-            @logger.debug "Ruby Path: #{ ENV['RUBY_ROOT'] }"
-            @logger.debug "Bundler Path: #{ ENV['BUNDLE_BIN_PATH'] }"
-            # logname is the posix standard and is set by cron, so probably reliable.
-            @logger.debug "Runtime User: #{ ENV['LOGNAME'] || ENV['USERNAME'] }"
+            @logger.debug "Ruby Path: #{ ENV.fetch 'RUBY_ROOT' }"
+            @logger.debug "Bundler Path: #{ ENV.fetch 'BUNDLE_BIN_PATH' }"
+            # LOGNAME is the posix standard and is set by cron, so probably reliable.
+            @logger.debug "Runtime User: #{ ENV.fetch('LOGNAME') || ENV.fetch('USERNAME') }"
          end
 
          def rename_process(pid_path)

@@ -652,18 +652,6 @@ module Procrastinator
             work_proxy.daemonized!
          end
 
-         it 'should run the given block' do
-            was_run = false
-            work_proxy.daemonized! do
-               was_run = true
-            end
-
-            expect(was_run).to eq true
-         end
-
-         # not sure this is actually necessary to test, so leaving just as a note:
-         #    it 'should respond to SIGTERM to exit cleanly'
-
          context 'process name' do
             let(:max_len) { Scheduler::DaemonWorking::MAX_PROC_LEN }
             let(:max_prog_name) { 'a' * max_len }
