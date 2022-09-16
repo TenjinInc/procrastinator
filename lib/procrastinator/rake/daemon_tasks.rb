@@ -24,10 +24,11 @@ module Procrastinator
          end
 
          # Defines procrastinator:start and procrastinator:stop Rake tasks that operate on the given scheduler.
-         # If provided a block, that block will run in the daemon process.
          #
-         # @param pid_path [Pathname, File, String, nil]
+         # @param pid_path [Pathname, File, String, nil] The pid file path
          # @yieldreturn scheduler [Procrastinator::Scheduler]
+         #
+         # @see Scheduler::DaemonWorking#daemonized!
          def define(pid_path: nil)
             raise ArgumentError, 'must provide a scheduler builder block' unless block_given?
 
@@ -58,8 +59,6 @@ module Procrastinator
 
          def start(scheduler)
             scheduler.work.daemonized!(@pid_path)
-            # ::Rake::Task['procrastinator:after_daemon'].invoke
-            # scheduler.work.threaded
          end
 
          def status
