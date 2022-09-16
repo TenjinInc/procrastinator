@@ -54,8 +54,8 @@ module Procrastinator
          end
 
          def read(filter = {})
-            FileTransaction.new(@path).read do |existing_data|
-               parse(existing_data).select do |row|
+            CSVFileTransaction.new(@path).read do |existing_data|
+               existing_data.select do |row|
                   filter.keys.all? do |key|
                      row[key] == filter[key]
                   end
@@ -70,8 +70,7 @@ module Procrastinator
          # @param initial_run_at [Time, nil] first time to run the task at. Defaults to run_at.
          # @param expire_at [Time, nil] time to expire the task
          def create(queue:, run_at:, expire_at:, data: '', initial_run_at: nil)
-            FileTransaction.new(@path).write do |existing_data|
-               tasks  = parse(existing_data)
+            CSVFileTransaction.new(@path).write do |tasks|
                max_id = tasks.collect { |task| task[:id] }.max || 0
 
                new_data = {
@@ -89,8 +88,7 @@ module Procrastinator
          end
 
          def update(id, data)
-            FileTransaction.new(@path).write do |existing_data|
-               tasks     = parse(existing_data)
+            CSVFileTransaction.new(@path).write do |tasks|
                task_data = tasks.find do |task|
                   task[:id] == id
                end
@@ -102,8 +100,7 @@ module Procrastinator
          end
 
          def delete(id)
-            FileTransaction.new(@path).write do |file_content|
-               existing_data = parse(file_content)
+            CSVFileTransaction.new(@path).write do |existing_data|
                generate(existing_data.reject { |task| task[:id] == id })
             end
          end
@@ -121,39 +118,45 @@ module Procrastinator
             lines.join("\n") << "\n"
          end
 
-         private
-
-         def parse(csv_string)
-            data = CSV.parse(csv_string,
-                             headers:           true,
-                             header_converters: :symbol,
-                             skip_blanks:       true,
-                             converters:        READ_CONVERTER,
-                             force_quotes:      true).to_a
-
-            headers = data.shift || HEADERS
-
-            data = data.collect do |d|
-               headers.zip(d).to_h
+         # Adds CSV parsing to the file reading
+         class CSVFileTransaction < FileTransaction
+            def transact(writable: nil)
+               super(writable: writable) do |file_str|
+                  yield(parse(file_str))
+               end
             end
 
-            correct_types(data)
-         end
+            private
 
-         def correct_types(data)
-            non_empty_keys = [:run_at, :expire_at, :attempts, :last_fail_at]
+            def parse(csv_string)
+               data = CSV.parse(csv_string,
+                                headers:     true, header_converters: :symbol,
+                                skip_blanks: true, converters: READ_CONVERTER, force_quotes: true).to_a
 
-            data.collect do |hash|
-               non_empty_keys.each do |key|
-                  hash.delete(key) if hash[key].is_a?(String) && hash[key].empty?
+               headers = data.shift || HEADERS
+
+               data = data.collect do |d|
+                  headers.zip(d).to_h
                end
 
-               hash[:attempts] ||= 0
+               correct_types(data)
+            end
 
-               # hash[:data]  = (hash[:data] || '').gsub('""', '"')
-               hash[:queue] = hash[:queue].to_sym
+            def correct_types(data)
+               non_empty_keys = [:run_at, :expire_at, :attempts, :last_fail_at]
 
-               hash
+               data.collect do |hash|
+                  non_empty_keys.each do |key|
+                     hash.delete(key) if hash[key].is_a?(String) && hash[key].empty?
+                  end
+
+                  hash[:attempts] ||= 0
+
+                  # hash[:data]  = (hash[:data] || '').gsub('""', '"')
+                  hash[:queue] = hash[:queue].to_sym
+
+                  hash
+               end
             end
          end
       end
