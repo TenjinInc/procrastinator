@@ -343,10 +343,10 @@ module Procrastinator
          end
 
          def print_debug_context
-            @logger.debug "Ruby Path: #{ ENV.fetch 'RUBY_ROOT' }"
-            @logger.debug "Bundler Path: #{ ENV.fetch 'BUNDLE_BIN_PATH' }"
+            @logger.debug "Ruby Path: #{ ENV.fetch 'RUBY_ROOT', '?' }"
+            @logger.debug "Bundler Path: #{ ENV.fetch 'BUNDLE_BIN_PATH', '?' }"
             # LOGNAME is the posix standard and is set by cron, so probably reliable.
-            @logger.debug "Runtime User: #{ ENV.fetch('LOGNAME') || ENV.fetch('USERNAME') }"
+            @logger.debug "Runtime User: #{ ENV.fetch('LOGNAME', ENV.fetch('USERNAME', '?')) }"
          end
 
          def rename_process(pid_path)
