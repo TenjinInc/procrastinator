@@ -46,7 +46,7 @@ module Procrastinator
                end
 
                desc 'Stop the Procrastinator daemon'
-               task :stop do
+               task stop: [:status] do
                   stop
                end
 
@@ -58,19 +58,28 @@ module Procrastinator
          private
 
          def start(scheduler)
+            warn 'Starting Procrastinator'
             scheduler.work.daemonized!(@pid_path)
          end
 
          def status
-            if Scheduler::DaemonWorking.running?(@pid_path)
-               warn "Procrastinator instance running (pid #{ File.read(@pid_path) })"
-            else
-               warn "No Procrastinator instance detected for #{ @pid_path }"
-            end
+            warn "Checking #{ @pid_path }..."
+            msg = if Scheduler::DaemonWorking.running?(@pid_path)
+                     "Procrastinator pid #{ File.read(@pid_path) } instance running."
+                  elsif File.exist?(@pid_path)
+                     "Procrastinator pid #{ File.read(@pid_path) } is not running. Maybe it crashed?"
+                  else
+                     "Procrastinator is not running (No such file - #{ @pid_path })"
+                  end
+
+            warn msg
          end
 
          def stop
+            return unless Scheduler::DaemonWorking.running?(@pid_path)
+
             Scheduler::DaemonWorking.halt!(@pid_path)
+            warn "Procrastinator pid #{ File.read(@pid_path) } halted."
          end
       end
    end

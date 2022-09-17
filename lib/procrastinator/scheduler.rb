@@ -286,7 +286,7 @@ module Procrastinator
             Process.getpgid pid
 
             true
-         rescue Errno::ESRCH
+         rescue Errno::ENOENT, Errno::ESRCH
             false
          end
 

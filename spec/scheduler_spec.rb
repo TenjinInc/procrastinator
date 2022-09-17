@@ -419,15 +419,13 @@ module Procrastinator
 
                it 'should say it is starting threads' do
                   msg = 'Starting workers for queues: first, second, third'
-                  expect do
-                     work_proxy.threaded
-                  end.to output(include(msg)).to_stderr
+                  expect { work_proxy.threaded }.to output(include(msg)).to_stderr
 
                   expect(log_file).to include_log_line 'INFO', msg
                end
 
                it 'should print the process pid' do
-                  work_proxy.threaded
+                  expect { work_proxy.threaded }.to output.to_stderr # silencing test output
 
                   expect(log_file).to include_log_line 'INFO', 'Procrastinator running. Process ID: 1234'
                end
