@@ -13,10 +13,11 @@ require 'fakefs/safe'
 require 'fakefs/spec_helpers'
 
 require 'procrastinator'
-require 'procrastinator/test/mocks'
 
-# keeping this independent of procrastinator base require on purpose
+# keeping these independent of procrastinator main lib require on purpose to allow apps to optionally include them
 require 'procrastinator/rake/daemon_tasks'
+require 'procrastinator/rspec/matchers'
+require 'procrastinator/test/mocks'
 
 RSpec.configure do |config|
    config.include FakeFS::SpecHelpers

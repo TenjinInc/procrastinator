@@ -69,7 +69,7 @@ module Procrastinator
          # @param run_at [Time, nil] time to run the task at
          # @param initial_run_at [Time, nil] first time to run the task at. Defaults to run_at.
          # @param expire_at [Time, nil] time to expire the task
-         def create(queue:, run_at:, expire_at:, data: '', initial_run_at: nil)
+         def create(queue:, run_at:, expire_at: nil, data: '', initial_run_at: nil)
             CSVFileTransaction.new(@path).write do |tasks|
                max_id = tasks.collect { |task| task[:id] }.max || 0
 
