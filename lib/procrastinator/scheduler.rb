@@ -244,7 +244,7 @@ module Procrastinator
       # @see WorkProxy
       module DaemonWorking
          PID_EXT         = '.pid'
-         DEFAULT_PID_DIR = Pathname.new('/var/run/').freeze
+         DEFAULT_PID_DIR = Pathname.new('/tmp').freeze
 
          # 15 chars is linux limit
          MAX_PROC_LEN = 15

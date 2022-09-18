@@ -7,7 +7,7 @@ module Procrastinator
       # RakeTask builder. Provide this in your Rakefile:
       #
       #    require 'procrastinator/rake/task'
-      #    Procrastinator::RakeTask.new('/var/run') do
+      #    Procrastinator::RakeTask.new do
       #       # return your Procrastinator::Scheduler here or construct it using Procrastinator.config
       #    end
       #

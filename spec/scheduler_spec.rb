@@ -902,7 +902,7 @@ module Procrastinator
          end
 
          it 'should normalize the pid parameter' do
-            pid_file = Pathname.new '/var/run/procrastinator.pid'
+            pid_file = Pathname.new '/tmp/procrastinator.pid'
             pid_file.dirname.mkpath
             pid_file.write(pid)
 

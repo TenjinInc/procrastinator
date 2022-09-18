@@ -82,7 +82,7 @@ module Procrastinator
             it 'should allow pid_path to be omitted' do
                task_factory.define { scheduler }
 
-               expect(scheduler_proxy).to receive(:daemonized!).with Pathname.new('/var/run/procrastinator.pid')
+               expect(scheduler_proxy).to receive(:daemonized!).with Pathname.new('/tmp/procrastinator.pid')
 
                expect { task.invoke }.to output.to_stderr
             end
