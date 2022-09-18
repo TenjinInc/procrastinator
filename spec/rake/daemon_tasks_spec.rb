@@ -165,7 +165,10 @@ module Procrastinator
                ::Rake::Task.clear
 
                # backstop to prevent actual calls to kill
-               allow(Process).to receive(:kill).with('TERM', pid)
+               allow(Process).to receive(:kill).with('TERM', pid) do
+                  # there is an at_exit hook which cleans up the pid, so simulating that here.
+                  pid_path.delete
+               end
 
                pid_path.dirname.mkpath
                pid_path.write(pid)

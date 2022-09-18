@@ -78,8 +78,9 @@ module Procrastinator
          def stop
             return unless Scheduler::DaemonWorking.running?(@pid_path)
 
+            pid = File.read(@pid_path)
             Scheduler::DaemonWorking.halt!(@pid_path)
-            warn "Procrastinator pid #{ File.read(@pid_path) } halted."
+            warn "Procrastinator pid #{ pid } halted."
          end
       end
    end
