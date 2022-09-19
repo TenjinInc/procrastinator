@@ -18,7 +18,6 @@ module Procrastinator
 
       let(:scheduler) { Scheduler.new(config) }
 
-      # api: Procrastinator.delay(run_at: Time.now + 10, queue: :email, SendInvitation.new(to: 'bob@example.com'))
       describe '#delay' do
          it 'should record a task on the given queue' do
             [:emails, :reminders].each do |queue_name|

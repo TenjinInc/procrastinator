@@ -3,9 +3,10 @@
 require 'stringio'
 
 module Procrastinator
-   # A Scheduler object provides the API for client applications to manage delayed tasks.
+   # A Scheduler object provides the API for client applications to manage scheduled tasks.
    #
-   # Use #delay to schedule new tasks, #reschedule to alter existing tasks, and #cancel to remove unwanted tasks.
+   # Use Scheduler#defer to schedule new tasks, Scheduler#reschedule to alter existing tasks, and Scheduler#cancel to
+   # remove unwanted tasks.
    #
    # @author Robin Miller
    class Scheduler

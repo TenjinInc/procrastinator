@@ -10,11 +10,11 @@ module Procrastinator
    # @!attribute [r] :task_class
    #    @return [Class] Class that defines the work to be done for jobs in this queue.
    # @!attribute [r] :timeout
-   #    @return [Object] Duration (seconds) after which tasks in this queue should fail for taking too long.
+   #    @return [Numeric] Duration (seconds) after which tasks in this queue should fail for taking too long.
    # @!attribute [r] :max_attempts
-   #    @return [Object] Maximum number of attempts for tasks in this queue.
+   #    @return [Integer] Maximum number of attempts for tasks in this queue.
    # @!attribute [r] :update_period
-   #    @return [Pathname] Delay (seconds) between reloads of tasks from the task store.
+   #    @return [Numeric] Delay (seconds) between reloads of tasks from the task store.
    class Queue
       extend Forwardable
 

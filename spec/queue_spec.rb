@@ -188,7 +188,7 @@ module Procrastinator
                end.to raise_error(MalformedTaskError, err)
             end
 
-            # Data is verified on calls to #delay and is therefore optional in the duck-typing interface
+            # Data is verified on calls to #defer and is therefore optional in the duck-typing interface
             it 'should NOT complain if task does not accept a data packet' do
                task_class = Class.new do
                   attr_accessor :scheduler, :container, :logger
