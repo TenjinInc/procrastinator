@@ -24,7 +24,7 @@ module Procrastinator
             [:emails, :reminders].each do |queue_name|
                expect(persister).to receive(:create).with(hash_including(queue: queue_name.to_s))
 
-               scheduler.delay(queue_name)
+               scheduler.defer(queue_name)
             end
          end
 
@@ -33,7 +33,7 @@ module Procrastinator
 
             expect(persister).to receive(:create).with(hash_including(run_at: Time.parse(run_stamp)))
 
-            scheduler.delay(:reminders, run_at: run_stamp)
+            scheduler.defer(:reminders, run_at: run_stamp)
          end
 
          it 'should record a task with given expire_at' do
@@ -41,7 +41,7 @@ module Procrastinator
 
             expect(persister).to receive(:create).with(hash_including(expire_at: Time.parse(expire_stamp)))
 
-            scheduler.delay(:reminders, expire_at: expire_stamp)
+            scheduler.defer(:reminders, expire_at: expire_stamp)
          end
 
          it 'should complain if they provide NO :data but the task expects it' do
@@ -60,7 +60,7 @@ module Procrastinator
 
             err = %[task #{ test_task } expects to receive :data. Provide :data to #delay.]
 
-            expect { scheduler.delay(:data_queue) }.to raise_error(ArgumentError, err)
+            expect { scheduler.defer(:data_queue) }.to raise_error(ArgumentError, err)
          end
 
          it 'should default run_at to now' do
@@ -69,7 +69,7 @@ module Procrastinator
             Timecop.freeze(now) do
                expect(persister).to receive(:create).with(hash_including(run_at: now))
 
-               scheduler.delay(:reminders)
+               scheduler.defer(:reminders)
             end
          end
 
@@ -79,13 +79,13 @@ module Procrastinator
             expect(persister).to receive(:create).with(hash_including(run_at:         time,
                                                                       initial_run_at: time))
 
-            scheduler.delay(:reminders, run_at: time)
+            scheduler.defer(:reminders, run_at: time)
          end
 
          it 'should default expire_at to nil' do
             expect(persister).to receive(:create).with(include(expire_at: nil))
 
-            scheduler.delay(:reminders)
+            scheduler.defer(:reminders)
          end
 
          it 'should NOT complain about well-formed hooks' do
@@ -95,14 +95,14 @@ module Procrastinator
                allow(task).to receive(method)
 
                expect do
-                  scheduler.delay(:reminders)
+                  scheduler.defer(:reminders)
                end.to_not raise_error
             end
          end
 
          it 'should complain when the first argument is not a symbol' do
             [5, double('trouble')].each do |arg|
-               expect { scheduler.delay(arg) }.to raise_error ArgumentError, <<~ERR
+               expect { scheduler.defer(arg) }.to raise_error ArgumentError, <<~ERR
                   must provide a queue name as the first argument. Received: #{ arg }
                ERR
             end

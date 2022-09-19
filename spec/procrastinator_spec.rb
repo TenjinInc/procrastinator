@@ -79,9 +79,9 @@ module Procrastinator
          end
 
          it 'should store tasks' do
-            scheduler.delay(:thumbnail, run_at: '2016-09-19T00:01:02-09:00', data: {path: 'doug-forcett.png'})
-            scheduler.delay(:email, run_at: '2016-09-19T00:01:00-07:00', data: 'janet@example.com')
-            scheduler.delay(:thumbnail,
+            scheduler.defer(:thumbnail, run_at: '2016-09-19T00:01:02-09:00', data: {path: 'doug-forcett.png'})
+            scheduler.defer(:email, run_at: '2016-09-19T00:01:00-07:00', data: 'janet@example.com')
+            scheduler.defer(:thumbnail,
                             run_at:    '2018-01-04T00:12:00-09:00',
                             expire_at: '2018-01-04T00:13:00-09:00',
                             data:      {size: 100, path: 'magic-panda.png'})
@@ -95,9 +95,9 @@ module Procrastinator
          end
 
          it 'should retry tasks' do
-            scheduler.delay(:thumbnail, run_at: '2016-09-19T00:01:02-09:00', data: {path: 'doug-forcett.png'})
-            scheduler.delay(:email, run_at: '2016-09-19T00:01:00-07:00', data: 'janet@example.com')
-            scheduler.delay(:crash, run_at: '2017-10-26T00:00:00-07:00', data: 'derek@example.com')
+            scheduler.defer(:thumbnail, run_at: '2016-09-19T00:01:02-09:00', data: {path: 'doug-forcett.png'})
+            scheduler.defer(:email, run_at: '2016-09-19T00:01:00-07:00', data: 'janet@example.com')
+            scheduler.defer(:crash, run_at: '2017-10-26T00:00:00-07:00', data: 'derek@example.com')
 
             scheduler.work.threaded(timeout: 0.25)
 
@@ -110,8 +110,8 @@ module Procrastinator
          end
 
          it 'should keep a log file per queue' do
-            scheduler.delay(:thumbnail, run_at: 100, data: {path: 'stars/doug-forcett.png'})
-            scheduler.delay(:email, run_at: 500, data: 'janet@example.com')
+            scheduler.defer(:thumbnail, run_at: 100, data: {path: 'stars/doug-forcett.png'})
+            scheduler.defer(:email, run_at: 500, data: 'janet@example.com')
 
             scheduler.work.threaded(timeout: 0.25)
 
