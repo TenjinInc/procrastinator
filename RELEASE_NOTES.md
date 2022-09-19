@@ -1,6 +1,6 @@
 # Release Notes
 
-## 1.0.0 (       )
+## 1.0.0 (2022-09-18)
 
 ### Major Changes
 
@@ -21,16 +21,19 @@
         * `Procrastinator::Config#run_process_block`
     * Removed use of envvar `PROCRASTINATOR_STOP`
     * `Procrastinator::QueueManager` is merged into `Procrastinator::Scheduler`
-    * Removed rake task to halt queue processes
+    * Removed rake task to halt individual queue processes
     * Renamed `Procrastinator::Config#provide_context` to `provide_container`
     * You must now call `Scheduler#work` on the result of `Procrastinator.config`
-    * Use a dedicated process monitor (like `monit`) instead in production environments
-    * Suuply a block to `daemonized!` to run code in the spawned process.
-* `max_tasks` is removed as it only added concurrency complexity
+    * Use a dedicated process monitor (like `monit`) instead in production environments to maintain uptime
+* `max_tasks` is removed as it only added concurrency complexity. Each queue worker only selects one task from only its
+  queue.
 * Data is now stored as JSON instead of YAML
 * Added with_store that applies its settings to its block
     * `load_with` has been removed
 * Removed `task_attr` and `Procrastinator::Task` module. Tasks is now duck-type checked for accessors instead.
+* Added Rake tasks to manage process daemon
+* Times are passed to Task Store as a Ruby Time object instead of an epoch time integer 
+* `#delay` is now `#defer`
 
 ### Minor Changes
 
@@ -38,6 +41,8 @@
 * Updated development gems
 * Logs now include the queue name in log lines
 * Logs can now set the shift size or age (like Ruby's Logger)
+* Log format is now tab-separated to align better and work with POSIX cut
+* General renaming of terms
 
 ### Bugfixes
 
