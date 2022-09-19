@@ -19,7 +19,7 @@ module Procrastinator
       # @param run_at [Time, Integer] Optional time when this task should be executed. Defaults to the current time.
       # @param data [Hash, Array, String, Integer] Optional simple data object to be provided to the task on execution.
       # @param expire_at [Time, Integer] Optional time when the task should be abandoned
-      def delay(queue_name = nil, data: nil, run_at: Time.now, expire_at: nil)
+      def defer(queue_name = nil, data: nil, run_at: Time.now, expire_at: nil)
          raise ArgumentError, <<~ERR unless queue_name.nil? || queue_name.is_a?(Symbol)
             must provide a queue name as the first argument. Received: #{ queue_name }
          ERR
@@ -28,6 +28,8 @@ module Procrastinator
 
          queue.create(run_at: run_at, expire_at: expire_at, data: data)
       end
+
+      alias delay defer
 
       # Alters an existing task to run at a new time, expire at a new time, or both.
       #
