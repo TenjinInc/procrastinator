@@ -808,13 +808,13 @@ module Procrastinator
 
                   expect do
                      work_proxy.daemonized!(pid_file)
-                  end.to raise_error ProcessExistsError
+                  end.to raise_error Scheduler::DaemonWorking::ProcessExistsError
                end
 
                it 'should error out' do
                   expect do
                      work_proxy.daemonized!(pid_file)
-                  end.to raise_error ProcessExistsError
+                  end.to raise_error Scheduler::DaemonWorking::ProcessExistsError
                end
 
                it 'should log the process collision' do
@@ -823,7 +823,7 @@ module Procrastinator
 
                   expect do
                      work_proxy.daemonized!(pid_file)
-                  end.to raise_error ProcessExistsError, msg
+                  end.to raise_error Scheduler::DaemonWorking::ProcessExistsError, msg
 
                   expect(log_file).to include_log_line 'FATAL', msg
                end

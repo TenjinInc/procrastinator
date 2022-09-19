@@ -25,10 +25,20 @@ module Procrastinator
    class Config
       attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container
 
-      DEFAULT_LOG_DIRECTORY  = Pathname.new('log').freeze
-      DEFAULT_LOG_SHIFT_AGE  = 0
+      # Default directory to keep logs in.
+      DEFAULT_LOG_DIRECTORY = Pathname.new('log').freeze
+
+      # Default age to keep log files for.
+      # @see Logger
+      DEFAULT_LOG_SHIFT_AGE = 0
+
+      # Default max size to keep log files under.
+      # @see Logger
       DEFAULT_LOG_SHIFT_SIZE = 2 ** 20 # 1 MB
-      DEFAULT_LOG_FORMATTER  = proc do |severity, datetime, progname, msg|
+
+      # Default log formatter
+      # @see Logger
+      DEFAULT_LOG_FORMATTER = proc do |severity, datetime, progname, msg|
          [datetime.iso8601(8),
           severity,
           "#{ progname } (#{ Process.pid }):",
@@ -70,10 +80,29 @@ module Procrastinator
             @default_store = old_store
          end
 
+         # Defines the container to assign to each Task Handler's :container attribute.
+         #
+         # @param container [Object] the container
          def provide_container(container)
             @container = container
          end
 
+         # Defines a queue in the Procrastinator Scheduler.
+         #
+         # The Task Handler will be initialized for each task and assigned each of these attributes:
+         #    :container, :logger, :scheduler
+         #
+         # @param name [Symbol, String] the identifier to label the queue. Referenced in #defer calls
+         # @param task_class [Class] the Task Handler class.
+         # @param properties [Hash] Settings options object for this queue
+         # @option properties [Object] :store (Procrastinator::TaskStore::SimpleCommaStore)
+         #                                    Storage strategy for tasks in the queue.
+         # @option properties [Integer] :max_attempts (Procrastinator::Queue::DEFAULT_MAX_ATTEMPTS)
+         #                                            Maximum number of times a task may be attempted before giving up.
+         # @option properties [Integer] :timeout (Procrastinator::Queue::DEFAULT_TIMEOUT)
+         #                                       Maximum number of seconds to wait for a single task to complete.
+         # @option properties [Integer] :update_period (Procrastinator::Queue::DEFAULT_UPDATE_PERIOD)
+         #                                             Time to wait before checking for new tasks.
          def define_queue(name, task_class, properties = {})
             raise ArgumentError, 'queue name cannot be nil' if name.nil?
             raise ArgumentError, 'queue task class cannot be nil' if task_class.nil?
@@ -142,7 +171,9 @@ module Procrastinator
          end
       end
 
+      # Raised when there is an error in the setup configuration.
       class SetupError < RuntimeError
+         # Standard error message for when there is no queue defined
          ERR_NO_QUEUE = 'setup block must call #define_queue on the environment'
       end
    end

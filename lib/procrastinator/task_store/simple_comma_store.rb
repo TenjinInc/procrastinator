@@ -4,25 +4,33 @@ require 'csv'
 require 'pathname'
 
 module Procrastinator
+   # Task storage strategies.
+   #
+   # All task stores must implement the API #read, #create, #update, #delete.
    module TaskStore
       # Simple Task I/O adapter that writes task information (ie. TaskMetaData attributes) to a CSV file.
       #
-      # SimpleCommaStore is not designed for efficiency or large loads (10,000+ tasks).
-      #
-      # For critical production environments, it is strongly recommended to use a more robust storage mechanism like a
-      # proper database.
+      # SimpleCommaStore is not designed for efficiency or large loads (10,000+ tasks). For critical production
+      # environments, it is strongly recommended to use a more robust storage mechanism like a proper database.
       #
       # @author Robin Miller
       class SimpleCommaStore
-         # ordered
+         # Ordered list of CSV column headers
          HEADERS = [:id, :queue, :run_at, :initial_run_at, :expire_at,
                     :attempts, :last_fail_at, :last_error, :data].freeze
 
-         EXT          = 'csv'
-         DEFAULT_FILE = Pathname.new("procrastinator-tasks.#{ EXT }").freeze
-
+         # Columns that store time information
          TIME_FIELDS = [:run_at, :initial_run_at, :expire_at, :last_fail_at].freeze
 
+         # CSV file extension
+         EXT = 'csv'
+
+         # Default filename
+         DEFAULT_FILE = Pathname.new("procrastinator-tasks.#{ EXT }").freeze
+
+         # CSV Converter lambda
+         #
+         # @see CSV
          READ_CONVERTER = proc do |value, field_info|
             if field_info.header == :data
                value
@@ -53,6 +61,10 @@ module Procrastinator
             freeze
          end
 
+         # Parses the CSV file for data matching the given filter, or all if no filter provided.
+         #
+         # @param filter [Hash] Specified attributes to match.
+         # @return [Array<Hash>]
          def read(filter = {})
             CSVFileTransaction.new(@path).read do |existing_data|
                existing_data.select do |row|
@@ -87,6 +99,10 @@ module Procrastinator
             end
          end
 
+         # Updates an existing task in the CSV file.
+         #
+         # @param id [Integer] task ID number
+         # @param data [Hash] new data to save
          def update(id, data)
             CSVFileTransaction.new(@path).write do |tasks|
                task_data = tasks.find do |task|
@@ -99,12 +115,19 @@ module Procrastinator
             end
          end
 
+         # Removes an existing task from the CSV file.
+         #
+         # @param id [Integer] task ID number
          def delete(id)
             CSVFileTransaction.new(@path).write do |existing_data|
                generate(existing_data.reject { |task| task[:id] == id })
             end
          end
 
+         # Generates a CSV string from the given data.
+         #
+         # @param data [Array] list of data to convert into CSV
+         # @return [String] Generated CSV string
          def generate(data)
             lines = data.collect do |d|
                TIME_FIELDS.each do |field|
@@ -120,6 +143,7 @@ module Procrastinator
 
          # Adds CSV parsing to the file reading
          class CSVFileTransaction < FileTransaction
+            # (see FileTransaction#transact)
             def transact(writable: nil)
                super(writable: writable) do |file_str|
                   yield(parse(file_str))

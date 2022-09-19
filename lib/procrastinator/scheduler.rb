@@ -37,7 +37,7 @@ module Procrastinator
       #
       # Example:
       #
-      # scheduler.reschedule(:alerts, data: {user_id: 5}).to(run_at: Time.now, expire_at: Time.now + 10)
+      #    scheduler.reschedule(:alerts, data: {user_id: 5}).to(run_at: Time.now, expire_at: Time.now + 10)
       #
       # The identifier can include any data field stored in the task loader. Often this is the information in :data.
       #
@@ -125,6 +125,7 @@ module Procrastinator
       #
       # @see WorkProxy
       module ThreadedWorking
+         # Program name. Used as default for pid file names and in logging.
          PROG_NAME = 'Procrastinator'
 
          # Work off jobs per queue, each in its own thread.
@@ -137,7 +138,7 @@ module Procrastinator
             begin
                @threads = spawn_threads
 
-               @logger.info "Procrastinator running. Process ID: #{ Process.pid }"
+               @logger.info "#{ PROG_NAME } running. Process ID: #{ Process.pid }"
                @threads.each do |thread|
                   thread.join(timeout)
                end
@@ -245,10 +246,13 @@ module Procrastinator
       #
       # @see WorkProxy
       module DaemonWorking
-         PID_EXT         = '.pid'
+         # File extension for process ID files
+         PID_EXT = '.pid'
+
+         # Default directory to store PID files in.
          DEFAULT_PID_DIR = Pathname.new('/tmp').freeze
 
-         # 15 chars is linux limit
+         # Maximum process name size. 15 chars is linux limit
          MAX_PROC_LEN = 15
 
          # Consumes the current process and turns it into a background daemon and proceed as #threaded.
@@ -290,6 +294,10 @@ module Procrastinator
             true
          rescue Errno::ENOENT, Errno::ESRCH
             false
+         end
+
+         # Raised when a process is already found to exist using the same pid_path
+         class ProcessExistsError < RuntimeError
          end
 
          private
@@ -385,8 +393,5 @@ module Procrastinator
             @config  = config
          end
       end
-   end
-
-   class ProcessExistsError < RuntimeError
    end
 end

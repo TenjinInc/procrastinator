@@ -14,10 +14,6 @@ module Procrastinator
    #
    # @see Task
    class LoggedTask < DelegateClass(Task)
-      # extend Forwardable
-      #
-      # def_delegators :@task, :id, :to_h
-
       attr_reader :logger
 
       alias task __getobj__
@@ -27,6 +23,7 @@ module Procrastinator
          @logger = logger || raise(ArgumentError, 'Logger cannot be nil')
       end
 
+      # (see Task#run)
       def run
          task.run
 
@@ -37,6 +34,7 @@ module Procrastinator
          end
       end
 
+      # @param (see Task#fail)
       def fail(error)
          hook = task.fail(error)
          begin

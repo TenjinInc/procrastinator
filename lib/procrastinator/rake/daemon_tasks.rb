@@ -3,14 +3,20 @@
 require 'rake'
 
 module Procrastinator
+   # Rake tasks specific to Procrastinator.
+   #
+   # Provide this in your Rakefile:
+   #
+   #    require 'procrastinator/rake/task'
+   #    Procrastinator::RakeTask.new do
+   #       # return your Procrastinator::Scheduler here or construct it using Procrastinator.config
+   #    end
+   #
+   # And then you will be able to run rake tasks like:
+   #
+   #    bundle exec rake procrastinator:start
    module Rake
-      # RakeTask builder. Provide this in your Rakefile:
-      #
-      #    require 'procrastinator/rake/task'
-      #    Procrastinator::RakeTask.new do
-      #       # return your Procrastinator::Scheduler here or construct it using Procrastinator.config
-      #    end
-      #
+      # RakeTask builder class. Use DaemonTasks.define to generate the needed tasks.
       class DaemonTasks
          include ::Rake::Cloneable
          include ::Rake::DSL
@@ -26,7 +32,7 @@ module Procrastinator
          # Defines procrastinator:start and procrastinator:stop Rake tasks that operate on the given scheduler.
          #
          # @param pid_path [Pathname, File, String, nil] The pid file path
-         # @yieldreturn scheduler [Procrastinator::Scheduler]
+         # @yieldreturn [Procrastinator::Scheduler] Constructed Scheduler to use as basis for starting tasks
          #
          # @see Scheduler::DaemonWorking#daemonized!
          def define(pid_path: nil)

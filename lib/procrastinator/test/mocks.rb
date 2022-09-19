@@ -1,6 +1,13 @@
 # frozen_string_literal: true
 
 module Procrastinator
+   # Reusable Test classes for mocking out object queues.
+   #
+   #    require 'procrastinator/test/mocks'
+   #
+   #    Procrastinator.setup do |config|
+   #       config.define_queue :test_queue, Procrastinator::Test::Mock
+   #    end
    module Test
       # Testing mock Task class
       #
@@ -16,10 +23,12 @@ module Procrastinator
       class MockTask
          attr_accessor :container, :logger, :scheduler
 
+         # Records that the mock task was run.
          def run
             @run = true
          end
 
+         # @return [Boolean] Whether the task was run
          def run?
             @run
          end

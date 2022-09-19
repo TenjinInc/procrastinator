@@ -64,6 +64,7 @@ module Procrastinator
          end
       end
 
+      # Logs halting the queue
       def halt
          @logger&.info("Halted worker on queue: #{ name }")
          @logger&.close
@@ -86,6 +87,9 @@ module Procrastinator
       end
    end
 
+   # Raised when a Task Storage strategy is missing a required part of the API.
+   #
+   # @see TaskStore
    class MalformedTaskPersisterError < StandardError
    end
 end

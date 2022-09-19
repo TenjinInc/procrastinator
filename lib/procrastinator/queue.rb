@@ -18,8 +18,13 @@ module Procrastinator
    class Queue
       extend Forwardable
 
-      DEFAULT_TIMEOUT       = 3600 # in seconds; one hour total
-      DEFAULT_MAX_ATTEMPTS  = 20
+      # Default number of seconds to wait for a task to complete
+      DEFAULT_TIMEOUT = 3600 # in seconds; one hour total
+
+      # Default number of times to retry a task
+      DEFAULT_MAX_ATTEMPTS = 20
+
+      # Default amount of time between checks for new Tasks
       DEFAULT_UPDATE_PERIOD = 10 # seconds
 
       attr_reader :name, :max_attempts, :timeout, :update_period, :task_store, :task_class
@@ -54,6 +59,12 @@ module Procrastinator
          freeze
       end
 
+      # Constructs the next available task on the queue.
+      #
+      # @param logger [Logger] logger to provide to the constructed task handler
+      # @param container [Object, nil] container to provide to the constructed task handler
+      # @param scheduler [Procrastinator::Scheduler, nil] the scheduler to provide to the constructed task handler
+      # @return [LoggedTask, nil] A Task or nil if no task is found
       def next_task(logger: Logger.new(StringIO.new), container: nil, scheduler: nil)
          metadata = next_metas.find(&:runnable?)
 
@@ -67,6 +78,9 @@ module Procrastinator
          LoggedTask.new(task, logger: logger)
       end
 
+      # Fetch a task matching the given identifier
+      #
+      # @param identifier [Hash] attributes to match
       def fetch_task(identifier)
          identifier[:data] = JSON.dump(identifier[:data]) if identifier[:data]
 
@@ -78,6 +92,11 @@ module Procrastinator
          TaskMetaData.new(tasks.first.merge(queue: self))
       end
 
+      # Creates a task on the queue, saved using the Task Store strategy.
+      #
+      # @param run_at [Time] Earliest time to attempt running the task
+      # @param expire_at [Time, nil] Time after which the task will not be attempted
+      # @param data [Hash, String, Numeric, nil] The data to save
       def create(run_at:, expire_at:, data:)
          if data.nil? && expects_data?
             raise ArgumentError, "task #{ @task_class } expects to receive :data. Provide :data to #delay."
@@ -102,6 +121,7 @@ module Procrastinator
          @task_store.create(**create_data)
       end
 
+      # @return [Boolean] whether the task handler will accept data to be assigned via its :data attribute
       def expects_data?
          @task_class.method_defined?(:data=)
       end
@@ -136,6 +156,8 @@ module Procrastinator
 
       # Internal queue validator
       module QueueValidation
+         private
+
          def validate!
             verify_task_class!
             verify_task_store!
@@ -198,9 +220,11 @@ module Procrastinator
       include QueueValidation
    end
 
+   # Raised when a Task Handler does not conform to the expected API
    class MalformedTaskError < StandardError
    end
 
+   # Raised when a Task Store strategy does not conform to the expected API
    class MalformedTaskStoreError < RuntimeError
    end
 end

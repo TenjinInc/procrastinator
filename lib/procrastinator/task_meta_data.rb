@@ -50,6 +50,9 @@ module Procrastinator
          @data           = data ? JSON.parse(data, symbolize_names: true) : nil
       end
 
+      # Increases the number of attempts on this task by one, unless the limit has been reached.
+      #
+      # @raise [Task::AttemptsExhaustedError] when the number of attempts has exceeded the Queue's defined maximum.
       def add_attempt
          raise Task::AttemptsExhaustedError unless attempts_left?
 
@@ -72,22 +75,28 @@ module Procrastinator
          end
       end
 
+      # @return [Boolean] whether the task has attempts left and is not expired
       def retryable?
          attempts_left? && !expired?
       end
 
+      # @return [Boolean] whether the task is expired
       def expired?
          !@expire_at.nil? && @expire_at < Time.now
       end
 
+      # @return [Boolean] whether there are attempts left until the Queue's defined maximum is reached (if any)
       def attempts_left?
          @queue.max_attempts.nil? || @attempts < @queue.max_attempts
       end
 
+      # @return [Boolean] whether the task's run_at is exceeded
       def runnable?
          !@run_at.nil? && @run_at <= Time.now
       end
 
+      # @return [Boolean] whether the task's last execution completed successfully.
+      # @raise [RuntimeError] when the task has not been attempted yet or when it is expired
       def successful?
          raise 'you cannot check for success before running #work' if !expired? && @attempts <= 0
 
@@ -117,6 +126,7 @@ module Procrastinator
          @run_at += 30 + (@attempts ** 4) unless @run_at.nil?
       end
 
+      # @return [Hash] representation of the task metadata as a hash
       def to_h
          {id:             @id,
           queue:          @queue.name.to_s,
@@ -129,10 +139,12 @@ module Procrastinator
           data:           serialized_data}
       end
 
+      # @return [String] :data serialized as a JSON string
       def serialized_data
          JSON.dump(@data)
       end
 
+      # Resets the last failure time and error.
       def clear_fails
          @last_error   = nil
          @last_fail_at = nil
