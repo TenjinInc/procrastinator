@@ -109,14 +109,28 @@ module Procrastinator
       end
 
       describe '#reschedule' do
+         it 'should create a proxy for chaining' do
+            proxy = scheduler.reschedule(:reminders, {id: 4})
+
+            expect(proxy).to be_a Scheduler::UpdateProxy
+         end
+
+         it 'should create a proxy for the given queue' do
+            expect(Scheduler::UpdateProxy).to receive(:new)
+                                                    .with(config.queue(name: :reminders), anything)
+                                                    .and_call_original
+
+            scheduler.reschedule(:reminders, id: 12358)
+         end
+
          it 'should create a proxy for the given search parameters' do
-            queue      = double('q', to_s: 'q')
-            identifier = {id: 4}
+            identifier = {some: 'identifier', data: 'chidi@example.com'}
 
-            expect(Scheduler::UpdateProxy).to receive(:new).with(config, identifier: hash_including(id:    4,
-                                                                                                    queue: queue.to_s))
+            expect(Scheduler::UpdateProxy).to receive(:new)
+                                                    .with(anything, identifier: identifier)
+                                                    .and_call_original
 
-            scheduler.reschedule(queue, identifier)
+            scheduler.reschedule(:reminders, identifier)
          end
 
          it 'should return the created proxy' do
@@ -124,7 +138,7 @@ module Procrastinator
 
             allow(Scheduler::UpdateProxy).to receive(:new).and_return(proxy)
 
-            expect(scheduler.reschedule(:test_queue, {})).to be proxy
+            expect(scheduler.reschedule(:emails, {})).to be proxy
          end
       end
 
@@ -227,19 +241,19 @@ module Procrastinator
    end
 
    describe Scheduler::UpdateProxy do
-      let(:task_id) { double('task id') }
+      let(:task_id) { 12358 }
       let(:identifier) { {id: task_id} }
       let(:task) do
          Task.new(TaskMetaData.new(queue: Queue.new(name: :test_queue, task_class: Test::MockTask), id: task_id),
                   Test::MockTask.new)
       end
       # need a queue double bc queues are frozen and can't be stubbed
-      let(:queue) { double('queue', update: nil, fetch_task: task) }
+      let(:queue) { double('queue', name: :some_queue, update: nil, fetch_task: task) }
       let(:update_proxy) { Scheduler::UpdateProxy.new(queue, identifier: identifier) }
 
       describe '#to' do
          it 'should ask the queue for the task' do
-            expect(queue).to receive(:fetch_task).with(identifier)
+            expect(queue).to receive(:fetch_task).with(id: task_id, queue: :some_queue)
 
             update_proxy.to(run_at: Time.now)
          end

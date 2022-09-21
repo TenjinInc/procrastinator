@@ -47,7 +47,7 @@ module Procrastinator
       #
       # @see TaskMetaData
       def reschedule(queue, identifier)
-         UpdateProxy.new(@config, identifier: identifier.merge(queue: queue.to_s))
+         UpdateProxy.new(@config.queue(name: queue), identifier: identifier)
       end
 
       # Removes an existing task, as located by the given identifying information.
@@ -89,7 +89,7 @@ module Procrastinator
       class UpdateProxy
          def initialize(queue, identifier:)
             @queue      = queue
-            @identifier = identifier
+            @identifier = identifier.merge(queue: queue.name.to_sym)
          end
 
          def to(run_at: nil, expire_at: nil)

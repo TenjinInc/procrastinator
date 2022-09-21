@@ -109,6 +109,21 @@ module Procrastinator
             expect(task_line[5]).to eq('"1"') # attempts
          end
 
+         it 'should reschedule tasks' do
+            wrong_time = Time.at(0)
+            new_time   = Time.parse('2022-09-20T12:00:00-07:00')
+            scheduler.defer(:email, run_at: wrong_time, data: 'mendoza@example.com')
+
+            scheduler.reschedule(:email, run_at: wrong_time, data: 'mendoza@example.com').to(run_at: new_time)
+
+            task_line = storage_path.readlines[1..-1].join("\n").split(',')
+
+            expect(task_line[1]).to eq('"email"') # queue
+            expect(task_line[2]).to eq('"2022-09-20T12:00:00-07:00"') # run at
+            expect(task_line[3]).to eq('"2022-09-20T12:00:00-07:00"') # initial run at
+            expect(task_line[5]).to eq('"0"') # attempts
+         end
+
          it 'should keep a log file per queue' do
             scheduler.defer(:thumbnail, run_at: 100, data: {path: 'stars/doug-forcett.png'})
             scheduler.defer(:email, run_at: 500, data: 'janet@example.com')

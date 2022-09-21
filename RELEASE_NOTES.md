@@ -1,5 +1,19 @@
 # Release Notes
 
+## 1.0.1 (2022-09-20)
+
+### Major Changes
+
+* none
+
+### Minor Changes
+
+* none
+
+### Bugfixes
+
+* Fixed integration error in rescheduling tasks
+
 ## 1.0.0 (2022-09-18)
 
 ### Major Changes
@@ -32,7 +46,7 @@
     * `load_with` has been removed
 * Removed `task_attr` and `Procrastinator::Task` module. Tasks is now duck-type checked for accessors instead.
 * Added Rake tasks to manage process daemon
-* Times are passed to Task Store as a Ruby Time object instead of an epoch time integer 
+* Times are passed to Task Store as a Ruby Time object instead of an epoch time integer
 * `#delay` is now `#defer`
 
 ### Minor Changes
