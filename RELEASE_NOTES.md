@@ -1,5 +1,21 @@
 # Release Notes
 
+## 1.0.2 (       )
+
+### Major Changes
+
+* none
+
+### Minor Changes
+
+* none
+
+### Bugfixes
+
+* have_task matcher:
+    * Fixed have_task handling of nested matchers like be_within
+    * Improved have_task handling of string queue names vs symbols
+
 ## 1.0.1 (2022-09-20)
 
 ### Major Changes

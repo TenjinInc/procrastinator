@@ -17,9 +17,26 @@ module Procrastinator
                expect(store).to have_task(id: 1)
             end
 
-            it 'should convert string queue names to symbols' do
-               store.create(queue: 'reminders', run_at: now)
-               expect(store).to have_task(id: 1, queue: 'reminders')
+            context 'queue name' do
+               it 'should match expected symbol' do
+                  store.create(queue: 'reminders', run_at: now)
+                  expect(store).to have_task(id: 1, queue: :reminders)
+               end
+
+               it 'should match expected string' do
+                  store.create(queue: 'reminders', run_at: now)
+                  expect(store).to have_task(id: 1, queue: 'reminders')
+               end
+
+               it 'should match actual string to expected symbol' do
+                  store = double('store', read: [{id: 1, queue: 'reminders', run_at: now}])
+                  expect(store).to have_task(id: 1, queue: :reminders)
+               end
+
+               it 'should match actual symbol to expected string' do
+                  store = double('store', read: [{id: 1, queue: :reminders, run_at: now}])
+                  expect(store).to have_task(id: 1, queue: 'reminders')
+               end
             end
 
             it 'should be true when multiple metadata matches' do
@@ -68,12 +85,23 @@ module Procrastinator
                   store.update(1, last_fail_at: now)
                   expect(store).to have_task(last_fail_at: now), 'last_fail_at should be converted'
                end
+
+               it 'should round actual time fields' do
+                  real_now = now
+                  store    = double('fake store', read: [{queue: 'reminders', run_at: real_now, data: nil}])
+                  expect(store).to have_task(run_at: real_now)
+               end
             end
 
             it 'should match data' do
                email = 'chidi@exmaple.com'
                store.create(queue: 'reminders', run_at: Time.now, data: JSON.dump(email))
                expect(store).to have_task(data: email)
+            end
+
+            it 'should ignore nil data' do
+               store = double('fake store', read: [{queue: :reminders, run_at: now, data: nil}])
+               expect(store).to have_task(queue: :reminders)
             end
 
             it 'should match compound data matchers' do
