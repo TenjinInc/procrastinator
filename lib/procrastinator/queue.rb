@@ -82,8 +82,8 @@ module Procrastinator
       #
       # @param identifier [Hash] attributes to match
       #
-      # @raise NoSuchTaskError when no task matches the identifier.
-      # @raise AmbiguousTaskFilterError when multiple tasks match the identifier, meaning you need to be more specific.
+      # @raise [NoSuchTaskError] when no task matches the identifier.
+      # @raise [AmbiguousTaskFilterError] when many tasks match the identifier, meaning you need to be more specific.
       def fetch_task(identifier)
          identifier[:data] = JSON.dump(identifier[:data]) if identifier[:data]
 
@@ -102,6 +102,9 @@ module Procrastinator
       # @param run_at [Time] Earliest time to attempt running the task
       # @param expire_at [Time, nil] Time after which the task will not be attempted
       # @param data [Hash, String, Numeric, nil] The data to save
+      #
+      # @raise [ArgumentError] when the keyword `:data` is needed by the task handler, but is missing
+      # @raise [MalformedTaskError] when the keyword `:data` is provided but not expected by the task handler.
       def create(run_at:, expire_at:, data:)
          if data.nil? && expects_data?
             raise ArgumentError, "task #{ @task_class } expects to receive :data. Provide :data to #delay."
