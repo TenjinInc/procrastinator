@@ -210,7 +210,7 @@ module Procrastinator
 
             context 'pid file exists but process missing' do
                before(:each) do
-                  allow(Process).to receive(:kill).with('TERM', pid).and_raise Errno::ESRCH
+                  allow(Process).to receive(:getpgid).with(pid).and_raise Errno::ESRCH
                end
 
                it 'should report when procrastinator is not running' do
