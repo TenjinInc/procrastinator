@@ -664,9 +664,6 @@ module Procrastinator
          end
 
          context 'process name' do
-            let(:max_len) { Scheduler::DaemonWorking::MAX_PROC_LEN }
-            let(:max_prog_name) { 'a' * max_len }
-
             before(:each) do
                allow(work_proxy).to receive(:system).with('pidof', anything, anything).and_return(false)
             end
@@ -685,15 +682,6 @@ module Procrastinator
                work_proxy.daemonized!('/var/run')
             end
 
-            it 'should trim long process names to fit' do
-               maxlen        = Scheduler::DaemonWorking::MAX_PROC_LEN
-               max_proc_name = 'z' * maxlen
-
-               expect(Process).to receive(:setproctitle).with(max_proc_name)
-
-               work_proxy.daemonized!("#{ max_proc_name }more.pid")
-            end
-
             it 'should silently ask the system about another process' do
                prog_name = 'lemming'
 
@@ -704,16 +692,6 @@ module Procrastinator
 
             context 'logging enabled' do
                let(:log_level) { Logger::INFO }
-
-               it 'should warn if the process name is too long' do
-                  name = "#{ max_prog_name }b"
-
-                  msg = "Process name is longer than max length (#{ max_len }). Trimming to fit."
-
-                  work_proxy.daemonized!("#{ name }.pid")
-
-                  expect(log_file).to include_log_line 'WARN', msg
-               end
 
                it 'should log warning when an existing process has the same name' do
                   prog_name = 'lemming'

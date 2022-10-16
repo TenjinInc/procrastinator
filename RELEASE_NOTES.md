@@ -1,6 +1,6 @@
 # Release Notes
 
-## 1.0.2 (       )
+## 1.1.0 (       )
 
 ### Major Changes
 
@@ -8,7 +8,7 @@
 
 ### Minor Changes
 
-* none
+* Removed process name limit.
 
 ### Bugfixes
 

@@ -514,7 +514,7 @@ Procrastinator::Rake::DaemonTasks.define do
 end
 ```
 
-You can name the daemon process by specifying the pid_path with a specific .pid file. If does not end with '.pid' it is
+You can title the daemon process by specifying the pid_path with a specific .pid file. If does not end with '.pid' it is
 assumed to be a directory name, and `procrastinator.pid` is appended.
 
 ```ruby
@@ -530,6 +530,11 @@ Procrastinator::Rake::DaemonTasks.define(pid_path: 'pids') do
    # ... build a Procrastinator instance here ...
 end
 ```
+
+> **Note:** There can be a distinction between process full title (`/proc/*/cmdline`) vs the shorter name
+> (`/proc/*/comm`). Some tools like `ps`  and `top` display the process title, while others like `pstree` show the process name.
+>
+> Procrastinator uses Ruby's `Process.setproctitle`, which only affects the title.
 
 Either run the generated Rake tasks in a terminal or with your daemon monitoring tool of choice (eg. Monit, systemd)
 

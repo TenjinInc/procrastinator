@@ -253,9 +253,6 @@ module Procrastinator
          # Default directory to store PID files in.
          DEFAULT_PID_DIR = Pathname.new('/tmp').freeze
 
-         # Maximum process name size. 15 chars is linux limit
-         MAX_PROC_LEN = 15
-
          # Consumes the current process and turns it into a background daemon and proceed as #threaded.
          # Additional logging is recorded in the directory specified by the Procrastinator.setup configuration.
          #
@@ -362,11 +359,6 @@ module Procrastinator
 
          def rename_process(pid_path)
             name = pid_path.basename(PID_EXT).to_s
-
-            if name.size > MAX_PROC_LEN
-               @logger.warn "Process name is longer than max length (#{ MAX_PROC_LEN }). Trimming to fit."
-               name = name[0, MAX_PROC_LEN]
-            end
 
             if system('pidof', name, out: File::NULL)
                @logger.warn "Another process is already named '#{ name }'. Consider the 'name:' keyword to distinguish."
