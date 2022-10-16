@@ -81,13 +81,18 @@ module Procrastinator
       # Fetch a task matching the given identifier
       #
       # @param identifier [Hash] attributes to match
+      #
+      # @raise NoSuchTaskError when no task matches the identifier.
+      # @raise AmbiguousTaskFilterError when multiple tasks match the identifier, meaning you need to be more specific.
       def fetch_task(identifier)
          identifier[:data] = JSON.dump(identifier[:data]) if identifier[:data]
 
          tasks = read(**identifier)
 
-         raise "no task found matching #{ identifier }" if tasks.nil? || tasks.empty?
-         raise "too many (#{ tasks.size }) tasks match #{ identifier }. Found: #{ tasks }" if tasks.size > 1
+         raise NoSuchTaskError, "no task found matching #{ identifier }" if tasks.nil? || tasks.empty?
+         if tasks.size > 1
+            raise AmbiguousTaskFilterError, "too many (#{ tasks.size }) tasks match #{ identifier }. Found: #{ tasks }"
+         end
 
          TaskMetaData.new(tasks.first.merge(queue: self))
       end
@@ -220,8 +225,16 @@ module Procrastinator
       include QueueValidation
    end
 
+   # Raised when a task matching certain criteria is requested but nothing matching is found
+   class NoSuchTaskError < RuntimeError
+   end
+
+   # Raised when a task matching certain criteria is requested but more than one option is found
+   class AmbiguousTaskFilterError < RuntimeError
+   end
+
    # Raised when a Task Handler does not conform to the expected API
-   class MalformedTaskError < StandardError
+   class MalformedTaskError < RuntimeError
    end
 
    # Raised when a Task Store strategy does not conform to the expected API

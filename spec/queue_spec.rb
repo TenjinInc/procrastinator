@@ -668,7 +668,7 @@ module Procrastinator
 
                expect do
                   queue.fetch_task(identifier)
-               end.to raise_error(RuntimeError, "no task found matching #{ identifier }")
+               end.to raise_error(NoSuchTaskError, "no task found matching #{ identifier }")
             end
          end
 
@@ -679,9 +679,11 @@ module Procrastinator
 
                allow(persister).to receive(:read).and_return(tasks)
 
+               msg = "too many (#{ n }) tasks match #{ identifier }. Found: #{ tasks }"
+
                expect do
                   queue.fetch_task(identifier)
-               end.to raise_error(RuntimeError, "too many (#{ n }) tasks match #{ identifier }. Found: #{ tasks }")
+               end.to raise_error(AmbiguousTaskFilterError, msg)
             end
          end
       end
