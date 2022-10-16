@@ -40,6 +40,11 @@ module Procrastinator
                end.to raise_error ::RSpec::Expectations::ExpectationNotMetError, end_with(msg)
             end
 
+            it 'should match other matchers' do
+               store.create(queue: 'reminders', run_at: now)
+               expect(store).to have_task(run_at: be_within(100).of(now))
+            end
+
             # Time objects are precise down to subsecond values, but Procrastinator only operates with seconds precision.
             # This prevents the need for be_within for every single expectation involving a time.
             context 'time metadata conversions' do

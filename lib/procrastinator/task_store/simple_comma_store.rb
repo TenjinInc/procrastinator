@@ -19,9 +19,6 @@ module Procrastinator
          HEADERS = [:id, :queue, :run_at, :initial_run_at, :expire_at,
                     :attempts, :last_fail_at, :last_error, :data].freeze
 
-         # Columns that store time information
-         TIME_FIELDS = [:run_at, :initial_run_at, :expire_at, :last_fail_at].freeze
-
          # CSV file extension
          EXT = 'csv'
 
@@ -34,7 +31,7 @@ module Procrastinator
          READ_CONVERTER = proc do |value, field_info|
             if field_info.header == :data
                value
-            elsif TIME_FIELDS.include? field_info.header
+            elsif Task::TIME_FIELDS.include? field_info.header
                value.empty? ? nil : Time.parse(value)
             else
                begin
@@ -130,7 +127,7 @@ module Procrastinator
          # @return [String] Generated CSV string
          def generate(data)
             lines = data.collect do |d|
-               TIME_FIELDS.each do |field|
+               Task::TIME_FIELDS.each do |field|
                   d[field] = d[field]&.iso8601
                end
                CSV.generate_line(d, headers: HEADERS, force_quotes: true).strip

@@ -10,6 +10,9 @@ module Procrastinator
    class Task
       extend Forwardable
 
+      # Fields that store time information
+      TIME_FIELDS = [:run_at, :initial_run_at, :expire_at, :last_fail_at].freeze
+
       def_delegators :@metadata,
                      :id, :run_at, :initial_run_at, :expire_at,
                      :attempts, :last_fail_at, :last_error,
