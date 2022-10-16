@@ -90,6 +90,6 @@ module Procrastinator
    # Raised when a Task Storage strategy is missing a required part of the API.
    #
    # @see TaskStore
-   class MalformedTaskPersisterError < StandardError
+   class MalformedTaskPersisterError < RuntimeError
    end
 end
