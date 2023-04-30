@@ -1,4 +1,4 @@
-inherit_from: ../.rubocop.yml
+inherit_from: ~/.config/rubocop/config.yml
 
 AllCops:
   Exclude:
@@ -23,4 +23,3 @@ Metrics/BlockLength:
 Metrics/ModuleLength:
   Exclude:
     - 'spec/**/*.rb'
-
