@@ -13,6 +13,8 @@ module Procrastinator
       # expected methods for all persistence strategies
       PERSISTER_METHODS = [:read, :update, :delete].freeze
 
+      NULL_FILE = File.open(File::NULL, File::WRONLY)
+
       def initialize(queue:, config:)
          raise ArgumentError, ':queue cannot be nil' if queue.nil?
          raise ArgumentError, ':config cannot be nil' if config.nil?
@@ -26,13 +28,13 @@ module Procrastinator
                   end
 
          @scheduler = Scheduler.new(config)
-         @logger    = Logger.new(StringIO.new)
+         @logger    = Logger.new(File::NULL)
       end
 
       # Works on jobs forever
       def work!
          @logger = open_log!("#{ name }-queue-worker", @config)
-         @logger.info("Started worker thread to consume queue: #{ name }")
+         @logger.info "Started worker thread to consume queue: #{ name }"
 
          loop do
             sleep(@queue.update_period)
@@ -72,12 +74,14 @@ module Procrastinator
 
       # Starts a log file and returns the created Logger
       def open_log!(name, config)
-         return @logger unless config.log_level
+         if config.log_level
+            log_path = config.log_dir / "#{ name }.log"
 
-         log_path = config.log_dir / "#{ name }.log"
-
-         config.log_dir.mkpath
-         FileUtils.touch(log_path)
+            config.log_dir.mkpath
+            FileUtils.touch(log_path)
+         else
+            log_path = NULL_FILE
+         end
 
          Logger.new(log_path.to_path,
                     config.log_shift_age, config.log_shift_size,

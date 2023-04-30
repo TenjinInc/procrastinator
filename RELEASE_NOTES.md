@@ -1,5 +1,19 @@
 # Release Notes
 
+## 1.1.1 (         )
+
+### Major Changes
+
+* none
+
+### Minor Changes
+
+* none
+
+### Bugfixes
+
+* When logging is disabled, it points to `File::NULL` instead of a dead-end StringIO
+
 ## 1.1.0 (2022-10-16)
 
 ### Major Changes

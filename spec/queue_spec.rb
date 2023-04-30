@@ -510,6 +510,8 @@ module Procrastinator
          end
 
          it 'should create a logged task' do
+            Pathname.new(QueueWorker::NULL_FILE).mkpath # TODO: remove when FakeFS is eliminated
+
             config = Config.new do |c|
                c.define_queue(:fast_queue, test_task, update_period: 0, store: fake_persister([{run_at: 1}]))
             end

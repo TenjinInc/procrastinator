@@ -327,6 +327,11 @@ module Procrastinator
          end
       end
 
+      before do
+         # TODO: remove when FakeFS is eliminated
+         Pathname.new(QueueWorker::NULL_FILE).mkpath
+      end
+
       # acts on each queue in series.
       # (useful for TDD)
       context '#serially' do
@@ -369,6 +374,11 @@ module Procrastinator
       end
 
       let(:log_file) { config.log_dir / 'procrastinator.log' }
+
+      before do
+         # TODO: remove when FakeFS is eliminated
+         Pathname.new(QueueWorker::NULL_FILE).mkpath
+      end
 
       before(:each) do
          # prevent actual threading during any testing
@@ -649,6 +659,11 @@ module Procrastinator
 
          before(:each) do
             allow(Process).to receive(:daemon).and_return(0)
+         end
+
+         before do
+            # TODO: remove when FakeFS is eliminated
+            Pathname.new(QueueWorker::NULL_FILE).mkpath
          end
 
          it 'should call process daemon' do

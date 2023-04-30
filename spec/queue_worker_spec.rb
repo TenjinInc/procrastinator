@@ -32,6 +32,8 @@ module Procrastinator
          end
 
          it 'should accept a queue name instead of a queue object' do
+            Pathname.new(QueueWorker::NULL_FILE).mkpath # TODO: remove when FakeFS is eliminated
+
             config = Config.new do |c|
                c.define_queue(:some_queue, test_task)
             end
@@ -54,6 +56,10 @@ module Procrastinator
             Config.new do |c|
                c.define_queue(:fast_queue, test_task, update_period: 0.01)
             end
+         end
+
+         before do
+            Pathname.new(QueueWorker::NULL_FILE).mkpath # TODO: remove when FakeFS is eliminated
          end
 
          # this needs to be here and not in init because they get initialized in the parent boot process
@@ -190,7 +196,13 @@ module Procrastinator
       end
 
       describe '#work_one' do
+         before do
+            # TODO: remove when FakeFS is eliminated
+            Pathname.new(QueueWorker::NULL_FILE).mkpath
+         end
+
          context 'loading and running tasks' do
+
             it 'should reload tasks every cycle' do
                task1 = double('task1', :container= => nil, :logger= => nil, :scheduler= => nil)
                task2 = double('task2', :container= => nil, :logger= => nil, :scheduler= => nil)
@@ -356,6 +368,8 @@ module Procrastinator
          end
 
          it 'should log clean shutdown' do
+            Pathname.new(QueueWorker::NULL_FILE).mkpath # TODO: remove when FakeFS is eliminated
+
             [:email, :reminders].each do |queue_name|
                worker = QueueWorker.new(queue: queue_name, config: config)
                allow(worker).to receive(:loop).and_yield
@@ -374,6 +388,11 @@ module Procrastinator
 
          let(:worker) { QueueWorker.new(queue: :test_queue, config: config) }
 
+         before do
+            # TODO: remove when FakeFS is eliminated
+            Pathname.new(QueueWorker::NULL_FILE).mkpath
+         end
+
          context 'falsey log level' do
             let(:config) do
                Config.new do |c|
@@ -389,8 +408,9 @@ module Procrastinator
                expect(Dir.glob('/var/log/*')).to be_empty
             end
 
-            it 'should create a logger instance with stringIO' do
-               expect(Logger).to receive(:new).with(instance_of(StringIO))
+            it 'should create a logger pointed at system null' do
+               expect(Logger).to receive(:new).with(File::NULL)
+               expect(Logger).to receive(:new).with(File::NULL, anything, anything, anything)
 
                worker.open_log!('test-log', config)
             end
