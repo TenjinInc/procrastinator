@@ -352,6 +352,10 @@ module Procrastinator
 
             work_proxy.serially(steps: 2)
          end
+
+         context 'log enabled'
+
+         context 'log disabled'
       end
    end
 

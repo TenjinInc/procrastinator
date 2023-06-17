@@ -16,7 +16,7 @@ module Procrastinator
          end
 
          it 'should require a queue keyword argument' do
-            expect { QueueWorker.new(config: nil) }.to raise_error(ArgumentError, 'missing keyword: queue')
+            expect { QueueWorker.new(config: nil) }.to raise_error(ArgumentError, 'missing keyword: :queue')
          end
 
          it 'should require queue not be nil' do
@@ -24,7 +24,7 @@ module Procrastinator
          end
 
          it 'should require a config keyword argument' do
-            expect { QueueWorker.new(queue: nil) }.to raise_error(ArgumentError, 'missing keyword: config')
+            expect { QueueWorker.new(queue: nil) }.to raise_error(ArgumentError, 'missing keyword: :config')
          end
 
          it 'should require the config argument not be nil' do
@@ -202,7 +202,6 @@ module Procrastinator
          end
 
          context 'loading and running tasks' do
-
             it 'should reload tasks every cycle' do
                task1 = double('task1', :container= => nil, :logger= => nil, :scheduler= => nil)
                task2 = double('task2', :container= => nil, :logger= => nil, :scheduler= => nil)
@@ -485,7 +484,7 @@ module Procrastinator
                worker
 
                size   = double('size')
-               age    = double('age')
+               age    = 'weekly'
                config = Config.new do |c|
                   c.define_queue :test_queue, Test::MockTask
                   c.log_with shift_size: size, shift_age: age

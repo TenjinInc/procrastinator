@@ -101,7 +101,7 @@ module Procrastinator
 
             scheduler.work.threaded(timeout: 0.25)
 
-            task_line = storage_path.readlines[1..-1].join("\n").split(',')
+            task_line = storage_path.readlines[1..].join("\n").split(',')
 
             expect(task_line[1]).to eq('"crash"') # queue
             expect(task_line[2]).to eq('""') # run at
@@ -116,7 +116,7 @@ module Procrastinator
 
             scheduler.reschedule(:email, run_at: wrong_time, data: 'mendoza@example.com').to(run_at: new_time)
 
-            task_line = storage_path.readlines[1..-1].join("\n").split(',')
+            task_line = storage_path.readlines[1..].join("\n").split(',')
 
             expect(task_line[1]).to eq('"email"') # queue
             expect(task_line[2]).to eq('"2022-09-20T12:00:00-07:00"') # run at
