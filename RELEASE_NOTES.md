@@ -1,6 +1,6 @@
 # Release Notes
 
-## 1.1.1 (         )
+## 1.2.0 (         )
 
 ### Major Changes
 
@@ -8,7 +8,7 @@
 
 ### Minor Changes
 
-* none
+* Updated minimum ruby to 2.7
 
 ### Bugfixes
 
