@@ -1,6 +1,6 @@
 # Release Notes
 
-## 1.2.0 (         )
+## 1.2.0 (2023-06-17)
 
 ### Major Changes
 
