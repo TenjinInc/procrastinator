@@ -290,7 +290,7 @@ module Procrastinator
             end
 
             it 'should write a header row' do
-               store.create(required_args)
+               store.create(**required_args)
 
                file_content = path.readlines
 
@@ -300,7 +300,7 @@ module Procrastinator
             end
 
             it 'should write a new data line' do
-               store.create(required_args)
+               store.create(**required_args)
 
                expect(path.readlines.length).to eq 2 # header row + 1 data row
             end
@@ -313,7 +313,7 @@ module Procrastinator
                ]
 
                data.each do |arguments|
-                  store.create(default_data.merge(arguments))
+                  store.create(**default_data.merge(arguments))
 
                   data_line = path.readlines.last&.strip
 
@@ -337,7 +337,7 @@ module Procrastinator
 
                test_keys.each do |field|
                   test_values.each do |value|
-                     store.create(default_data.merge(field => value))
+                     store.create(**default_data.merge(field => value))
 
                      data_line = path.readlines.last&.strip
 
@@ -347,7 +347,7 @@ module Procrastinator
             end
 
             it 'should write default values' do
-               store.create(required_args)
+               store.create(**required_args)
 
                data_line = path.readlines.last&.strip
 
@@ -370,7 +370,7 @@ module Procrastinator
 
                path.write(contents)
 
-               store.create(required_args)
+               store.create(**required_args)
 
                file_content = path.readlines
 
@@ -387,7 +387,7 @@ module Procrastinator
 
                path.write(prior_content)
 
-               store.create(required_args)
+               store.create(**required_args)
 
                file_content = path.read || ''
 
@@ -400,7 +400,7 @@ module Procrastinator
                expect(FileTransaction).to receive(:new).with(path).and_return(transaction)
                expect(transaction).to receive(:write)
 
-               store.create(required_args)
+               store.create(**required_args)
             end
          end
 
@@ -431,7 +431,7 @@ module Procrastinator
                             last_error: error,
                             data:       data)
 
-               file_lines = path.readlines(chomp: true)
+               file_lines = path.readlines.collect(&:chomp)
 
                line = [id.to_s,
                        'reminders',
@@ -463,7 +463,7 @@ module Procrastinator
                             last_error:     'err',
                             data:           '')
 
-               file_lines = path.readlines(chomp: true)
+               file_lines = path.readlines.collect(&:chomp)
 
                line = [id.to_s,
                        'reminders',

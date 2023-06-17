@@ -1,5 +1,19 @@
 # Release Notes
 
+## 2.0.0 (2023-06-17)
+
+### Major Changes
+
+* Updated minimum ruby to 3.0
+
+### Minor Changes
+
+* Updated development dependencies
+
+### Bugfixes
+
+* none
+
 ## 1.2.0 (2023-06-17)
 
 ### Major Changes

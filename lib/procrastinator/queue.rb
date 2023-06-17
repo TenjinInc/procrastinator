@@ -94,7 +94,7 @@ module Procrastinator
             raise AmbiguousTaskFilterError, "too many (#{ tasks.size }) tasks match #{ identifier }. Found: #{ tasks }"
          end
 
-         TaskMetaData.new(tasks.first.merge(queue: self))
+         TaskMetaData.new(**tasks.first.merge(queue: self))
       end
 
       # Creates a task on the queue, saved using the Task Store strategy.

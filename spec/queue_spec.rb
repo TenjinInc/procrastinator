@@ -606,7 +606,7 @@ module Procrastinator
 
             expect(persister).to receive(:create)
 
-            queue.create(required_args)
+            queue.create(**required_args)
          end
 
          it 'should record a task with serialized task data' do
@@ -617,7 +617,7 @@ module Procrastinator
             # these are, at the moment, all of the arguments the dev can pass in
             expect(persister).to receive(:create).with(include(data: JSON.dump(data)))
 
-            queue.create(required_args.merge(data: data))
+            queue.create(**required_args.merge(data: data))
          end
 
          it 'should complain if they provide :data but the task does NOT import it' do
@@ -630,7 +630,7 @@ module Procrastinator
             ERROR
 
             expect do
-               queue.create(required_args.merge(data: double('something')))
+               queue.create(**required_args.merge(data: double('something')))
             end.to raise_error(MalformedTaskError, err)
          end
 
@@ -639,7 +639,7 @@ module Procrastinator
 
             err = "task #{ task_with_data } expects to receive :data. Provide :data to #delay."
 
-            expect { queue.create(required_args.merge(data: nil)) }.to raise_error(ArgumentError, err)
+            expect { queue.create(**required_args.merge(data: nil)) }.to raise_error(ArgumentError, err)
          end
       end
 

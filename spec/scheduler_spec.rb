@@ -253,7 +253,7 @@ module Procrastinator
 
       describe '#to' do
          it 'should ask the queue for the task' do
-            expect(queue).to receive(:fetch_task).with(id: task_id, queue: :some_queue)
+            expect(queue).to receive(:fetch_task).with(hash_including(id: task_id, queue: :some_queue))
 
             update_proxy.to(run_at: Time.now)
          end
