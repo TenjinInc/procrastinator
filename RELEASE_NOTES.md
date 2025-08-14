@@ -14,7 +14,7 @@
 
 * Compatible with Ruby 3.4.5
 
-## 2.0.0 (2023-06-17)
+## [2.0.0] (2023-06-17)
 
 ### Major Changes
 
@@ -28,7 +28,7 @@
 
 * none
 
-## 1.2.0 (2023-06-17)
+## [1.2.0] (2023-06-17)
 
 ### Major Changes
 
@@ -42,7 +42,7 @@
 
 * When logging is disabled, it points to `File::NULL` instead of a dead-end StringIO
 
-## 1.1.0 (2022-10-16)
+## [1.1.0] (2022-10-16)
 
 ### Major Changes
 
@@ -58,7 +58,7 @@
     * Fixed have_task handling of nested matchers like be_within
     * Improved have_task handling of string queue names vs symbols
 
-## 1.0.1 (2022-09-20)
+## [1.0.1] (2022-09-20)
 
 ### Major Changes
 
@@ -72,7 +72,7 @@
 
 * Fixed integration error in rescheduling tasks
 
-## 1.0.0 (2022-09-18)
+## [1.0.0] (2022-09-18)
 
 ### Major Changes
 
