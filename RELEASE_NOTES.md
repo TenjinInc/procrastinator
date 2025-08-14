@@ -1,5 +1,19 @@
 # Release Notes
 
+## [Unreleased]
+
+### Major Changes
+
+* none
+
+### Minor Changes
+
+* none
+
+### Bugfixes
+
+* Compatible with Ruby 3.4.5
+
 ## 2.0.0 (2023-06-17)
 
 ### Major Changes
