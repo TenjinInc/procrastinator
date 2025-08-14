@@ -35,3 +35,19 @@ RSpec/ExampleWording:
 # My style is often to use multiple smaller expectations in a row instead of one giant one
 RSpec/MultipleExpectations:
   Enabled: false
+
+# My style is often to abuse contexts for logical grouping
+RSpec/ContextWording:
+  Enabled: false
+
+# TODO: re-enable when FakeFS is removed
+RSpec/AnyInstance:
+  Enabled: false
+
+# Not convinced described_class is better. Makes everything harder to track mentally.
+RSpec/DescribedClass:
+  Enabled: false
+
+# TODO: re-enable and replace generic doubles with verifying ones
+RSpec/VerifiedDoubles:
+  Enabled: false

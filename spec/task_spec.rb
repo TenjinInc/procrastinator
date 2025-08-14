@@ -22,7 +22,8 @@ module Procrastinator
          end
       end
       let(:handler) { handler_class.new }
-      let(:task) { Task.new(meta, handler) }
+
+      subject(:task) { Task.new(meta, handler) }
 
       describe '#run' do
          it 'should increase number of attempts when #run is called' do
@@ -33,15 +34,19 @@ module Procrastinator
          end
 
          it 'should call the handler' do
-            expect(handler).to receive(:run)
+            allow(handler).to receive(:run)
 
             task.run
+
+            expect(handler).to have_received(:run)
          end
 
          it 'should alias call' do
-            expect(handler).to receive(:run)
+            allow(handler).to receive(:run)
 
             task.call
+
+            expect(handler).to have_received(:run)
          end
 
          it 'should blank the error message' do
@@ -50,7 +55,7 @@ module Procrastinator
 
             task.run
 
-            expect(meta.last_error).to be nil
+            expect(meta.last_error).to be_nil
          end
 
          it 'should blank the error time' do
@@ -59,22 +64,26 @@ module Procrastinator
 
             task.run
 
-            expect(meta.last_fail_at).to be nil
+            expect(meta.last_fail_at).to be_nil
          end
 
          it 'should attempt task #success' do
-            expect(handler).to receive(:success)
+            allow(handler).to receive(:success)
 
             task.run
+
+            expect(handler).to have_received(:success)
          end
 
          it 'should pass the result of #run to #success' do
-            result = double('run result')
+            result = 'run result'
 
             allow(handler).to receive(:run).and_return(result)
-            expect(handler).to receive(:success).with(result)
+            allow(handler).to receive(:success)
 
             task.run
+
+            expect(handler).to have_received(:success).with(result)
          end
 
          it 'should raise an error when queue timeout exceeded' do
@@ -101,13 +110,15 @@ module Procrastinator
                meta = TaskMetaData.new(queue: queue, expire_at: 0)
                task = Task.new(meta, handler)
 
-               expect(handler).to_not receive(:run)
+               allow(handler).to receive(:run)
                expect { task.run }.to raise_error Task::ExpiredError
+
+               expect(handler).to_not have_received(:run)
             end
          end
 
          context 'run error' do
-            before(:each) do
+            before do
                allow(handler).to receive(:run).and_raise 'asplode'
             end
 
@@ -132,16 +143,18 @@ module Procrastinator
             end
 
             it 'should NOT attempt task #success' do
-               expect(handler).to_not receive(:success)
+               allow(handler).to receive(:success)
 
                expect { task.run }.to raise_error RuntimeError, 'asplode'
+
+               expect(handler).to_not have_received(:success)
             end
          end
 
          context 'success error' do
             let(:err) { 'task failed successfully' }
 
-            before(:each) do
+            before do
                allow(handler).to receive(:success).and_raise err
             end
 
@@ -159,13 +172,18 @@ module Procrastinator
          end
 
          it 'should record the failure in metadata' do
-            expect(meta).to receive(:failure).with(fake_error).and_return :fail
+            allow(meta).to receive(:failure).and_return :fail
+
             task.fail(fake_error)
+
+            expect(meta).to have_received(:failure).with(fake_error)
          end
 
          it 'should call the #fail handler hook' do
-            expect(handler).to receive(:fail).with(fake_error)
+            allow(handler).to receive(:fail)
             task.fail(fake_error)
+
+            expect(handler).to have_received(:fail).with(fake_error)
          end
 
          it 'should capture errors from task #fail' do

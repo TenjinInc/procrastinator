@@ -11,6 +11,11 @@ module Procrastinator
       describe '.setup' do
          let(:test_task) { Test::MockTask }
          let(:persister) { Test::Persister.new }
+         let(:config) do
+            Config.new do |c|
+               c.define_queue(:setup_test_queue, test_task, store: persister)
+            end
+         end
 
          it 'should provide the block a configuration instance' do
             # allow(Config).to receive(:new).and_yield
@@ -23,18 +28,16 @@ module Procrastinator
          end
 
          it 'should return a scheduler configured with config' do
-            scheduler = double('scheduler')
-            config    = Config.new do |c|
-               c.define_queue(:setup_test_queue, test_task, store: persister)
-            end
+            scheduler = {}
 
-            expect(Config).to receive(:new).and_return(config)
-            expect(Scheduler).to receive(:new).with(config).and_return(scheduler)
+            allow(Config).to receive(:new).and_return(config)
+            allow(Scheduler).to receive(:new).and_return(scheduler)
 
             returned = Procrastinator.setup do |c|
                # config stuff
             end
 
+            expect(Scheduler).to have_received(:new).with(config)
             expect(returned).to be scheduler
          end
 
@@ -68,12 +71,12 @@ module Procrastinator
             end
          end
 
-         before(:each) do
+         before do
             # FakeFS doesn't currently support file locks (used in csv storage)
             FakeFS.deactivate!
          end
 
-         after(:each) do
+         after do
             FileUtils.remove_entry(tmp_dir)
             FakeFS.activate!
          end
@@ -96,17 +99,21 @@ module Procrastinator
 
          it 'should retry tasks' do
             scheduler.defer(:thumbnail, run_at: '2016-09-19T00:01:02-09:00', data: {path: 'doug-forcett.png'})
-            scheduler.defer(:email, run_at: '2016-09-19T00:01:00-07:00', data: 'janet@example.com')
             scheduler.defer(:crash, run_at: '2017-10-26T00:00:00-07:00', data: 'derek@example.com')
 
             scheduler.work.threaded(timeout: 0.25)
 
             task_line = storage_path.readlines[1..].join("\n").split(',')
 
-            expect(task_line[1]).to eq('"crash"') # queue
-            expect(task_line[2]).to eq('""') # run at
-            expect(task_line[3]).to eq('"2017-10-26T00:00:00-07:00"') # initial run at
-            expect(task_line[5]).to eq('"1"') # attempts
+            expect(task_line).to contain_exactly(anything, # id
+                                                 '"crash"', # queue
+                                                 '""', # run at
+                                                 '"2017-10-26T00:00:00-07:00"', # initial run at
+                                                 anything, # expire_at
+                                                 '"1"', # attempts
+                                                 anything, # last_fail_at
+                                                 anything, # last_error
+                                                 anything) # data
          end
 
          it 'should reschedule tasks' do
@@ -118,10 +125,15 @@ module Procrastinator
 
             task_line = storage_path.readlines[1..].join("\n").split(',')
 
-            expect(task_line[1]).to eq('"email"') # queue
-            expect(task_line[2]).to eq('"2022-09-20T12:00:00-07:00"') # run at
-            expect(task_line[3]).to eq('"2022-09-20T12:00:00-07:00"') # initial run at
-            expect(task_line[5]).to eq('"0"') # attempts
+            expect(task_line).to contain_exactly(anything, # id
+                                                 '"email"', # queue
+                                                 '"2022-09-20T12:00:00-07:00"', # run at
+                                                 '"2022-09-20T12:00:00-07:00"', # initial run at
+                                                 anything, # expire_at
+                                                 '"0"', # attempts
+                                                 anything, # last_fail_at
+                                                 anything, # last_error
+                                                 anything) # data
          end
 
          it 'should keep a log file per queue' do

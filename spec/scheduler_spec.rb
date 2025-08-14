@@ -314,10 +314,10 @@ module Procrastinator
    describe Scheduler::SerialWorking do
       let(:test_task) { Test::MockTask }
 
-      let(:queue_names) { [:first, :second, :third] }
-
       let(:persister) { Test::Persister.new }
       let(:config) do
+         queue_names = [:first, :second, :third]
+
          Config.new do |c|
             c.with_store(persister) do
                queue_names.each do |name|
@@ -382,9 +382,7 @@ module Procrastinator
       before do
          # TODO: remove when FakeFS is eliminated
          Pathname.new(QueueWorker::NULL_FILE).mkpath
-      end
 
-      before(:each) do
          # prevent actual threading during any testing
          allow(Thread).to receive(:new).and_raise('Must override Thread spawning in test')
 
@@ -439,7 +437,7 @@ module Procrastinator
                   end
                end
 
-               before(:each) do
+               before do
                   allow(Thread).to receive(:new).and_return(thread_double)
                   allow(Process).to receive(:pid).and_return(1234)
                end
@@ -464,7 +462,7 @@ module Procrastinator
             let(:work_proxy) { Scheduler.new(config).work(:first) }
             let(:worker) { work_proxy.workers.first }
 
-            before(:each) do
+            before do
                allow(Thread).to receive(:new).and_yield(worker).and_return(thread_double)
 
                allow(worker).to receive(:work!) # need to stub work because it uses an infiniloop
@@ -503,12 +501,14 @@ module Procrastinator
             # Be aware that there is also a class-level version of abort_on_exception.
             # This is done per-instance to prevent accidental interactions with other gems, etc
             it 'should set this thread to raise errors to the parent' do
-               expect(Thread.current).to receive(:abort_on_exception=).with(true)
+               allow(Thread.current).to receive(:abort_on_exception=)
 
                work_proxy.threaded
+
+               expect(Thread.current).to have_received(:abort_on_exception=).with(true)
             end
 
-            context 'log disabled' do
+            context 'when log disabled' do
                let(:log_level) { false }
 
                it 'should log to stderr but not to file' do
@@ -520,7 +520,7 @@ module Procrastinator
                end
             end
 
-            context 'log enabled' do
+            context 'when log enabled' do
                let(:log_level) { Logger::INFO }
 
                # this is a backstop to the queue worker's internal logging, just in case that fails
@@ -645,7 +645,7 @@ module Procrastinator
 
       let(:log_file) { config.log_dir / 'procrastinator.log' }
 
-      before(:each) do
+      before do
          # prevent actual threading during any testing
          allow(Thread).to receive(:new).and_raise('Must override Thread spawning in test')
 
@@ -661,13 +661,11 @@ module Procrastinator
       context '#daemonized!' do
          let(:work_proxy) { Scheduler.new(config).work(:second) }
 
-         before(:each) do
-            allow(Process).to receive(:daemon).and_return(0)
-         end
-
          before do
             # TODO: remove when FakeFS is eliminated
             Pathname.new(QueueWorker::NULL_FILE).mkpath
+
+            allow(Process).to receive(:daemon).and_return(0)
          end
 
          it 'should call process daemon' do
@@ -683,7 +681,7 @@ module Procrastinator
          end
 
          context 'process name' do
-            before(:each) do
+            before do
                allow(work_proxy).to receive(:system).with('pidof', anything, anything).and_return(false)
             end
 
@@ -791,7 +789,7 @@ module Procrastinator
             end
 
             context 'process already exists' do
-               before(:each) do
+               before do
                   pid_file.dirname.mkpath
                   pid_file.write(1234)
                   allow(Process).to receive(:getpgid).and_raise Errno::ESRCH, 'No such process'
@@ -807,7 +805,7 @@ module Procrastinator
             end
 
             context 'process already exists' do
-               before(:each) do
+               before do
                   pid_file.dirname.mkpath
                   pid_file.write(1234)
                   allow(Process).to receive(:getpgid).and_return 5678
@@ -844,7 +842,7 @@ module Procrastinator
             let(:log_level) { Logger::INFO }
             let(:pid) { 12345 }
 
-            before(:each) do
+            before do
                allow(Process).to receive(:pid).and_return(pid)
             end
 
@@ -898,7 +896,7 @@ module Procrastinator
       context 'halt!' do
          let(:pid) { 12345 }
 
-         before(:each) do
+         before do
             allow(Process).to receive(:kill)
          end
 

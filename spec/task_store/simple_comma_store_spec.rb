@@ -97,11 +97,14 @@ module Procrastinator
             # write-tmp-and-swap instead, but it would need to be evaluated first vs multithreading and multiprocessing
             # (ie. multiple daemons)
             it 'should perform the read within a file transaction' do
-               transaction = double('transaction')
-               expect(FileTransaction).to receive(:new).with(path).and_return(transaction)
-               expect(transaction).to receive(:read)
+               transaction = {}
+               allow(FileTransaction).to receive(:new).and_return(transaction)
+               allow(transaction).to receive(:read)
 
                store.read
+
+               expect(FileTransaction).to have_received(:new).with(path)
+               expect(transaction).to have_received(:read)
             end
 
             it 'should handle a file with no tasks' do
@@ -196,9 +199,7 @@ module Procrastinator
             it 'should return hashes of the read data' do
                data = store.read
 
-               data.each do |d|
-                  expect(d).to be_a Hash
-               end
+               expect(data).to all be_a Hash
             end
 
             it 'should ignore blank lines' do
@@ -245,34 +246,53 @@ module Procrastinator
                expect(data.length).to eq 3
             end
 
-            it 'should convert types' do
-               contents = <<~CONTENTS
-                  id, queue,   run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
-                  "1","emails","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","0","","",""
-                  "2","emails","2022-01-01T00:00Z","2022-01-01T00:00Z","","","","",""
-                  "3","emails","","2022-01-01T00:00Z","","2","2022-01-01T00:00Z","problem",""
-               CONTENTS
+            context 'type conversion' do
+               let(:contents) do
+                  <<~CONTENTS
+                     id, queue,   run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
+                     "1","emails","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","0","","",""
+                     "2","emails","2022-01-01T00:00Z","2022-01-01T00:00Z","","","","",""
+                     "3","emails","","2022-01-01T00:00Z","","2","2022-01-01T00:00Z","problem",""
+                  CONTENTS
+               end
 
-               path.write(contents)
+               let(:int_keys) { [:id, :attempts] }
+               let(:time_keys) { [:run_at, :initial_run_at, :expire_at, :last_fail_at] }
 
-               data = store.read
+               before do
+                  path.write(contents)
+               end
 
-               time_keys = [:run_at, :initial_run_at, :expire_at, :last_fail_at]
-               int_keys  = [:id, :attempts]
-
-               data.each do |row|
-                  time_keys.each do |key|
-                     expect(row[key]).to satisfy do |value|
-                        value.is_a?(Time) || value.nil?
+               it 'should convert integers' do
+                  store.read.each do |row|
+                     int_keys.each do |key|
+                        value = row[key]
+                        expect(value).to be_an(Integer)
                      end
                   end
-                  int_keys.each do |key|
-                     value = row[key]
-                     expect(value).to be_an(Integer)
+               end
+
+               it 'should convert times' do
+                  store.read.each do |row|
+                     time_keys.each do |key|
+                        expect(row[key]).to satisfy do |value|
+                           value.is_a?(Time) || value.nil?
+                        end
+                     end
                   end
-                  expect(row[:queue]).to be_a Symbol
-                  expect(row[:last_error]).to be_a String
-                  expect(row[:data]).to be_a String
+               end
+
+               it 'should convert symbols' do
+                  store.read.each do |row|
+                     expect(row[:queue]).to be_a Symbol
+                  end
+               end
+
+               it 'should convert strings' do
+                  store.read.each do |row|
+                     expect(row[:last_error]).to be_a String
+                     expect(row[:data]).to be_a String
+                  end
                end
             end
          end
@@ -400,17 +420,21 @@ module Procrastinator
             end
 
             it 'should perform the create within a file transaction' do
-               transaction = double('transaction')
-               expect(FileTransaction).to receive(:new).with(path).and_return(transaction)
-               expect(transaction).to receive(:write)
+               transaction = {}
+               allow(FileTransaction).to receive(:new).and_return(transaction)
+               allow(transaction).to receive(:write)
 
                store.create(**required_args)
+
+               expect(FileTransaction).to have_received(:new).with(path)
+               expect(transaction).to have_received(:write)
             end
          end
 
          describe 'update' do
             let(:path) { Pathname.new('procrastinator-data.csv').expand_path }
             let(:store) { SimpleCommaStore.new(path) }
+            let(:id) { 2 }
 
             before do
                path.write <<~CONTENTS
@@ -424,8 +448,6 @@ module Procrastinator
             end
 
             it 'should write the changed data to a file' do
-               id = 2
-
                attempts = 14
                error    = 'everything is okay alarm'
                data     = 'boop'
@@ -451,8 +473,6 @@ module Procrastinator
             end
 
             it 'should convert time fields to iso8601' do
-               id = 2
-
                run      = '2022-01-01T01:01:01-01:00'
                initial  = '2022-01-02T02:02:02-02:00'
                expire   = '2022-03-03T03:03:03-03:00'
@@ -467,8 +487,6 @@ module Procrastinator
                             last_error:     'err',
                             data:           '')
 
-               file_lines = path.readlines.collect(&:chomp)
-
                line = [id.to_s,
                        'reminders',
                        run,
@@ -479,7 +497,7 @@ module Procrastinator
                        'err',
                        '']
 
-               expect(file_lines[2]).to eq line.collect { |v| %["#{ v }"] }.join(',')
+               expect(path.readlines.collect(&:chomp)[2]).to eq line.collect { |v| %["#{ v }"] }.join(',')
             end
 
             it 'should NOT create a new task' do
@@ -502,11 +520,14 @@ module Procrastinator
             end
 
             it 'should perform the update within a file transaction' do
-               transaction = double('transaction')
-               expect(FileTransaction).to receive(:new).with(path).and_return(transaction)
-               expect(transaction).to receive(:write)
+               transaction = {}
+               allow(FileTransaction).to receive(:new).and_return(transaction)
+               allow(transaction).to receive(:write)
 
                store.update(2, run_at: 0)
+
+               expect(transaction).to have_received(:write)
+               expect(FileTransaction).to have_received(:new).with(path)
             end
          end
 
@@ -536,27 +557,22 @@ module Procrastinator
             end
 
             it 'should perform the delete within a file transaction' do
-               transaction = double('transaction')
-               expect(FileTransaction).to receive(:new).with(path).and_return(transaction)
-               expect(transaction).to receive(:write)
+               transaction = {}
+               allow(FileTransaction).to receive(:new).and_return(transaction)
+               allow(transaction).to receive(:write)
 
                store.delete(2)
+
+               expect(FileTransaction).to have_received(:new).with(path)
+               expect(transaction).to have_received(:write)
             end
          end
 
          describe 'generate' do
             let(:store) { SimpleCommaStore.new }
             let(:path) { store.path }
-
-            # CSV specification (RFC 4180) considers two dquotes in a row ("") as an escaped dquote (")
-            it 'should escape double quote characters' do
-               result = store.generate([{data: 'this has "quotes" in it'}])
-
-               expect(result.strip).to end_with(',"this has ""quotes"" in it"')
-            end
-
-            it 'should force quote every field' do
-               task_info = {
+            let(:task_info) do
+               {
                      id:             1,
                      queue:          :reminders,
                      run_at:         Time.at(3),
@@ -567,7 +583,16 @@ module Procrastinator
                      last_error:     '',
                      data:           'user_id: 5'
                }
+            end
 
+            # CSV specification (RFC 4180) considers two dquotes in a row ("") as an escaped dquote (")
+            it 'should escape double quote characters' do
+               result = store.generate([{data: 'this has "quotes" in it'}])
+
+               expect(result.strip).to end_with(',"this has ""quotes"" in it"')
+            end
+
+            it 'should force quote every field' do
                result = store.generate([task_info])
 
                new_row = task_info.values.collect { |x| %["#{ x }"] }.join(',')
@@ -606,9 +631,11 @@ module Procrastinator
                block = proc do
                   # something
                end
-               expect(transaction).to receive(:transact).with(writable: false, &block)
+               allow(transaction).to receive(:transact)
 
                transaction.read(&block)
+
+               expect(transaction).to have_received(:transact).with(writable: false, &block)
             end
          end
 
@@ -620,9 +647,11 @@ module Procrastinator
                block = proc do
                   # something
                end
-               expect(transaction).to receive(:transact).with(writable: true, &block)
+               allow(transaction).to receive(:transact)
 
                transaction.write(&block)
+
+               expect(transaction).to have_received(:transact).with(writable: true, &block)
             end
          end
 
@@ -634,7 +663,7 @@ module Procrastinator
                [true, false].each do |mode|
                   allow_any_instance_of(FakeFS::File).to receive(:flock)
 
-                  result = double('something')
+                  result = 'something'
 
                   expect(transaction.transact(writable: mode) do
                      result
@@ -759,14 +788,14 @@ module Procrastinator
 
                it 'should flock the file before reading' do
                   transaction.transact do
-                     expect(storage_path.open.flock(flock_mask)).to(eq(false),
+                     expect(storage_path.open.flock(flock_mask)).to(be(false),
                                                                     "expected #{ storage_path } to be locked")
                   end
                end
 
                it 'should flock the file before writing' do
                   transaction.transact(writable: true) do
-                     expect(storage_path.open.flock(flock_mask)).to(eq(false),
+                     expect(storage_path.open.flock(flock_mask)).to(be(false),
                                                                     "expected #{ storage_path } to be locked")
                   end
                end
