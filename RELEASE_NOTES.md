@@ -8,7 +8,7 @@
 
 ### Minor Changes
 
-* none
+* Improved MultiIO implementation to avoid clobbering class methods
 
 ### Bugfixes
 

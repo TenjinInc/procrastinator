@@ -227,12 +227,14 @@ module Procrastinator
                @streams = stream
             end
 
-            (IO.methods << :path << :sync=).uniq.each do |method_name|
-               define_method(method_name) do |*args|
-                  able_streams(method_name).collect do |stream|
-                     stream.send(method_name, *args)
-                  end.last # forces consistent return result type for callers (but may lose some info)
-               end
+            def method_missing(method_name, *args)
+               able_streams(method_name).collect do |stream|
+                  stream.send(method_name, *args)
+               end.last # forces consistent return result type for callers (but may lose some info)
+            end
+
+            def respond_to_missing?(method_name, include_private)
+               @streams.any? { |stream| stream.respond_to?(method_name, include_private) }
             end
 
             private
