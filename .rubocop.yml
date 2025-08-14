@@ -27,3 +27,7 @@ Metrics/BlockLength:
 Metrics/ModuleLength:
   Exclude:
     - 'spec/**/*.rb'
+
+# Disabling because it's marginally better, if at all, and not worth rewriting all step descripts right now
+RSpec/ExampleWording:
+  Enabled: false
