@@ -4,6 +4,7 @@ source 'https://rubygems.org'
 
 group :development do
    gem 'mutex_m', '~> 0.3' # for 'debase' debugger
+   gem 'base64', '~> 0.3' # for 'debase' debugger
    gem 'bundler', '~> 2.3'
    gem 'fakefs', '~> 1.8'
    gem 'rake', '~> 13.0'
