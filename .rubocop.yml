@@ -31,3 +31,7 @@ Metrics/ModuleLength:
 # Disabling because it's marginally better, if at all, and not worth rewriting all step descripts right now
 RSpec/ExampleWording:
   Enabled: false
+
+# My style is often to use multiple smaller expectations in a row instead of one giant one
+RSpec/MultipleExpectations:
+  Enabled: false

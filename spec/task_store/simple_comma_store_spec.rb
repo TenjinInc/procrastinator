@@ -782,9 +782,7 @@ module Procrastinator
 
                it 'should unflock the file when errored' do
                   expect do
-                     transaction.transact do
-                        raise 'vexed'
-                     end
+                     transaction.transact { raise 'vexed' }
                   end.to raise_error RuntimeError, 'vexed'
 
                   expect(storage_path.open.flock(flock_mask)).to(eq(0),
