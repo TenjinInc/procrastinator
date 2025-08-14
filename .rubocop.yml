@@ -4,7 +4,7 @@ AllCops:
   Exclude:
     - 'bin/*'
 
-  TargetRubyVersion: 3.0
+  TargetRubyVersion: 3.4
 
 Layout/LineLength:
   Exclude:

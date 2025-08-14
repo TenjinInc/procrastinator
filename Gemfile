@@ -3,14 +3,13 @@
 source 'https://rubygems.org'
 
 group :development do
-   gem 'mutex_m', '~> 0.3' # for 'debase' debugger
-   gem 'base64', '~> 0.3' # for 'debase' debugger
    gem 'bundler', '~> 2.3'
    gem 'fakefs', '~> 1.8'
+   gem 'mutex_m', '~> 0.3' # for 'debase' debugger
    gem 'rake', '~> 13.0'
    gem 'rspec', '~> 3.12'
-   gem 'rubocop', '~> 1.52'
-   gem 'rubocop-performance', '~> 1.18'
+   gem 'rubocop', '~> 1.79'
+   gem 'rubocop-performance', '~> 1.25'
    gem 'simplecov', '~> 0.22.0'
    gem 'timecop', '~> 0.9'
    gem 'yard', '~> 0.9'
