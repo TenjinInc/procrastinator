@@ -59,7 +59,7 @@ module Procrastinator
             let(:path) { Pathname.new(SimpleCommaStore::DEFAULT_FILE).expand_path }
             let(:store) { SimpleCommaStore.new(path) }
 
-            before(:each) do
+            before do
                contents = <<~CONTENTS
                   id, queue    , run_at,            initial_run_at,    expire_at,         attempts, last_fail_at,      last_error, data
                   1 , reminders, 2022-01-01T00:00Z, 2022-01-01T00:00Z, 2022-01-01T00:00Z, 5       , 2022-01-01T00:00Z, problem   , info
@@ -285,7 +285,7 @@ module Procrastinator
                {queue: :some_queue, run_at: Time.at(0), expire_at: nil, data: ''}
             end
 
-            before(:each) do
+            before do
                allow_any_instance_of(FakeFS::File).to receive(:flock)
             end
 
@@ -412,7 +412,7 @@ module Procrastinator
             let(:path) { Pathname.new('procrastinator-data.csv').expand_path }
             let(:store) { SimpleCommaStore.new(path) }
 
-            before(:each) do
+            before do
                path.write <<~CONTENTS
                   id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
                   "1","reminders","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","2022-01-01T00:00Z","err",""
@@ -514,7 +514,7 @@ module Procrastinator
             let(:path) { Pathname.new('procrastinator-data.csv').expand_path }
             let(:store) { SimpleCommaStore.new(path) }
 
-            before(:each) do
+            before do
                path.write <<~CONTENTS
                   id,queue,run_at,initial_run_at,expire_at,attempts,last_fail_at,last_error,data
                   "1","reminders","2022-01-01T00:00Z","2022-01-01T00:00Z","","5","","",""
@@ -598,7 +598,7 @@ module Procrastinator
             let(:storage_path) { Pathname.new 'test-file.txt' }
             let(:transaction) { FileTransaction.new(storage_path) }
 
-            before(:each) do
+            before do
                allow_any_instance_of(FakeFS::File).to receive(:flock)
             end
 
@@ -646,7 +646,7 @@ module Procrastinator
                let(:storage_path) { Pathname.new 'test-file.txt' }
                let(:transaction) { FileTransaction.new(storage_path) }
 
-               before(:each) do
+               before do
                   allow_any_instance_of(FakeFS::File).to receive(:flock)
                end
 
@@ -675,7 +675,7 @@ module Procrastinator
                let(:storage_path) { Pathname.new 'test-file.txt' }
                let(:transaction) { FileTransaction.new(storage_path) }
 
-               before(:each) do
+               before do
                   allow_any_instance_of(FakeFS::File).to receive(:flock)
                end
 
@@ -710,7 +710,7 @@ module Procrastinator
             context 'thread safety' do
                let(:lock) { FileTransaction.file_mutex[storage_path.to_s] }
 
-               before(:each) do
+               before do
                   allow_any_instance_of(FakeFS::File).to receive(:flock)
                end
 
@@ -744,14 +744,14 @@ module Procrastinator
                let(:tmp_dir) { Pathname.new Dir.mktmpdir('procrastinator-test') }
                let(:storage_path) { tmp_dir / 'some-file.txt' }
 
-               before(:each) do
+               before do
                   # FakeFS doesn't currently support file locks
                   FakeFS.deactivate!
 
                   storage_path.write ''
                end
 
-               after(:each) do
+               after do
                   Pathname.new(storage_path).open.flock(File::LOCK_UN)
                   FileUtils.remove_entry(tmp_dir)
                   FakeFS.activate!
