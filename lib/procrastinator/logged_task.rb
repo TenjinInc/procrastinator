@@ -19,7 +19,7 @@ module Procrastinator
       alias task __getobj__
 
       def initialize(task, logger: Logger.new(StringIO.new))
-         super task
+         super(task)
          @logger = logger || raise(ArgumentError, 'Logger cannot be nil')
       end
 

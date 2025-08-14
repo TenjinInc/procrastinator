@@ -109,7 +109,9 @@ module Procrastinator
 
             properties[:store] = interpret_store(properties[:store]) if properties.key? :store
 
-            @queues << Queue.new(**{name: name, task_class: task_class, store: @default_store}.merge(properties))
+            args = {name: name, task_class: task_class, store: @default_store}.merge(properties)
+
+            @queues << Queue.new(**args)
          end
 
          # Sets details of logging behaviour

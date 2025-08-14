@@ -142,7 +142,7 @@ module Procrastinator
          class CSVFileTransaction < FileTransaction
             # (see FileTransaction#transact)
             def transact(writable: nil)
-               super(writable: writable) do |file_str|
+               super do |file_str|
                   yield(parse(file_str))
                end
             end

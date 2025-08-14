@@ -23,7 +23,7 @@ Gem::Specification.new do |spec|
    spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
    spec.require_paths = ['lib']
 
-   spec.required_ruby_version = '>= 3.0'
+   spec.required_ruby_version = '>= 3.3'
 
    # TODO: remove when CSV persister is split to separate gem; used to be part of STDLIB but now is separate
    spec.add_dependency 'csv', '>= 3.3'

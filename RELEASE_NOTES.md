@@ -9,6 +9,7 @@
 ### Minor Changes
 
 * Improved MultiIO implementation to avoid clobbering class methods
+* Updated minimum ruby to 3.3
 
 ### Bugfixes
 

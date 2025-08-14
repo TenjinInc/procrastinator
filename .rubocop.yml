@@ -4,7 +4,7 @@ AllCops:
   Exclude:
     - 'bin/*'
 
-  TargetRubyVersion: 3.4
+  TargetRubyVersion: 3.3
 
 Layout/LineLength:
   Exclude:
@@ -14,6 +14,10 @@ Layout/LineLength:
 Layout/FirstArrayElementIndentation:
   IndentationWidth: 6
 
+# setting to 6 to match RubyMine autoformat
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented_relative_to_receiver
+  IndentationWidth: 6
 
 # rspec blocks are huge by design
 Metrics/BlockLength:

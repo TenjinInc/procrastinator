@@ -202,7 +202,7 @@ module Procrastinator
             end
 
             it 'should ignore blank lines' do
-               contents = <<~'CONTENTS'
+               contents = <<~CONTENTS
                   id, queue, run_at, initial_run_at, expire_at, attempts, last_fail_at, last_error, data
                   "1","","2022-01-01T00:00Z","2022-01-01T00:00Z","2022-01-01T00:00Z","5","2022-01-01T00:00Z","problem","5"
 
@@ -313,7 +313,9 @@ module Procrastinator
                ]
 
                data.each do |arguments|
-                  store.create(**default_data.merge(arguments))
+                  args = default_data.merge(arguments)
+
+                  store.create(**args)
 
                   data_line = path.readlines.last&.strip
 
@@ -337,7 +339,9 @@ module Procrastinator
 
                test_keys.each do |field|
                   test_values.each do |value|
-                     store.create(**default_data.merge(field => value))
+                     args = default_data.merge(field => value)
+
+                     store.create(**args)
 
                      data_line = path.readlines.last&.strip
 
