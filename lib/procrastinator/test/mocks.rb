@@ -34,6 +34,50 @@ module Procrastinator
          end
       end
 
+      # Testing mock Task class that requires a data packet
+      class MockTaskWithData
+         attr_accessor :container, :logger, :scheduler, :data
+
+         # Records that the mock task was run.
+         def run
+            @run = true
+         end
+
+         # @return [Boolean] Whether the task was run
+         def run?
+            @run
+         end
+      end
+
+      # Testing mock Thread class
+      class MockThread
+         attr_reader :status
+
+         def initialize(name: nil, status: nil)
+            @name   = name
+            @status = status
+         end
+
+         def join(_timeout)
+         end
+
+         def kill
+         end
+
+         def alive?
+            true
+         end
+
+         def thread_variable_get(var_name)
+            case var_name
+            when :name
+               @name
+            else
+               raise 'test error: undefined thread var'
+            end
+         end
+      end
+
       # Data-accepting MockTask
       #
       # @see MockTask

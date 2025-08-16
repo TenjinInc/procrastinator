@@ -4,14 +4,13 @@ require 'spec_helper'
 
 module Procrastinator
    describe Procrastinator::Scheduler do
-      let(:test_task) { Test::MockTask }
       let(:persister) { Test::Persister.new }
 
       let(:config) do
          Config.new do |c|
             c.with_store(persister) do
-               c.define_queue(:emails, test_task)
-               c.define_queue(:reminders, test_task)
+               c.define_queue(:emails, Test::MockTask)
+               c.define_queue(:reminders, Test::MockTask)
             end
          end
       end
@@ -19,37 +18,36 @@ module Procrastinator
       let(:scheduler) { Scheduler.new(config) }
 
       describe '#delay' do
+         before do
+            allow(persister).to receive(:create)
+         end
+
          it 'should record a task on the given queue' do
             [:emails, :reminders].each do |queue_name|
-               expect(persister).to receive(:create).with(hash_including(queue: queue_name.to_s))
-
                scheduler.defer(queue_name)
+
+               expect(persister).to have_received(:create).with(hash_including(queue: queue_name.to_s))
             end
          end
 
          it 'should record a task with given run_at' do
             run_stamp = '2022-12-25T06:01:00-07:00'
 
-            expect(persister).to receive(:create).with(hash_including(run_at: Time.parse(run_stamp)))
-
             scheduler.defer(:reminders, run_at: run_stamp)
+
+            expect(persister).to have_received(:create).with(hash_including(run_at: Time.parse(run_stamp)))
          end
 
          it 'should record a task with given expire_at' do
             expire_stamp = '2022-12-31T23:59:59-04:00'
 
-            expect(persister).to receive(:create).with(hash_including(expire_at: Time.parse(expire_stamp)))
-
             scheduler.defer(:reminders, expire_at: expire_stamp)
+
+            expect(persister).to have_received(:create).with(hash_including(expire_at: Time.parse(expire_stamp)))
          end
 
          it 'should complain if they provide NO :data but the task expects it' do
-            test_task = Class.new do
-               attr_accessor :data, :logger, :container, :scheduler
-
-               def run
-               end
-            end
+            test_task = Test::MockTaskWithData
 
             config = Config.new do |c|
                c.define_queue(:data_queue, test_task, store: persister)
@@ -66,30 +64,30 @@ module Procrastinator
             now = Time.now
 
             Timecop.freeze(now) do
-               expect(persister).to receive(:create).with(hash_including(run_at: now))
-
                scheduler.defer(:reminders)
+
+               expect(persister).to have_received(:create).with(hash_including(run_at: now))
             end
          end
 
          it 'should record initial_run_at and run_at to be equal' do
             time = Time.now
 
-            expect(persister).to receive(:create).with(hash_including(run_at:         time,
-                                                                      initial_run_at: time))
-
             scheduler.defer(:reminders, run_at: time)
+
+            expect(persister).to have_received(:create).with(hash_including(run_at:         time,
+                                                                            initial_run_at: time))
          end
 
          it 'should default expire_at to nil' do
-            expect(persister).to receive(:create).with(include(expire_at: nil))
-
             scheduler.defer(:reminders)
+
+            expect(persister).to have_received(:create).with(include(expire_at: nil))
          end
 
          it 'should NOT complain about well-formed hooks' do
             [:success, :fail, :final_fail].each do |method|
-               task = test_task.new
+               task = Test::MockTask.new
 
                allow(task).to receive(method)
 
@@ -116,21 +114,21 @@ module Procrastinator
          end
 
          it 'should create a proxy for the given queue' do
-            expect(Scheduler::UpdateProxy).to receive(:new)
-                                                    .with(config.queue(name: :reminders), anything)
-                                                    .and_call_original
+            allow(Scheduler::UpdateProxy).to receive(:new).and_call_original
 
             scheduler.reschedule(:reminders, id: 12358)
+
+            expect(Scheduler::UpdateProxy).to have_received(:new).with(config.queue(name: :reminders), anything)
          end
 
          it 'should create a proxy for the given search parameters' do
             identifier = {some: 'identifier', data: 'chidi@example.com'}
 
-            expect(Scheduler::UpdateProxy).to receive(:new)
-                                                    .with(anything, identifier: identifier)
-                                                    .and_call_original
+            allow(Scheduler::UpdateProxy).to receive(:new).and_call_original
 
             scheduler.reschedule(:reminders, identifier)
+
+            expect(Scheduler::UpdateProxy).to have_received(:new).with(anything, identifier: identifier)
          end
 
          it 'should return the created proxy' do
@@ -146,44 +144,44 @@ module Procrastinator
          let(:config) do
             Config.new do |config|
                config.with_store(persister) do
-                  config.define_queue(:greeting, test_task)
-                  config.define_queue(:reminder, test_task)
+                  config.define_queue(:greeting, Test::MockTask)
+                  config.define_queue(:reminder, Test::MockTask)
                end
             end
          end
 
          it 'should delete the task matching the given search data' do
-            tasks = [{id: 1, queue: :reminder, data: 'user_id: 5'},
-                     {id: 2, queue: :reminder, data: 'user_id: 10'}]
+            tasks = [
+                  {id: 1, queue: :reminder, data: '{"user_id": 5}'},
+                  {id: 2, queue: :reminder, data: '{"user_id": 10}'},
+                  {id: 3, queue: :reminder, data: '{"user_id": 15}'}
+            ]
 
             allow(persister).to receive(:read) do |attrs|
-               attrs[:data][:user_id] == 5 ? [tasks.first] : [tasks.last]
+               attrs[:data][:user_id] == 10 ? [tasks[1]] : nil
             end
 
-            # first search
-            expect(persister).to receive(:delete).with(2)
-            scheduler.cancel(:reminder, data: {user_id: 10})
+            allow(persister).to receive(:delete)
 
-            # second search
-            expect(persister).to receive(:delete).with(1)
-            scheduler.cancel(:reminder, data: {user_id: 5})
+            scheduler.cancel(:reminder, data: {user_id: 10})
+            expect(persister).to have_received(:delete).with(2)
          end
 
          it 'should delete the task only on the given queue' do
-            tasks = [{id: 1, queue: :reminder, data: 'user_id: 5'},
-                     {id: 2, queue: :greeting, data: 'user_id: 5'}]
+            tasks = [
+                  {id: 1, queue: :reminder, data: 'user_id: 5'},
+                  {id: 2, queue: :greeting, data: 'user_id: 5'},
+                  {id: 3, queue: :cleanup, data: 'user_id: 5'}
+            ]
 
             allow(persister).to receive(:read) do |attrs|
-               attrs[:queue] == :reminder.to_s ? [tasks.first] : [tasks.last]
+               attrs[:queue] == :greeting.to_s ? [tasks[1]] : nil
             end
 
-            # first search
-            expect(persister).to receive(:delete).with(2)
-            scheduler.cancel(:greeting, data: {user_id: 5})
+            allow(persister).to receive(:delete)
 
-            # second search
-            expect(persister).to receive(:delete).with(1)
-            scheduler.cancel(:reminder, data: {user_id: 5})
+            scheduler.cancel(:greeting, data: {user_id: 5})
+            expect(persister).to have_received(:delete).with(2)
          end
 
          it 'should complain if no task matches the given data' do
@@ -191,11 +189,13 @@ module Procrastinator
 
             [{data: {bogus: 6}},
              {data: 'missing data'}].each do |identifier|
-               expect(persister).to_not receive(:delete)
+               allow(persister).to receive(:delete)
 
                expect do
                   scheduler.cancel(:greeting, identifier)
                end.to raise_error(RuntimeError, "no task matches search: #{ identifier }")
+
+               expect(persister).to_not have_received(:delete)
             end
          end
 
@@ -203,13 +203,15 @@ module Procrastinator
             allow(persister).to receive(:read).and_return([{id: 1, queue: :reminder, run_at: 0},
                                                            {id: 2, queue: :reminder, run_at: 0}])
 
-            expect(persister).to_not receive(:delete)
+            allow(persister).to receive(:delete)
 
             [{run_at: 0},
              {queue: :reminder}].each do |identifier|
                expect do
                   scheduler.cancel(:greeting, identifier)
                end.to raise_error(RuntimeError, "multiple tasks match search: #{ identifier }")
+
+               expect(persister).to_not have_received(:delete)
             end
          end
       end
@@ -218,7 +220,7 @@ module Procrastinator
          let(:queue_names) { [:first, :second, :third] }
          let(:config) do
             Config.new do |config|
-               queue_names.each { |name| config.define_queue(name, test_task, store: persister) }
+               queue_names.each { |name| config.define_queue(name, Test::MockTask, store: persister) }
             end
          end
 
@@ -226,75 +228,90 @@ module Procrastinator
             specified = [:first, :third]
 
             specified.each do |queue|
-               expect(QueueWorker).to receive(:new).and_return(double("queue worker #{ queue }", work_one: nil))
+               allow(QueueWorker).to receive(:new).and_return(double("queue worker #{ queue }", work_one: nil))
             end
 
             scheduler.work(*specified)
+
+            expect(QueueWorker).to have_received(:new).exactly(specified.length).times
          end
 
          it 'should create a worker for every queue definition by default' do
-            expect(QueueWorker).to receive(:new).exactly(queue_names.length).times
+            allow(QueueWorker).to receive(:new)
 
             scheduler.work
+
+            expect(QueueWorker).to have_received(:new).exactly(queue_names.length).times
          end
       end
    end
 
    describe Scheduler::UpdateProxy do
       let(:task_id) { 12358 }
-      let(:identifier) { {id: task_id} }
       let(:task) do
          Task.new(TaskMetaData.new(queue: Queue.new(name: :test_queue, task_class: Test::MockTask), id: task_id),
                   Test::MockTask.new)
       end
       # need a queue double bc queues are frozen and can't be stubbed
       let(:queue) { double('queue', name: :some_queue, update: nil, fetch_task: task) }
-      let(:update_proxy) { Scheduler::UpdateProxy.new(queue, identifier: identifier) }
+      let(:update_proxy) { Scheduler::UpdateProxy.new(queue, identifier: {id: task_id}) }
 
       describe '#to' do
          it 'should ask the queue for the task' do
-            expect(queue).to receive(:fetch_task).with(hash_including(id: task_id, queue: :some_queue))
-
             update_proxy.to(run_at: Time.now)
+
+            expect(queue).to have_received(:fetch_task).with(hash_including(id: task_id, queue: :some_queue))
          end
 
          it 'should update the found task' do
-            expect(queue).to receive(:update).with(task_id, anything)
+            allow(queue).to receive(:update)
 
             update_proxy.to(run_at: Time.now)
+
+            expect(queue).to have_received(:update).with(task_id, anything)
          end
 
          it 'should update run_at and initial_run_at to the given time' do
             time = Time.parse('2022-05-01T05:40:00-06:00')
 
-            expect(queue).to receive(:update).with(anything, hash_including(run_at:         time,
-                                                                            initial_run_at: time))
+            allow(queue).to receive(:update)
 
             update_proxy.to(run_at: time)
+
+            expect(queue).to have_received(:update).with(anything, hash_including(run_at:         time,
+                                                                                  initial_run_at: time))
          end
 
          it 'should reschedule the run_at' do
-            expect(task).to receive(:reschedule).with(run_at: 1234)
+            allow(task).to receive(:reschedule)
 
             update_proxy.to(run_at: 1234)
+
+            expect(task).to have_received(:reschedule).with(run_at: 1234)
          end
 
          it 'should NOT reschedule run_at to nil' do
-            expect(task).to_not receive(:reschedule).with(run_at: nil)
+            allow(task).to receive(:reschedule)
 
             update_proxy.to(run_at: nil, expire_at: 0)
+
+            expect(task).to_not have_received(:reschedule).with(run_at: nil)
          end
 
          it 'should reschedule the expire_at' do
-            expect(task).to receive(:reschedule).with(expire_at: 4567)
+            allow(task).to receive(:reschedule)
 
             update_proxy.to(expire_at: 4567)
+
+            expect(task).to have_received(:reschedule).with(expire_at: 4567)
          end
 
          it 'should NOT reschedule expire_at to nil' do
-            expect(task).to_not receive(:reschedule).with(expire_at: nil)
+            allow(task).to receive(:reschedule)
 
             update_proxy.to(run_at: 0, expire_at: nil)
+
+            expect(task).to_not have_received(:reschedule).with(expire_at: nil)
          end
 
          it 'should complain if run_at nor expire_at are provided' do
@@ -304,16 +321,16 @@ module Procrastinator
          end
 
          it 'should not change id, queue, or data' do
-            expect(queue).to receive(:update).with(task_id, hash_excluding(:id, :data, :queue))
+            allow(queue).to receive(:update)
 
             update_proxy.to(run_at: Time.now)
+
+            expect(queue).to have_received(:update).with(task_id, hash_excluding(:id, :data, :queue))
          end
       end
    end
 
    describe Scheduler::SerialWorking do
-      let(:test_task) { Test::MockTask }
-
       let(:persister) { Test::Persister.new }
       let(:config) do
          queue_names = [:first, :second, :third]
@@ -321,7 +338,7 @@ module Procrastinator
          Config.new do |c|
             c.with_store(persister) do
                queue_names.each do |name|
-                  c.define_queue(name, test_task)
+                  c.define_queue(name, Test::MockTask)
                end
             end
          end
@@ -334,23 +351,27 @@ module Procrastinator
 
       # acts on each queue in series.
       # (useful for TDD)
-      context '#serially' do
-         let(:work_proxy) { Scheduler.new(config).work }
+      describe '#serially' do
+         subject(:work_proxy) { Scheduler.new(config).work }
          let(:queue_workers) { work_proxy.workers }
 
          it 'should call QueueWorker#work_one on each queue worker' do
             queue_workers.each do |worker|
-               expect(worker).to receive(:work_one)
+               allow(worker).to receive(:work_one)
             end
             work_proxy.serially
+
+            expect(queue_workers).to all have_received(:work_one)
          end
 
          it 'should call QueueWorker#work_one the specified number of times' do
             queue_workers.each do |worker|
-               expect(worker).to receive(:work_one).exactly(2).times
+               allow(worker).to receive(:work_one)
             end
 
             work_proxy.serially(steps: 2)
+
+            expect(queue_workers).to all have_received(:work_one).exactly(2).times
          end
 
          context 'log enabled'
@@ -360,17 +381,14 @@ module Procrastinator
    end
 
    describe Scheduler::ThreadedWorking do
-      let(:test_task) { Test::MockTask }
-
       let(:queue_names) { [:first, :second, :third] }
 
-      let(:persister) { Test::Persister.new }
       let(:log_level) { false }
       let(:config) do
          Config.new do |c|
-            c.with_store(persister) do
+            c.with_store(Test::Persister.new) do
                queue_names.each do |name|
-                  c.define_queue(name, test_task)
+                  c.define_queue(name, Test::MockTask)
                end
             end
             c.log_with level: log_level
@@ -392,18 +410,18 @@ module Procrastinator
 
       # spawns a thread per queue and calls act on each queue worker
       # (useful for same-process one-offs like a manual intervention)
-      context '#threaded' do
-         let(:thread_double) { double('thread', join: nil, kill: nil, alive?: true, thread_variable_get: nil) }
-         let(:scheduler) { Scheduler.new(config) }
-         let(:work_proxy) { scheduler.work(*queue_names) }
-
+      describe '#threaded' do
          let(:log_level) { Logger::FATAL } # silence stdout logger in these tests
 
-         context 'main thread' do
+         subject(:work_proxy) { Scheduler.new(config).work(*queue_names) }
+
+         context 'when in main thread' do
             it 'should spawn a new thread for each specified queue' do
-               expect(Thread).to receive(:new).exactly(queue_names.size).times.and_return(thread_double)
+               allow(Thread).to receive(:new).and_return(Test::MockThread.new)
 
                work_proxy.threaded
+
+               expect(Thread).to have_received(:new).exactly(queue_names.size).times
             end
 
             it 'should wait for the threads to complete' do
@@ -413,19 +431,25 @@ module Procrastinator
                allow(Thread).to receive(:new).and_return(*threads)
 
                threads.each do |thread|
-                  expect(thread).to receive(:join).once
+                  allow(thread).to receive(:join)
                end
 
                work_proxy.threaded
+
+               expect(threads).to all have_received(:join).once
             end
 
             it 'should respect the given timeout' do
+               thread_double = Test::MockThread.new
+
                allow(Thread).to receive(:new).and_return(thread_double)
 
                n = 5
-               expect(thread_double).to receive(:join).with(n)
+               allow(thread_double).to receive(:join)
 
                work_proxy.threaded(timeout: n)
+
+               expect(thread_double).to have_received(:join).with(n).exactly(3).times # 3 for number of queues
             end
 
             context 'logging enabled' do
@@ -438,7 +462,7 @@ module Procrastinator
                end
 
                before do
-                  allow(Thread).to receive(:new).and_return(thread_double)
+                  allow(Thread).to receive(:new).and_return(Test::MockThread.new)
                   allow(Process).to receive(:pid).and_return(1234)
                end
 
@@ -458,34 +482,35 @@ module Procrastinator
          end
 
          # ie. testing inside the child thread
-         context 'child thread' do
-            let(:work_proxy) { Scheduler.new(config).work(:first) }
+         context 'when in child thread' do
+            subject(:work_proxy) { Scheduler.new(config).work(:first) }
             let(:worker) { work_proxy.workers.first }
 
             before do
-               allow(Thread).to receive(:new).and_yield(worker).and_return(thread_double)
+               allow(Thread).to receive(:new).and_yield(worker).and_return(Test::MockThread.new)
 
-               allow(worker).to receive(:work!) # need to stub work because it uses an infiniloop
+               # need to stub work for spying, but also because it uses an infiniloop
+               allow(worker).to receive(:work!)
                allow(worker).to receive(:halt)
             end
 
             it 'should tell the queue worker to work' do
-               expect(worker).to receive(:work!)
-
                work_proxy.threaded
+
+               expect(worker).to have_received(:work!)
             end
 
             # worker#work loops indefinitely, but can be interrupted by shutdown.
             it 'should tell the worker to halt when interrupted' do
-               expect(worker).to receive(:halt)
-
                work_proxy.threaded
+
+               expect(worker).to have_received(:halt)
             end
 
             it 'should call halt after work normally' do
-               expect(worker).to receive(:halt).once
-
                work_proxy.threaded
+
+               expect(worker).to have_received(:halt).once
             end
 
             # gently clean up the other threads when one sibling crashes
@@ -493,9 +518,9 @@ module Procrastinator
                err = 'dummy test error'
                allow(worker).to receive(:work!).and_raise(StandardError, err)
 
-               expect(worker).to receive(:halt).once
-
                expect { work_proxy.threaded }.to output.to_stderr # silencing terminal output
+
+               expect(worker).to have_received(:halt).once
             end
 
             # Be aware that there is also a class-level version of abort_on_exception.
@@ -539,14 +564,12 @@ module Procrastinator
                end
 
                it 'should warn about errors with the crashed queue name' do
+                  thread_double = Test::MockThread.new(name: worker.name, status: nil)
+
                   allow(Thread).to receive(:new).and_return(thread_double)
 
                   # need this one to be separately tested because the threads group is nil when immediately crashing on #work!
-                  err = 'dummy test error'
-                  allow(thread_double).to receive(:join).and_raise(StandardError, err)
-
-                  allow(thread_double).to receive(:status).and_return(nil)
-                  allow(thread_double).to receive(:thread_variable_get).and_return(worker.name)
+                  allow(thread_double).to receive(:join).and_raise(StandardError, 'dummy test error')
 
                   msg = /Crashed thread: #{ worker.name }/
 
@@ -561,18 +584,22 @@ module Procrastinator
 
          context 'SIGINT' do
             it 'should register a SIGINT handler' do
-               allow(Thread).to receive(:new).and_return(thread_double)
+               allow(Thread).to receive(:new).and_return(Test::MockThread.new)
 
-               expect(Signal).to receive(:trap).with('INT')
+               allow(Signal).to receive(:trap)
 
                work_proxy.threaded
+
+               expect(Signal).to have_received(:trap).with('INT')
             end
 
             it 'should register a SIGINT handler before calling join' do
+               thread_double = Test::MockThread.new
+
                allow(Thread).to receive(:new).and_return(thread_double)
 
                expect(Signal).to receive(:trap).ordered
-               expect(thread_double).to receive(:join).ordered
+               expect(thread_double).to receive(:join).ordered.exactly(3).times # 3 for number of queues
 
                work_proxy.threaded
             end
@@ -596,17 +623,15 @@ module Procrastinator
                signal_block&.call
             end
 
-            context 'logging enabled' do
+            context 'when logging enabled' do
                let(:log_level) { Logger::INFO }
 
-               it 'should say it is shutting down' do
-                  thread_a = double('threadA', join: nil, kill: nil, alive?: true, thread_variable_get: nil)
-                  allow(Thread).to receive(:new).and_return(thread_a)
+               before do
+                  allow(Thread).to receive(:new).and_return(Test::MockThread.new)
+               end
 
-                  signal_block = nil
-                  allow(Signal).to receive(:trap) do |&block|
-                     signal_block = block
-                  end
+               it 'should say it is shutting down' do
+                  allow(Signal).to receive(:trap).and_yield
 
                   msg1 = 'Halting worker threads...'
                   msg2 = 'Threads halted.'
@@ -615,10 +640,8 @@ module Procrastinator
                      work_proxy.threaded
                   end.to output(include(msg1, msg2)).to_stderr
 
-                  signal_block&.call
-
-                  expect(log_file).to include_log_line 'INFO', msg1
-                  expect(log_file).to include_log_line 'INFO', msg2
+                  expect(log_file).to include_log_line('INFO', msg1)
+                                            .and include_log_line('INFO', msg2)
                end
             end
          end
@@ -626,8 +649,6 @@ module Procrastinator
    end
 
    describe Scheduler::DaemonWorking do
-      let(:test_task) { Test::MockTask }
-
       let(:queue_names) { [:first, :second, :third] }
 
       let(:persister) { Test::Persister.new }
@@ -636,7 +657,7 @@ module Procrastinator
          Config.new do |c|
             c.with_store(persister) do
                queue_names.each do |name|
-                  c.define_queue(name, test_task)
+                  c.define_queue(name, Test::MockTask)
                end
             end
             c.log_with level: log_level
@@ -658,8 +679,8 @@ module Procrastinator
 
       # takes over the current process and daemonizes itself.
       # (useful for normal background operations in production)
-      context '#daemonized!' do
-         let(:work_proxy) { Scheduler.new(config).work(:second) }
+      describe '#daemonized!' do
+         subject(:work_proxy) { Scheduler.new(config).work(:second) }
 
          before do
             # TODO: remove when FakeFS is eliminated
@@ -669,15 +690,20 @@ module Procrastinator
          end
 
          it 'should call process daemon' do
-            # no args means chdir to root and redirect all stdio to /dev/null
-            expect(Process).to receive(:daemon).with(no_args).and_return(0)
+            allow(Process).to receive(:daemon).and_return(0)
+
             work_proxy.daemonized!
+
+            # no args means chdir to root and redirect all stdio to /dev/null
+            expect(Process).to have_received(:daemon).with(no_args)
          end
 
          it 'should spawn queues workers in threaded mode' do
-            expect(work_proxy).to receive(:threaded)
+            allow(work_proxy).to receive(:threaded)
 
             work_proxy.daemonized!
+
+            expect(work_proxy).to have_received(:threaded)
          end
 
          context 'process name' do
@@ -688,23 +714,29 @@ module Procrastinator
             it 'should rename the daemon process based on the pidfile' do
                prog_name = 'vicky'
 
-               expect(Process).to receive(:setproctitle).with(prog_name)
+               allow(Process).to receive(:setproctitle)
 
                work_proxy.daemonized!("#{ prog_name }.pid")
+
+               expect(Process).to have_received(:setproctitle).with(prog_name)
             end
 
             it 'should use a default process name' do
-               expect(Process).to receive(:setproctitle).with(Scheduler::DaemonWorking::PROG_NAME.downcase)
+               allow(Process).to receive(:setproctitle)
 
                work_proxy.daemonized!('/var/run')
+
+               expect(Process).to have_received(:setproctitle).with(Scheduler::DaemonWorking::PROG_NAME.downcase)
             end
 
             it 'should silently ask the system about another process' do
                prog_name = 'lemming'
 
-               expect(work_proxy).to receive(:system).with('pidof', prog_name, out: File::NULL)
+               allow(work_proxy).to receive(:system)
 
                work_proxy.daemonized!("#{ prog_name }.pid")
+
+               expect(work_proxy).to have_received(:system).with('pidof', prog_name, out: File::NULL)
             end
 
             context 'logging enabled' do
@@ -771,7 +803,7 @@ module Procrastinator
 
             it 'should clean up the pid file on exit' do
                # stub out at_exit to force it to run immediately
-               expect(work_proxy).to receive(:at_exit).and_yield
+               allow(work_proxy).to receive(:at_exit).and_yield
 
                work_proxy.daemonized!
 
@@ -780,15 +812,18 @@ module Procrastinator
 
             it 'should be okay with the pid file not existing' do
                # stub out at_exit to force it to run immediately
-               expect(work_proxy).to receive(:at_exit) do |&block|
+               allow(work_proxy).to receive(:at_exit) do |&block|
                   pid_file.delete
                   block.call
                end
 
                work_proxy.daemonized!(pid_file)
+
+               # stub out at_exit to force it to run immediately
+               expect(work_proxy).to have_received(:at_exit)
             end
 
-            context 'process already exists' do
+            context 'when prior process did not clean up its pid file' do
                before do
                   pid_file.dirname.mkpath
                   pid_file.write(1234)
@@ -804,7 +839,7 @@ module Procrastinator
                end
             end
 
-            context 'process already exists' do
+            context 'when process already exists' do
                before do
                   pid_file.dirname.mkpath
                   pid_file.write(1234)
@@ -812,11 +847,13 @@ module Procrastinator
                end
 
                it 'should ask about the process in the pid file' do
-                  expect(Process).to receive(:getpgid).with(1234)
+                  allow(Process).to receive(:getpgid)
 
                   expect do
                      work_proxy.daemonized!(pid_file)
                   end.to raise_error Scheduler::DaemonWorking::ProcessExistsError
+
+                  expect(Process).to have_received(:getpgid).with(1234)
                end
 
                it 'should error out' do
@@ -863,10 +900,11 @@ module Procrastinator
 
             it 'should print a clean exit' do
                # stub out at_exit to force it to run inline
-               expect(work_proxy).to receive(:at_exit).and_yield
+               allow(work_proxy).to receive(:at_exit).and_yield
 
                work_proxy.daemonized!
 
+               expect(work_proxy).to have_received(:at_exit)
                expect(log_file).to include_log_line 'INFO', "Procrastinator (pid #{ pid }) halted."
             end
 
@@ -904,9 +942,9 @@ module Procrastinator
             pid_file = Pathname.new 'procrastinator.pid'
             pid_file.write(pid)
 
-            expect(Process).to receive(:kill).with('TERM', pid)
-
             described_class.halt!(pid_file)
+
+            expect(Process).to have_received(:kill).with('TERM', pid)
          end
 
          it 'should normalize the pid parameter' do
@@ -914,9 +952,9 @@ module Procrastinator
             pid_file.dirname.mkpath
             pid_file.write(pid)
 
-            expect(Process).to receive(:kill).with('TERM', pid)
-
             described_class.halt!(nil)
+
+            expect(Process).to have_received(:kill).with('TERM', pid)
          end
       end
    end

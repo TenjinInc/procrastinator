@@ -51,3 +51,6 @@ RSpec/DescribedClass:
 # TODO: re-enable and replace generic doubles with verifying ones
 RSpec/VerifiedDoubles:
   Enabled: false
+
+RSpec/MultipleMemoizedHelpers:
+  Max: 7
