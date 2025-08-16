@@ -8,6 +8,21 @@
 
 ### Minor Changes
 
+* none
+
+### Bugfixes
+
+* none
+
+## [2.1.0] (2025-08-16)
+
+### Major Changes
+
+* none
+
+### Minor Changes
+
+* Added process priority nice value handling
 * Improved MultiIO implementation to avoid clobbering class methods
 * Updated minimum ruby to 3.3
 
