@@ -963,6 +963,26 @@ module Procrastinator
                expect(Process).to have_received(:setpriority).with(Process::PRIO_PROCESS, 0, 8).ordered
             end
          end
+
+         context 'when priority is negative' do
+            let(:config) do
+               Config.new do |c|
+                  c.with_store(persister) do
+                     queue_names.each do |name|
+                        c.define_queue(name, Test::MockTask)
+                     end
+                  end
+
+                  c.adjust_priority -1
+               end
+            end
+
+            it 'should complain' do
+               expect do
+                  work_proxy.daemonized!
+               end.to raise_error ArgumentError, 'Process priority cannot be negative. Use system tools if you need a reduced nice value.'
+            end
+         end
       end
 
       context 'halt!' do

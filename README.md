@@ -365,6 +365,8 @@ Procrastinator.setup do |config|
 end
 ```
 
+If you want a negative priority nice value, then use system tools like `renice` at your own discretion.
+
 ## Deferring Tasks
 
 To add tasks to a queue, call `#defer` on the scheduler returned by `Procrastinator.setup`:

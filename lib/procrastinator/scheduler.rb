@@ -380,6 +380,8 @@ module Procrastinator
             new_priority     = @config.priority
             current_priority = Process.getpriority(Process::PRIO_PROCESS, 0)
 
+            raise ArgumentError, 'Process priority cannot be negative. Use system tools if you need a reduced nice value.' if new_priority.negative?
+
             # second arg "integer" arg of zero means self
             Process.setpriority(Process::PRIO_PROCESS, 0, current_priority + new_priority)
          end
