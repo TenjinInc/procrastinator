@@ -23,7 +23,9 @@ module Procrastinator
    # @!attribute [r] :log_shift_size
    #    @return [Integer] Filesize before rotating to a new logfile (see Ruby Logger for details)
    class Config
-      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container
+      attr_reader :queues, :log_dir, :log_level, :log_shift_age, :log_shift_size, :container, :priority
+
+      alias nice priority
 
       # Default directory to keep logs in.
       DEFAULT_LOG_DIRECTORY = Pathname.new('log').freeze
@@ -45,6 +47,9 @@ module Procrastinator
           msg].join("\t") << "\n"
       end
 
+      # Default priority 'nice' level.
+      DEFAULT_PRIORITY = 1
+
       def initialize
          @queues         = []
          @container      = nil
@@ -52,6 +57,7 @@ module Procrastinator
          @log_level      = Logger::INFO
          @log_shift_age  = DEFAULT_LOG_SHIFT_AGE
          @log_shift_size = DEFAULT_LOG_SHIFT_SIZE
+         @priority       = DEFAULT_PRIORITY
 
          with_store(csv: TaskStore::SimpleCommaStore::DEFAULT_FILE) do
             if block_given?
@@ -126,6 +132,19 @@ module Procrastinator
             @log_shift_age  = shift_age
             @log_shift_size = shift_size
          end
+
+         # Sets the desired process 'nice' priority value.
+         # Higher numbers are more nice to other processes (lower priority); think of it as the position in line.
+         #
+         # If the process priority is lower than the runtime current, this property is ignored and a warning is sent to
+         # log. You can be more nice, but never less nice.
+         #
+         # @param new_priority [Number] the new priority.
+         def process_priority(new_priority)
+            @priority = new_priority
+         end
+
+         alias process_nice process_priority
       end
 
       include DSL

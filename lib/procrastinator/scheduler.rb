@@ -316,6 +316,7 @@ module Procrastinator
 
             manage_pid pid_path
             rename_process pid_path
+            update_priority
          rescue StandardError => e
             @logger&.fatal ([e.message] + e.backtrace).join("\n")
             raise e
@@ -368,6 +369,18 @@ module Procrastinator
 
             @logger.debug "Renaming process to: #{ name }"
             Process.setproctitle name
+         end
+
+         def update_priority
+            new_priority     = @config.priority
+            current_priority = Process.getpriority(Process::PRIO_PROCESS, 0)
+
+            if new_priority < current_priority
+               @logger.warn ["Requested Procrastinator priority value (#{ new_priority }) is too low.",
+                             "Remaining at 5 #{ current_priority }"].join ' '
+            else
+               Process.setpriority(Process::PRIO_PROCESS, 0, new_priority) # zero "integer" arg means self
+            end
          end
 
          include ThreadedWorking

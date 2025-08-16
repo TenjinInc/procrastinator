@@ -365,6 +365,35 @@ module Procrastinator
                expect(config.log_shift_size).to eq Config::DEFAULT_LOG_SHIFT_SIZE
             end
          end
+
+         describe '#process_priority' do
+            it 'should use a default priority' do
+               config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
+               end
+
+               expect(config.priority).to eq Config::DEFAULT_PRIORITY
+            end
+
+            it 'should save the provided priority' do
+               config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
+                  c.process_priority 123
+               end
+
+               expect(config.priority).to eq 123
+            end
+
+            it 'should alias nice' do
+               config = Config.new do |c|
+                  c.define_queue(:test_queue, test_task)
+                  c.process_nice 123
+               end
+
+               expect(config.priority).to eq 123
+               expect(config.nice).to eq 123
+            end
+         end
       end
 
       describe 'queue' do

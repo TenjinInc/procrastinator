@@ -687,11 +687,11 @@ module Procrastinator
             Pathname.new(QueueWorker::NULL_FILE).mkpath
 
             allow(Process).to receive(:daemon).and_return(0)
+            allow(Process).to receive(:getpriority).and_return(0)
+            allow(Process).to receive(:setpriority)
          end
 
          it 'should call process daemon' do
-            allow(Process).to receive(:daemon).and_return(0)
-
             work_proxy.daemonized!
 
             # no args means chdir to root and redirect all stdio to /dev/null
@@ -919,7 +919,7 @@ module Procrastinator
                expect(log_file).to include_log_line 'FATAL', msg
             end
 
-            context 'logging disabled' do
+            context 'when logging disabled' do
                let(:log_level) { false }
 
                it 'should create a null logger' do
@@ -927,6 +927,67 @@ module Procrastinator
 
                   expect(log_file).to_not exist
                end
+            end
+         end
+
+         context 'when priority not specified' do
+            it 'should set the process priority with a default' do
+               work_proxy.daemonized!
+
+               expect(Process).to have_received(:daemon).ordered
+               expect(Process).to have_received(:setpriority).with(Process::PRIO_PROCESS, 0, 1).ordered
+            end
+         end
+
+         context 'when priority specified' do
+            let(:config) do
+               Config.new do |c|
+                  c.with_store(persister) do
+                     queue_names.each do |name|
+                        c.define_queue(name, Test::MockTask)
+                     end
+                  end
+
+                  c.process_priority 3
+               end
+            end
+
+            it 'should set the process priority' do
+               work_proxy.daemonized!
+
+               expect(Process).to have_received(:daemon).ordered
+               expect(Process).to have_received(:setpriority).with(Process::PRIO_PROCESS, 0, 3).ordered
+            end
+         end
+
+         # priority can generally only be lowered by root
+         context 'when new priority lower than current' do
+            let(:config) do
+               Config.new do |c|
+                  c.with_store(persister) do
+                     queue_names.each do |name|
+                        c.define_queue(name, Test::MockTask)
+                     end
+                  end
+
+                  c.process_priority 3
+               end
+            end
+
+            before do
+               allow(Process).to receive(:getpriority).and_return(5)
+            end
+
+            it 'should NOT set the process priority' do
+               work_proxy.daemonized!
+
+               expect(Process).to_not have_received(:setpriority)
+            end
+
+            it 'should warn that priority was too low' do
+               work_proxy.daemonized!
+
+               expect(log_file).to include_log_line 'WARN', 'Requested Procrastinator priority value (3) is too low. Remaining at 5'
             end
          end
       end
