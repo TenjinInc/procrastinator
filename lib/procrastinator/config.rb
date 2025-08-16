@@ -133,18 +133,18 @@ module Procrastinator
             @log_shift_size = shift_size
          end
 
-         # Sets the desired process 'nice' priority value.
-         # Higher numbers are more nice to other processes (lower priority); think of it as the position in line.
+         # Sets the desired process 'nice' priority value adjustment. This value is added to whatever runtime priority
+         # Procrastinator starts with.
          #
-         # If the process priority is lower than the runtime current, this property is ignored and a warning is sent to
-         # log. You can be more nice, but never less nice.
+         # Higher numbers are more nice to other processes (lower priority); think of it as the position in line.
+         # You can be more nice, but never less nice.
          #
          # @param new_priority [Number] the new priority.
-         def process_priority(new_priority)
+         def adjust_priority(new_priority)
             @priority = new_priority
          end
 
-         alias process_nice process_priority
+         alias adjust_nice adjust_priority
       end
 
       include DSL

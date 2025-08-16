@@ -931,7 +931,7 @@ module Procrastinator
          end
 
          context 'when priority not specified' do
-            it 'should set the process priority with a default' do
+            it 'should increase the process priority value with a default' do
                work_proxy.daemonized!
 
                expect(Process).to have_received(:daemon).ordered
@@ -948,29 +948,7 @@ module Procrastinator
                      end
                   end
 
-                  c.process_priority 3
-               end
-            end
-
-            it 'should set the process priority' do
-               work_proxy.daemonized!
-
-               expect(Process).to have_received(:daemon).ordered
-               expect(Process).to have_received(:setpriority).with(Process::PRIO_PROCESS, 0, 3).ordered
-            end
-         end
-
-         # priority can generally only be lowered by root
-         context 'when new priority lower than current' do
-            let(:config) do
-               Config.new do |c|
-                  c.with_store(persister) do
-                     queue_names.each do |name|
-                        c.define_queue(name, Test::MockTask)
-                     end
-                  end
-
-                  c.process_priority 3
+                  c.adjust_priority 3
                end
             end
 
@@ -978,16 +956,11 @@ module Procrastinator
                allow(Process).to receive(:getpriority).and_return(5)
             end
 
-            it 'should NOT set the process priority' do
+            it 'should set the process priority' do
                work_proxy.daemonized!
 
-               expect(Process).to_not have_received(:setpriority)
-            end
-
-            it 'should warn that priority was too low' do
-               work_proxy.daemonized!
-
-               expect(log_file).to include_log_line 'WARN', 'Requested Procrastinator priority value (3) is too low. Remaining at 5'
+               expect(Process).to have_received(:daemon).ordered
+               expect(Process).to have_received(:setpriority).with(Process::PRIO_PROCESS, 0, 8).ordered
             end
          end
       end

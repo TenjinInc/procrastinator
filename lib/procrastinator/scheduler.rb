@@ -380,12 +380,8 @@ module Procrastinator
             new_priority     = @config.priority
             current_priority = Process.getpriority(Process::PRIO_PROCESS, 0)
 
-            if new_priority < current_priority
-               @logger.warn ["Requested Procrastinator priority value (#{ new_priority }) is too low.",
-                             "Remaining at 5 #{ current_priority }"].join ' '
-            else
-               Process.setpriority(Process::PRIO_PROCESS, 0, new_priority) # zero "integer" arg means self
-            end
+            # second arg "integer" arg of zero means self
+            Process.setpriority(Process::PRIO_PROCESS, 0, current_priority + new_priority)
          end
 
          include ThreadedWorking

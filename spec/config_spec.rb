@@ -366,7 +366,7 @@ module Procrastinator
             end
          end
 
-         describe '#process_priority' do
+         describe '#adjust_priority' do
             it 'should use a default priority' do
                config = Config.new do |c|
                   c.define_queue(:test_queue, test_task)
@@ -378,7 +378,7 @@ module Procrastinator
             it 'should save the provided priority' do
                config = Config.new do |c|
                   c.define_queue(:test_queue, test_task)
-                  c.process_priority 123
+                  c.adjust_priority 123
                end
 
                expect(config.priority).to eq 123
@@ -387,7 +387,7 @@ module Procrastinator
             it 'should alias nice' do
                config = Config.new do |c|
                   c.define_queue(:test_queue, test_task)
-                  c.process_nice 123
+                  c.adjust_nice 123
                end
 
                expect(config.priority).to eq 123

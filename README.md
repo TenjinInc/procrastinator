@@ -352,12 +352,14 @@ end
 
 ### Process Priority
 
-The whole Procrastinator process may be made less urgent by increasing its process_priority value (aka nice level).
-If not provided, Procrastinator will assume a priority of 1.
+The whole Procrastinator process may be made less urgent by providing an `adjust_priority` value (aka nice level
+adjustment).
+
+If not provided, Procrastinator will assume a priority adjustment of 1.
 
 ```ruby
 Procrastinator.setup do |config|
-   config.process_priority 10 # higher numbers are less urgent
+   config.adjust_priority 10 # higher numbers are less urgent. This increases the default priority by 10
 
    # .. other setup stuff ...
 end
