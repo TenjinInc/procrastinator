@@ -34,7 +34,7 @@ module Procrastinator
 
       # Alters an existing task to run at a new time, expire at a new time, or both.
       #
-      # Call #to on the result and pass in the new :run_at and/or :expire_at.
+      # Call UpdateProxy#to on the result and pass in the new :run_at and/or :expire_at.
       #
       # Example:
       #
@@ -92,6 +92,11 @@ module Procrastinator
             @identifier = identifier.merge(queue: queue.name.to_sym)
          end
 
+         # Updates the task found by the identifier to run at and/or expire at the new provided time.
+         #
+         # @raise [NoSuchTaskError] when no task matches the identifier.
+         # @raise [AmbiguousTaskFilterError] when many tasks match the identifier, meaning you need to be more specific.
+         # @see Scheduler#reschedule
          def to(run_at: nil, expire_at: nil)
             task = @queue.fetch_task(@identifier)
 
