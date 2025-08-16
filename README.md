@@ -140,12 +140,12 @@ Task Handlers have attributes that are set after the Handler is created. The att
 the tasks from referencing unknown variables at whatever time they are run - if they're missing, you'll get
 a `MalformedTaskError`.
 
-| Attribute  | Required | Description | 
-|------------|----------|-------------|
-|`:container`| Yes   | Container declared in `#setup` from the currently running instance |
-|`:logger`   | Yes   | Logger object for the Queue |
-|`:scheduler`| Yes   | A scheduler object that you can use to schedule new tasks (eg. with `#defer`)|
-|`:data`     | No       | Data provided to `#defer`. Calls to `#defer` will error if they do not provide data when expected and vice-versa. |
+| Attribute    | Required | Description                                                                                                       | 
+|--------------|----------|-------------------------------------------------------------------------------------------------------------------|
+| `:container` | Yes      | Container declared in `#setup` from the currently running instance                                                |
+| `:logger`    | Yes      | Logger object for the Queue                                                                                       |
+| `:scheduler` | Yes      | A scheduler object that you can use to schedule new tasks (eg. with `#defer`)                                     |
+| `:data`      | No       | Data provided to `#defer`. Calls to `#defer` will error if they do not provide data when expected and vice-versa. |
 
 ### Errors & Logging
 
@@ -184,10 +184,10 @@ end
 
 Some events are always logged by default:
 
-|event               |level  |
-|--------------------|-------|
-|Task completed      | INFO  |
-|Task cailure        | ERROR |
+| event          | level |
+|----------------|-------|
+| Task completed | INFO  |
+| Task cailure   | ERROR |
 
 ## Configuration
 
@@ -220,12 +220,12 @@ config.define_queue :greeting, SendWelcomeEmail, store: 'procrastinator.csv', ti
 
 Description of keyword options:
 
-| Option           | Description   |
-|------------------| ------------- |
-| `:store`         | Storage IO object for tasks. See [Task Store](#task-store)     |
-| `:timeout`       | Max duration (seconds) before tasks are failed for taking too long  |
+| Option           | Description                                                                         |
+|------------------|-------------------------------------------------------------------------------------|
+| `:store`         | Storage IO object for tasks. See [Task Store](#task-store)                          |
+| `:timeout`       | Max duration (seconds) before tasks are failed for taking too long                  |
 | `:max_attempts`  | Once a task has been attempted `max_attempts` times, it will be permanently failed. |
-| `:update_period` | Delay (seconds) between reloads of all tasks from the task store  |
+| `:update_period` | Delay (seconds) between reloads of all tasks from the task store                    |
 
 ### Task Store
 
@@ -275,8 +275,8 @@ _Warning_: Task stores shared between queues **must** be thread-safe if using th
 These are the data fields for each individual scheduled task. When using the built-in task store, these are the field
 names. If you have a database, use this to inform your table schema.
 
-|  Hash Key         | Type     | Description                                                             |
-|-------------------|----------| ------------------------------------------------------------------------|
+| Hash Key          | Type     | Description                                                             |
+|-------------------|----------|-------------------------------------------------------------------------|
 | `:id`             | integer  | Unique identifier for this exact task                                   |
 | `:queue`          | symbol   | Name of the queue the task is inside                                    | 
 | `:run_at`         | datetime | Time to attempt running the task next. Updated for retries¹             |
@@ -285,7 +285,7 @@ names. If you have a database, use this to inform your table schema.
 | `:attempts`       | integer  | Number of times the task has tried to run                               |
 | `:last_fail_at`   | datetime | Time of the most recent failure                                         |
 | `:last_error`     | string   | Error message + backtrace of the most recent failure. May be very long. |
-| `:data`           | JSON     | Data to be provided to the task handler, serialized² to JSON.            |
+| `:data`           | JSON     | Data to be provided to the task handler, serialized² to JSON.           |
 
 ¹ `nil` indicates that it is permanently failed and will never run, either due to expiry or too many attempts.
 
@@ -347,6 +347,19 @@ class LunchTask
    def run
       logger.info("Today's Lunch is: #{ container[:lunch] }")
    end
+end
+```
+
+### Process Priority
+
+The whole Procrastinator process may be made less urgent by increasing its process_priority value (aka nice level).
+If not provided, Procrastinator will assume a priority of 1.
+
+```ruby
+Procrastinator.setup do |config|
+   config.process_priority 10 # higher numbers are less urgent
+
+   # .. other setup stuff ...
 end
 ```
 
@@ -532,7 +545,8 @@ end
 ```
 
 > **Note:** There can be a distinction between process full title (`/proc/*/cmdline`) vs the shorter name
-> (`/proc/*/comm`). Some tools like `ps`  and `top` display the process title, while others like `pstree` show the process name.
+> (`/proc/*/comm`). Some tools like `ps`  and `top` display the process title, while others like `pstree` show the
+> process name.
 >
 > Procrastinator uses Ruby's `Process.setproctitle`, which only affects the title.
 
