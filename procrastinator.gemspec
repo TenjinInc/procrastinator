@@ -27,4 +27,6 @@ Gem::Specification.new do |spec|
 
    # TODO: remove when CSV persister is split to separate gem; used to be part of STDLIB but now is separate
    spec.add_dependency 'csv', '>= 3.3'
+   spec.add_dependency 'logger', '>= 1.7'
+   spec.add_dependency 'ostruct', '>= 0.6'
 end
